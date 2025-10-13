@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
@@ -35,6 +35,17 @@ export default function App() {
       setProfileImages([...profileImages, ...newImages]);
     }
   };
+
+  // pick an image to send to someone
+  const sendImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+    if (!result.canceled) {
+      alert("Image sent to " + (activeTab === 'janes chat' ? 'Jane Doe' : 'John Doe') + "!");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,8 +98,31 @@ export default function App() {
       ) : activeTab === 'messages' ? (
         <View style={styles.profileContainer}>
           <Text style={styles.profileText}>💬 Messages Page</Text>
+           <Button title="Jane Doe" onPress={() => setActiveTab('janes chat')}/>
+           <Button title="John Doe" onPress={() => setActiveTab('johns chat')} />
         </View>
-      ) : null}
+
+      ) : activeTab === 'janes chat' ? (
+        
+        <View style={styles.profileContainer}>
+          <Text style={styles.profileText}>💬 Chat with Jane Doe</Text>
+          <Text style={{ color: "white", fontSize: 18, marginBottom: 20 }}>Janes Chat With John.</Text>
+          <Button title="John Doe POV" onPress={() => setActiveTab('johns chat')} />
+          <Button title="Send Picture" onPress={sendImages} />
+        </View>
+
+      ) : activeTab === 'johns chat' ? (
+        <View style={styles.profileContainer}>
+          <Text style={styles.profileText}>💬 Chat with John Doe</Text>
+          <Text style={{ color: "white", fontSize: 18, marginBottom: 20 }}>Johns Chat With Jane.</Text>
+          <Button title="Jane Doe POV" onPress={() => setActiveTab('janes chat')} />
+          <Button title="Send Picture" onPress={sendImages} />
+          
+
+        </View>
+      ) :
+
+        null}
 
       {/* --- BOTTOM NAVIGATION --- */}
       <View style={styles.navBar}>
