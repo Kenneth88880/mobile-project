@@ -3,8 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import ChatScreen from "./ChatScreen";
-
+import ChatScreen from "./ChatScreen"; // import ChatScreen component
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile" or "messages"
@@ -100,38 +99,11 @@ export default function App() {
         </View>
       ) : activeTab === 'messages' ? (
 
-        
         <View style={styles.profileContainer}>
           <Text style={styles.profileText}>💬 Messages Page</Text>
           <ChatScreen />
-           
-          {/*
-           <Button title="Jane Doe" onPress={() => setActiveTab('janes chat')}/>
-           <Button title="John Doe" onPress={() => setActiveTab('johns chat')} />
-            */}
         </View>
-/*
-      ) : activeTab === 'janes chat' ? (
-        
-        <View style={styles.profileContainer}>
-          <Text style={styles.profileText}>💬 Chat with Jane Doe</Text>
-          <Text style={{ color: "white", fontSize: 18, marginBottom: 20 }}>Janes Chat With John.</Text>
-          <Button title="John Doe POV" onPress={() => setActiveTab('johns chat')} />
-          <Button title="Send Picture" onPress={sendImages} />
-        </View>
-
-      ) : activeTab === 'johns chat' ? (
-        <View style={styles.profileContainer}>
-          <Text style={styles.profileText}>💬 Chat with John Doe</Text>
-          <Text style={{ color: "white", fontSize: 18, marginBottom: 20 }}>Johns Chat With Jane.</Text>
-          <Button title="Jane Doe POV" onPress={() => setActiveTab('janes chat')} />
-          <Button title="Send Picture" onPress={sendImages} />
-          
-
-        </View>
-      */
         ) :
-      
 
         null}
 

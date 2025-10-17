@@ -36,7 +36,7 @@ export default function ChatScreen() {
     });
   }, []);
 
-  // changed bubble colour 
+  // changes bubble colour 
   const renderBubble = (props) => {
       return (
         <Bubble
@@ -53,7 +53,7 @@ export default function ChatScreen() {
       );
     };
 
-  // redners chat
+  // renders chat
   return (
     <View style={{ 
       backgroundColor: 'fff', 
