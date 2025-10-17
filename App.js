@@ -3,34 +3,15 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
+import ChatScreen from "./ChatScreen";
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile" or "messages"
   const [profileImages, setProfileImages] = useState([]); // photos from profile tab
   const [cards, setCards] = useState([]); // cards for dating tab
 
-  // prototype code for messaging
-  const socket = new WebSocket('ws://localhost:8080');
-
-  function sendMessage(e) {
-    e.preventDefault();
-    const input = document.querySelector('input');
-    if (input.value) {
-      socket.send(input.value);
-      input.value = "";
-    }
-    input.focus();
-  }
-
-  document.querySelector('form').addEventListener('submit', sendMessage);
-
-  // listen for messages
-  socket.addEventListener("message", ({ data}) => {
-    const li = document.createElement('li');
-    li.textContent = data;
-    document.querySelector('ul').appendChild(li);
-  })
-
+  
   // when profileImages change, update the dating card
   useEffect(() => {
     if (profileImages.length > 0) {
@@ -118,12 +99,18 @@ export default function App() {
           </ScrollView>
         </View>
       ) : activeTab === 'messages' ? (
+
+        
         <View style={styles.profileContainer}>
           <Text style={styles.profileText}>💬 Messages Page</Text>
+          <ChatScreen />
+           
+          {/*
            <Button title="Jane Doe" onPress={() => setActiveTab('janes chat')}/>
            <Button title="John Doe" onPress={() => setActiveTab('johns chat')} />
+            */}
         </View>
-
+/*
       ) : activeTab === 'janes chat' ? (
         
         <View style={styles.profileContainer}>
@@ -142,7 +129,8 @@ export default function App() {
           
 
         </View>
-      ) :
+      */
+        ) :
       
 
         null}
@@ -175,7 +163,7 @@ export default function App() {
       <StatusBar style="auto" />
     </SafeAreaView>
   );
-}
+} 
 
 const styles = StyleSheet.create({
   container: {
@@ -255,3 +243,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
