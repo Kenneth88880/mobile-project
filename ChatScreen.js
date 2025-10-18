@@ -56,7 +56,7 @@ export default function ChatScreen() {
   // renders chat
   return (
     <View style={{ 
-      backgroundColor: 'fff', 
+      backgroundColor: '#fff', 
       width: 300, 
       height: 200, 
       flex: 1
