@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
+import ChatScreen from "./ChatScreen"; // import ChatScreen component
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile"
+  const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile" or "messages"
   const [profileImages, setProfileImages] = useState([]); // photos from profile tab
   const [cards, setCards] = useState([]); // cards for dating tab
 
+  
   // when profileImages change, update the dating card
   useEffect(() => {
     if (profileImages.length > 0) {
@@ -35,6 +37,17 @@ export default function App() {
       setProfileImages([...profileImages, ...newImages]);
     }
   };
+
+  // pick an image to send to someone
+  const sendImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+    if (!result.canceled) {
+      alert("Image sent to " + (activeTab === 'janes chat' ? 'Jane Doe' : 'John Doe') + "!");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -68,7 +81,7 @@ export default function App() {
         ) : (
           <Text style={{ color: "white", fontSize: 18 }}>Add profile photos first!</Text>
         )
-      ) : (
+      ) : activeTab === 'profile' ? (
         <View style={styles.profileContainer}>
           <Text style={styles.profileText}>👤 Profile Page</Text>
           <Button title="Pick Profile Pictures" onPress={pickProfileImage} />
@@ -84,7 +97,15 @@ export default function App() {
             ))}
           </ScrollView>
         </View>
-      )}
+      ) : activeTab === 'messages' ? (
+
+        <View style={styles.profileContainer}>
+          <Text style={styles.profileText}>💬 Messages Page</Text>
+          <ChatScreen />
+        </View>
+        ) :
+
+        null}
 
       {/* --- BOTTOM NAVIGATION --- */}
       <View style={styles.navBar}>
@@ -101,12 +122,20 @@ export default function App() {
         >
           <Text style={styles.navText}>👤 Profile</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navButton, activeTab === 'messages' && styles.activeButton]}
+          onPress={() => setActiveTab('messages')}
+        >
+          <Text style={styles.navText}>💬 Messages</Text>
+        </TouchableOpacity>
+
       </View>
 
       <StatusBar style="auto" />
     </SafeAreaView>
   );
-}
+} 
 
 const styles = StyleSheet.create({
   container: {
@@ -173,7 +202,7 @@ const styles = StyleSheet.create({
   },
   navButton: {
     paddingVertical: 10,
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
     borderRadius: 30,
     backgroundColor: "rgba(255,255,255,0.2)",
   },
@@ -186,3 +215,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
