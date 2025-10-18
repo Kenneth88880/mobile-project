@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# firebase api key (DO NOT KEEP)
+firebaseConfig.js
