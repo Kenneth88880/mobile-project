@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import { db } from "./firebaseConfig";
+import { getUserID } from "./App.js";
+import { getChatName } from "./createChat.js"
 import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
-import { screensEnabled } from "react-native-screens";
-
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([]);
+  const chatName = getChatName()
 
   // handles messages receiving
   useEffect(() => {
-    const q = query(collection(db, "messages"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, getUserID() , chatName, "messages"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMessages(
         snapshot.docs.map((doc) => ({
@@ -28,7 +29,7 @@ export default function ChatScreen() {
   // sends messages
   const onSend = useCallback(async (messages = []) => {
     const { _id, createdAt, text, user } = messages[0];
-    await addDoc(collection(db, "messages"), {
+    await addDoc(collection(db, getUserID(), chatName, "messages"), {
       _id,
       text,
       createdAt: serverTimestamp(),
@@ -57,10 +58,13 @@ export default function ChatScreen() {
   return (
     <View style={{ 
       backgroundColor: '#fff', 
-      width: 300, 
-      height: 200, 
+      width: 411, 
+      height: 600,
+      textItems: "center",
       flex: 1
     }}>
+      <Text style={styles.profileText}>{"Chatting with " + chatName}</Text>
+
       <GiftedChat
         messages={messages}
         onSend={(msgs) => onSend(msgs)}
@@ -73,3 +77,13 @@ export default function ChatScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  profileText: {
+    fontSize: 24,
+    color: "black", 
+    marginBottom: 20,
+    textAlign: "center",
+    fontWeight: "bold",
+  }
+});

@@ -3,14 +3,26 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import ChatScreen from "./ChatScreen"; // import ChatScreen component
+import ChatScreen from "./chatScreen"; // import ChatScreen component
+import CreateChat from "./createChat"; // import createChat component
+
+const userID = "user1"
+var uesrChats = [];
+
+// allows other files to grab the user ID
+export function getUserID() {
+  
+  return userID;
+
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile" or "messages"
   const [profileImages, setProfileImages] = useState([]); // photos from profile tab
   const [cards, setCards] = useState([]); // cards for dating tab
+  const [showChat, setShowChat] = useState(false);
+  const [createChat, setCreateChat] = useState(false);
 
-  
   // when profileImages change, update the dating card
   useEffect(() => {
     if (profileImages.length > 0) {
@@ -37,17 +49,29 @@ export default function App() {
       setProfileImages([...profileImages, ...newImages]);
     }
   };
+  
+ 
+  // shows the selected chat once the button is pressed for it
+  if (showChat) {
+      return (
 
-  // pick an image to send to someone
-  const sendImages = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-    if (!result.canceled) {
-      alert("Image sent to " + (activeTab === 'janes chat' ? 'Jane Doe' : 'John Doe') + "!");
+        <View style={{marginTop: 40, alignItems: "center"}}>
+          <Button title="Back" onPress={() => setShowChat(false)} />
+          <ChatScreen />
+        </View>
+
+      );
     }
-  }
+
+    // brings them to the create chat screen once button is pressed
+    if (createChat) {
+      return (
+        <View style={{marginTop: 40}}>
+              <Button title="Back" onPress={() => setCreateChat(false)} />
+              <CreateChat />
+        </View>
+      );
+    }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -101,8 +125,13 @@ export default function App() {
 
         <View style={styles.profileContainer}>
           <Text style={styles.profileText}>💬 Messages Page</Text>
-          <ChatScreen />
+          
+          <Button title= "Chat 1" onPress = {() => setShowChat(true)} />
+
+          <Button title= "Create Chat" onPress={() => setCreateChat(true)} />
+
         </View>
+        
         ) :
 
         null}
@@ -215,4 +244,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
-
