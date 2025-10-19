@@ -9,7 +9,7 @@ export function getChatName() {
 
 }
 
-export default function CreateChat() {
+function tester() {
     const [chatName, setChatName] = useState("");
 
     const createNewChat = async () => {
@@ -46,6 +46,16 @@ export default function CreateChat() {
         </View>
     );
 }
+
+export default function CreateChat() {
+
+    return (
+        tester()
+    );
+
+
+}
+
 
 const styles = StyleSheet.create({
     container: {

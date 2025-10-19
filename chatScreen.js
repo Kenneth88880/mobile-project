@@ -6,8 +6,10 @@ import { getUserID } from "./App.js";
 import { getChatName } from "./createChat.js"
 import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 
-export default function ChatScreen() {
-  const [messages, setMessages] = useState([]);
+const [messages, setMessages] = useState([]);
+
+function tester() {
+  
   const chatName = getChatName()
 
   // handles messages receiving
@@ -76,6 +78,15 @@ export default function ChatScreen() {
       />
     </View>
   );
+}
+
+export default function alk() {
+
+  return (
+    tester()
+  );
+
+
 }
 
 const styles = StyleSheet.create({

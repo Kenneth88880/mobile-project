@@ -3,11 +3,9 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import ChatScreen from "./chatScreen"; // import ChatScreen component
-import CreateChat from "./createChat"; // import createChat component
+import { Tester, CreateChat } from "./chat"; // import chats
 
 const userID = "user1"
-var uesrChats = [];
 
 // allows other files to grab the user ID
 export function getUserID() {
@@ -57,7 +55,7 @@ export default function App() {
 
         <View style={{marginTop: 40, alignItems: "center"}}>
           <Button title="Back" onPress={() => setShowChat(false)} />
-          <ChatScreen />
+          <Tester name = "sudo"/>
         </View>
 
       );
