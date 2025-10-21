@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import MapView from 'react-native-maps';
+import MapView from 'react-native-maps';//npx expo install react-native-maps
 
 export default function ExploreScreen() {
   return (
     <View style={styles.container}>
-      <MapView
+      <MapView 
         style={styles.map}
         initialRegion={{
           latitude: 43.6532, // Toronto example
@@ -25,4 +25,5 @@ const styles = StyleSheet.create({
   map: {
     flex: 1, // fills container
   },
+
 });
