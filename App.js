@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity } from "react-native";
+
+import styles from "./styles";
 import ChatScreen from "./ChatScreen";
 import ProfileScreen from "./ProfileScreen";
 import DatingScreen from "./DatingScreen";
+import ExploreScreen from "./ExploreScreen";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating"); // "dating" | "profile" | "messages"
@@ -12,9 +15,10 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       {/* --- MAIN CONTENT --- */}
       {activeTab === "dating" && <DatingScreen />}
+      {activeTab === "explore" && <ExploreScreen />}
       {activeTab === "profile" && <ProfileScreen />}
       {activeTab === "messages" && (
-        <View style={styles.profileContainer}>
+        <View style={styles.container}>
           <Text style={styles.profileText}>💬 Messages Page</Text>
           <ChatScreen />
         </View>
@@ -30,10 +34,10 @@ export default function App() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.navButton, activeTab === "profile" && styles.activeButton]}
-          onPress={() => setActiveTab("profile")}
+          style={[styles.navButton, activeTab === "explore" && styles.activeButton]}
+          onPress={() => setActiveTab("explore")}
         >
-          <Text style={styles.navText}>👤 Profile</Text>
+          <Text style={styles.navText}>🧭 Explore</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -42,45 +46,17 @@ export default function App() {
         >
           <Text style={styles.navText}>💬 Messages</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.navButton, activeTab === "profile" && styles.activeButton]}
+          onPress={() => setActiveTab("profile")}
+        >
+          <Text style={styles.navText}>👤 Profile</Text>
+        </TouchableOpacity>
+        
       </View>
 
       <StatusBar style="auto" />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "dodgerblue",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileText: {
-    color: "white",
-    fontSize: 18,
-    marginBottom: 10,
-  },
-  navBar: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    backgroundColor: "white",
-    width: "100%",
-    paddingVertical: 10,
-  },
-  navButton: {
-    padding: 10,
-  },
-  activeButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: "dodgerblue",
-  },
-  navText: {
-    fontSize: 16,
-  },
-});
