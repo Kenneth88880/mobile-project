@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import { Tester, CreateChat } from "./chat"; // import chats
+import { ChatScreen, CreateChat, Reset } from "./chat"; // import chats
 
 const userID = "user1"
 
@@ -55,10 +55,12 @@ export default function App() {
 
         <View style={{marginTop: 40, alignItems: "center"}}>
           <Button title="Back" onPress={() => setShowChat(false)} />
-          <Tester name = "sudo"/>
+          <ChatScreen name = "sudo"/>
         </View>
 
       );
+    } else {
+        Reset();
     }
 
     // brings them to the create chat screen once button is pressed
@@ -69,6 +71,8 @@ export default function App() {
               <CreateChat />
         </View>
       );
+    } else {
+        Reset();
     }
 
   return (

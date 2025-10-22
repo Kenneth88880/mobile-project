@@ -3,13 +3,22 @@ import { StyleSheet, Text, TextInput, Button, View } from "react-native";
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import { db } from "./firebaseConfig";
 import { getUserID } from "./App.js";
-import { getChatName } from "./createChat.js"
 import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 
+// global variables used to track if a new chat has been created and its name 
 var chatCreated = false;
 var inputtedChatName = "";
 
-export function Tester({name}) {
+// resests variables when they leave the screen
+export function Reset() {
+
+    chatCreated = false;
+    inputtedChatName = "";
+
+}
+
+
+export function ChatScreen({name}) {
     
     const [messages, setMessages] = useState([]);
 
