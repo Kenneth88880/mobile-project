@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import {React, useState, useEffect, useCallback } from "react";
 import { StyleSheet, Text, TextInput, Button, View } from "react-native";
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import { db } from "./firebaseConfig";
@@ -9,7 +9,7 @@ import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp } from 
 var chatCreated = false;
 var inputtedChatName = "";
 
-// resests variables when they leave the screen
+// resets variables when they leave the screen
 export function Reset() {
 
     chatCreated = false;
@@ -17,9 +17,10 @@ export function Reset() {
 
 }
 
-
+// creates the chat scren for people to interact and message each other 
 export function ChatScreen({name}) {
     
+    // stores messages 
     const [messages, setMessages] = useState([]);
 
     // handles messages receiving
@@ -91,15 +92,21 @@ export function ChatScreen({name}) {
 // creates a new chat with a name 
 export function CreateChat() {
     
+    // stores chat names and stores messages
     const [chatName, setChatName] = useState("");
     const [messages, setMessages] = useState([]);
 
+    // creates a new chat 
     const createNewChat = async () => {
+
+        // gets the user to input a chat name
         if (chatName.trim() === "") {
             alert("Please enter a chat name");
             return;
         }
+
         try {
+
             // This will create a new document in a 'chats' collection with the chat name as the ID
             // and then a 'messages' subcollection inside it.
             await addDoc(collection(db, "user1", chatName, "messages"), {
@@ -134,6 +141,7 @@ export function CreateChat() {
         })
     }
 
+    // updates the firebase data collection with the new chat name
     useEffect(() => {
 
         const fetchName = async() => {
@@ -187,6 +195,7 @@ export function CreateChat() {
         );
     };
 
+    // if a chat has been created, then show the newly created chat screen 
     if (chatCreated === true) {
         
         return (
@@ -228,6 +237,7 @@ export function CreateChat() {
 
 }
 
+// styles for text
 const styles = StyleSheet.create({
     container: {
         flex: 1,

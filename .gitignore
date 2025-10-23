@@ -5,6 +5,7 @@ node_modules/
 
 # api keys
 firebaseConfig.js
+const.js
 
 # Expo
 .expo/
