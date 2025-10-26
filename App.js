@@ -3,74 +3,15 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import { CometChat } from "@cometchat/chat-sdk-javascript";
-import { Chat } from "./cometChatUI";
-import { APP_ID, REGION, AUTH_KEY } from "./const";
+import { Platform } from 'react-native';
 import { ChatScreen, CreateChat, Reset } from "./chat"; 
 
-CometChatApp.localize('en-US');
-const userID = "user1"
 
-// comet chat initialization
-let appID = APP_ID;
-let region = REGION;
-let appSetting = new CometChat.AppSettingsBuilder()
-  .subscribePresenceForAllUsers()
-  .setRegion(region)
-  .autoEstablishSocketConnection(true)
-  .build();
-CometChat.init(appID, appSetting).then(
-  () => {
-    console.log("Initialization completed successfully");
-  },
-  (error) => {
-    console.log("Initialization failed with error:", error);
-  }
-);
-
-let authKey = AUTH_KEY;
-var UID = "user4";
-var name = "Micheal";
-
-var user = new CometChat.User(UID);
-
-user.setName(name);
-
-CometChat.createUser(user, authKey).then(
-  (user) => {
-    console.log("user created", user);
-  },
-  (error) => {
-    console.log("error", error);
-  }
-);
-
-//var UID = "cometchat-uid-6";
-
-CometChat.getLoggedinUser().then(
-  (user) => {
-    if (!user) {
-      CometChat.login(UID, authKey).then(
-        (user) => {
-          console.log("Login Successful:", { user });
-        },
-        (error) => {
-          console.log("Login failed with exception:", { error });
-        }
-      );
-    }
-  },
-  (error) => {
-    console.log("Some Error Occured", { error });
-  }
-);
-
-// allows other files to grab the user ID
 export function getUserID() {
-  
-  return userID;
 
-}
+  return "user1";
+
+} 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dating'); // "dating" or "profile" or "messages"
@@ -109,19 +50,14 @@ export default function App() {
  
   // shows the selected chat once the button is pressed for it
   if (showChat) {
-      {/*
       return (
-
         <View style={{marginTop: 40, alignItems: "center"}}>
           <Button title="Back" onPress={() => setShowChat(false)} />
           <ChatScreen name = "sudo"/>
         </View>
-
       );
     } else {
         Reset();
-    */}
-
     }
     
     // brings them to the create chat screen once button is pressed
