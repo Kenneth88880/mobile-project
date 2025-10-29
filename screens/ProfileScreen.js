@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React, { useContext } from "react";
 import { View, Text, Button, Image, ScrollView, StyleSheet } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { UserContext } from "../context/UserContext";
+import ProfileInfo from "../components/ProfileInfo";
 
-// Handles profile photo logic
 export default function ProfileScreen() {
-  const [profileImages, setProfileImages] = useState([]);
+  const { userData, setUserData } = useContext(UserContext);
 
-  // pick images for profile tab
   const pickProfileImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -16,30 +16,33 @@ export default function ProfileScreen() {
 
     if (!result.canceled) {
       const newImages = result.assets.map((asset) => ({ uri: asset.uri }));
-      setProfileImages([...profileImages, ...newImages]);
+      setUserData({ ...userData, photos: [...userData.photos, ...newImages] });
     }
   };
 
   return (
-    <View style={styles.profileContainer}>
+    <ScrollView contentContainerStyle={styles.profileContainer}>
       <Text style={styles.profileText}>👤 Profile Page</Text>
+
+      <ProfileInfo />
+
       <Button title="Pick Profile Pictures" onPress={pickProfileImage} />
 
       <ScrollView
         contentContainerStyle={styles.imageGrid}
         showsVerticalScrollIndicator={false}
       >
-        {profileImages.map((img, index) => (
+        {userData.photos.map((img, index) => (
           <Image key={index} source={img} style={styles.profileImage} resizeMode="cover" />
         ))}
       </ScrollView>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   profileContainer: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     padding: 10,
   },
