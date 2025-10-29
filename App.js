@@ -1,62 +1,89 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, ScrollView } from "react-native";
+import { UserProvider } from "./context/UserContext";
 
-import styles from "./styles";
-import ChatScreen from "./ChatScreen";
-import ProfileScreen from "./ProfileScreen";
-import DatingScreen from "./DatingScreen";
-import ExploreScreen from "./ExploreScreen";
+import DatingScreen from "./screens/DatingScreen";
+import ExploreScreen from "./screens/ExploreScreen";
+import ProfileScreen from "./screens/ProfileScreen";
+import ChatScreen from "./screens/ChatScreen";
+import PremiumScreen from "./screens/PremiumScreen";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("dating"); // "dating" | "profile" | "messages"
+  const [activeTab, setActiveTab] = useState("dating");
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* --- MAIN CONTENT --- */}
-      {activeTab === "dating" && <DatingScreen />}
-      {activeTab === "explore" && <ExploreScreen />}
-      {activeTab === "profile" && <ProfileScreen />}
-      {activeTab === "messages" && (
-        <View style={styles.container}>
-          <Text style={styles.profileText}>💬 Messages Page</Text>
-          <ChatScreen />
+    <UserProvider>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          {activeTab === "dating" && <DatingScreen />}
+          {activeTab === "explore" && <ExploreScreen />}
+          {activeTab === "profile" && <ProfileScreen />}
+          {activeTab === "messages" && <ChatScreen />}
+          {activeTab === "premium" && <PremiumScreen />}
         </View>
-      )}
 
-      {/* --- BOTTOM NAVIGATION --- */}
-      <View style={styles.navBar}>
-        <TouchableOpacity
-          style={[styles.navButton, activeTab === "dating" && styles.activeButton]}
-          onPress={() => setActiveTab("dating")}
-        >
-          <Text style={styles.navText}>💘 Dating</Text>
-        </TouchableOpacity>
+        <View style={styles.navBar}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.navScrollContent}
+          >
+            {["dating", "explore", "messages", "premium", "profile"].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.navButton, activeTab === tab && styles.activeButton]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={styles.navText}>
+                  {tab === "dating" ? "💘 Dating" :
+                   tab === "explore" ? "🧭 Explore" :
+                   tab === "messages" ? "💬 Messages" :
+                   tab === "premium" ? "⭐ Premium" :
+                   "👤 Profile"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-        <TouchableOpacity
-          style={[styles.navButton, activeTab === "explore" && styles.activeButton]}
-          onPress={() => setActiveTab("explore")}
-        >
-          <Text style={styles.navText}>🧭 Explore</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navButton, activeTab === "messages" && styles.activeButton]}
-          onPress={() => setActiveTab("messages")}
-        >
-          <Text style={styles.navText}>💬 Messages</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navButton, activeTab === "profile" && styles.activeButton]}
-          onPress={() => setActiveTab("profile")}
-        >
-          <Text style={styles.navText}>👤 Profile</Text>
-        </TouchableOpacity>
-        
-      </View>
-
-      <StatusBar style="auto" />
-    </SafeAreaView>
+        <StatusBar style="auto" />
+      </SafeAreaView>
+    </UserProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1,
+    backgroundColor: "#1E90FF"
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: "#1E90FF"
+  },
+  navBar: {
+    borderTopWidth: 1,
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
+  },
+  navScrollContent: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+  },
+  navButton: { 
+    padding: 10,
+    marginHorizontal: 5,
+    minWidth: 100,
+    alignItems: "center",
+  },
+  activeButton: { 
+    backgroundColor: "#1E90FF", 
+    borderRadius: 10 
+  },
+  navText: { 
+    fontSize: 16,
+    textAlign: "center",
+  },
+});

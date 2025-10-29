@@ -42,4 +42,3 @@ yarn-error.*
 
 # firebase api key (DO NOT KEEP)
 firebaseConfig.js
-
