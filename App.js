@@ -1,11 +1,10 @@
+
 import { useState, useEffect, use } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, Image, Button, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
 import * as ImagePicker from 'expo-image-picker';
-import { Platform } from 'react-native';
-import { ChatScreen, CreateChat, Reset } from "./chat"; 
-
+import { ChatScreen, CreateChat, ResetCreation, ResetOpening } from "./chat"; 
 
 export function getUserID() {
 
@@ -53,11 +52,11 @@ export default function App() {
       return (
         <View style={{marginTop: 40, alignItems: "center"}}>
           <Button title="Back" onPress={() => setShowChat(false)} />
-          <ChatScreen name = "sudo"/>
+          <ChatScreen />
         </View>
       );
     } else {
-        Reset();
+        ResetOpening();
     }
     
     // brings them to the create chat screen once button is pressed
@@ -70,7 +69,7 @@ export default function App() {
         </View>
       );
     } else {
-        Reset();
+        ResetCreation();
     }
 
   return (
@@ -137,7 +136,7 @@ export default function App() {
           <View style={styles.profileContainer}>
             <Text style={styles.profileText}>💬 Chat List Page</Text>
             <Button title= "Back to Messages" onPress = {() => setActiveTab('messages')} />
-            <Button title= "Open Chat with sudo" onPress={() => setShowChat(true)} />
+            <Button title= "Open Chat" onPress={() => setShowChat(true)} />
           </View>
 
         ):
@@ -251,5 +250,13 @@ const styles = StyleSheet.create({
     color: "black",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 10,
+    marginBottom: 20,
+    borderRadius: 5
   },
 });
