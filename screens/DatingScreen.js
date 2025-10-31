@@ -1,203 +1,303 @@
-import React, { useContext, useEffect, useState, useRef } from "react";
-import { View, Text, Image, StyleSheet, ScrollView, PanResponder, Animated } from "react-native";
-import { UserContext } from "../context/UserContext";
+import React, { useEffect, useState, useRef } from "react";
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated, Alert } from "react-native";
+import { getAllProfiles, saveRating } from "../profileService";
+import { CURRENT_USER_ID } from "../UserConfig";
 
 export default function DatingScreen() {
-  const { userData } = useContext(UserContext);
+  const [profiles, setProfiles] = useState([]);
+  const [currentPairIndex, setCurrentPairIndex] = useState(0);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingProfile, setRatingProfile] = useState(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
 
+  const currentUserId = CURRENT_USER_ID;
+
   useEffect(() => {
+    loadProfiles();
+  }, []);
+
+  const loadProfiles = async () => {
+    setLoading(true);
+    const fetchedProfiles = await getAllProfiles(currentUserId);
+    console.log(`Loaded ${fetchedProfiles.length} profiles for user: ${currentUserId}`);
+    setProfiles(fetchedProfiles);
+    setCurrentPairIndex(0); // Reset to first pair
+    setLoading(false);
+  };
+
+  const handleProfileClick = (profile) => {
+    setSelectedProfile(profile);
     setCurrentImageIndex(0);
-  }, [userData]);
+  };
+
+  const handleBackToDouble = () => {
+    setSelectedProfile(null);
+    setCurrentImageIndex(0);
+  };
+
+  const handleRateProfile = (profile) => {
+    setRatingProfile(profile);
+    setShowRatingModal(true);
+  };
+
+  const submitRating = async (rating) => {
+    if (ratingProfile) {
+      await saveRating(currentUserId, ratingProfile.userId, rating);
+      Alert.alert("Rating Submitted", `You rated ${ratingProfile.name} ${rating} stars!`);
+      setShowRatingModal(false);
+      setRatingProfile(null);
+    }
+  };
 
   const handleNextImage = () => {
-    if (userData.photos.length > 1) {
+    if (selectedProfile && selectedProfile.photos.length > 1) {
       setCurrentImageIndex((prevIndex) => 
-        (prevIndex + 1) % userData.photos.length
+        (prevIndex + 1) % selectedProfile.photos.length
       );
     }
   };
 
   const handlePrevImage = () => {
-    if (userData.photos.length > 1) {
+    if (selectedProfile && selectedProfile.photos.length > 1) {
       setCurrentImageIndex((prevIndex) => 
-        prevIndex === 0 ? userData.photos.length - 1 : prevIndex - 1
+        prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1
       );
     }
+  };
+
+  const handleSwipeComplete = (direction) => {
+    const action = direction === "right" ? "like" : "pass";
+    console.log(`${action} on both profiles!`);
+    
+    // Move to next pair
+    setCurrentPairIndex((prevIndex) => prevIndex + 2);
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 5;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        pan.setValue({ x: gestureState.dx, y: gestureState.dy * 0.5 });
-        const newOpacity = 1 - Math.abs(gestureState.dx) / 400;
-        opacity.setValue(newOpacity);
-        // Rotate card based on drag
-        const rotateValue = gestureState.dx / 15;
-        rotate.setValue(rotateValue);
-      },
+      onMoveShouldSetPanResponder: () => false,
       onPanResponderRelease: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
           if (gestureState.x0 < 200) {
             handlePrevImage();
           } else {
             handleNextImage();
           }
-        } 
-        else if (Math.abs(gestureState.dx) > 120) {
-          // Swipe detected
-          const direction = gestureState.dx > 0 ? "right" : "left";
-          
-          Animated.parallel([
-            Animated.timing(pan, {
-              toValue: { x: gestureState.dx > 0 ? 500 : -500, y: gestureState.dy },
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacity, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            // Reset card
-            pan.setValue({ x: 0, y: 0 });
-            opacity.setValue(1);
-            rotate.setValue(0);
-            
-            // Show feedback
-            if (direction === "right") {
-              console.log("✓ YES - Swiped Right!");
-            } else {
-              console.log("✗ NO - Swiped Left!");
-            }
-          });
-        } else {
-          // Return to center
-          Animated.parallel([
-            Animated.spring(pan, {
-              toValue: { x: 0, y: 0 },
-              friction: 7,
-              tension: 40,
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacity, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.spring(rotate, {
-              toValue: 0,
-              friction: 7,
-              tension: 40,
-              useNativeDriver: true,
-            }),
-          ]).start();
         }
       },
     })
   ).current;
 
-  if (userData.photos.length === 0) {
+  if (loading) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={{ color: "white", fontSize: 18 }}>Loading profiles...</Text>
+      </View>
+    );
+  }
+
+  if (currentPairIndex >= profiles.length) {
     return (
       <View style={styles.emptyContainer}>
         <Text style={{ color: "white", fontSize: 18 }}>
-          Go to your profile and add photos & info first!
+          No more profiles! Check back later.
         </Text>
       </View>
     );
   }
 
-  const rotateInterpolate = rotate.interpolate({
-    inputRange: [-50, 0, 50],
-    outputRange: ["-10deg", "0deg", "10deg"],
-  });
+  const topProfile = profiles[currentPairIndex];
+  const bottomProfile = profiles[currentPairIndex + 1];
 
-  const likeOpacity = pan.x.interpolate({
-    inputRange: [0, 150],
-    outputRange: [0, 1],
-    extrapolate: "clamp",
-  });
-
-  const nopeOpacity = pan.x.interpolate({
-    inputRange: [-150, 0],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
-
-  return (
-    <ScrollView 
-      style={styles.scrollContainer}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Image Card */}
-      <Animated.View 
-        style={[
-          styles.imageCard,
-          {
-            transform: [
-              { translateX: pan.x },
-              { rotate: rotateInterpolate }
-            ],
-            opacity: opacity,
-          }
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <Image 
-          source={userData.photos[currentImageIndex]} 
-          style={styles.image} 
-          resizeMode="cover" 
-        />
-        
-        {/* YES Label */}
-        <Animated.View style={[styles.likeLabel, { opacity: likeOpacity }]}>
-          <Text style={styles.likeText}>YES ❤️</Text>
-        </Animated.View>
-
-        {/* NO Label */}
-        <Animated.View style={[styles.nopeLabel, { opacity: nopeOpacity }]}>
-          <Text style={styles.nopeText}>NO ✗</Text>
-        </Animated.View>
-        
-        {/* Image indicator dots */}
-        {userData.photos.length > 1 && (
-          <View style={styles.dotsContainer} pointerEvents="none">
-            {userData.photos.map((_, index) => (
-              <View 
-                key={index} 
-                style={[
-                  styles.dot,
-                  index === currentImageIndex && styles.activeDot
-                ]} 
-              />
+  // Rating Modal
+  if (showRatingModal && ratingProfile) {
+    return (
+      <View style={styles.modalContainer}>
+        <View style={styles.ratingModal}>
+          <Text style={styles.modalTitle}>Rate {ratingProfile.name}</Text>
+          <Text style={styles.modalSubtitle}>How would you rate this profile?</Text>
+          
+          <View style={styles.starsContainer}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                style={styles.starButton}
+                onPress={() => submitRating(star)}
+              >
+                <Text style={styles.starText}>⭐</Text>
+                <Text style={styles.starNumber}>{star}</Text>
+              </TouchableOpacity>
             ))}
           </View>
-        )}
-      </Animated.View>
+          
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => {
+              setShowRatingModal(false);
+              setRatingProfile(null);
+            }}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
-      {/* Info Card */}
-      <View style={styles.infoCard}>
-        <Text style={styles.cardText}>
-          {userData.name || "Unknown"} {userData.age ? `, ${userData.age}` : ""}
+  // If viewing a single profile
+  if (selectedProfile) {
+    return (
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity style={styles.backButton} onPress={handleBackToDouble}>
+          <Text style={styles.backButtonText}>← Back to Double Dating</Text>
+        </TouchableOpacity>
+
+        <View 
+          style={styles.imageCard}
+        >
+          <Image 
+            source={{ uri: selectedProfile.photos[currentImageIndex] }} 
+            style={styles.image} 
+            resizeMode="cover" 
+          />
+          
+          {/* Left tap zone for previous image */}
+          <TouchableOpacity 
+            style={styles.leftTapZone}
+            onPress={handlePrevImage}
+            activeOpacity={1}
+          />
+          
+          {/* Right tap zone for next image */}
+          <TouchableOpacity 
+            style={styles.rightTapZone}
+            onPress={handleNextImage}
+            activeOpacity={1}
+          />
+          
+          {selectedProfile.photos.length > 1 && (
+            <View style={styles.dotsContainer} pointerEvents="none">
+              {selectedProfile.photos.map((_, index) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.dot,
+                    index === currentImageIndex && styles.activeDot
+                  ]} 
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.cardText}>
+            {selectedProfile.name || "Unknown"} {selectedProfile.age ? `, ${selectedProfile.age}` : ""}
+          </Text>
+          <Text style={styles.desc}>{selectedProfile.description}</Text>
+          <Text style={styles.tags}>{selectedProfile.tags}</Text>
+          
+          <TouchableOpacity 
+            style={styles.rateButton}
+            onPress={() => handleRateProfile(selectedProfile)}
+          >
+            <Text style={styles.rateButtonText}>⭐ Rate this profile</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.instructions}>
+          Tap left/right on images to flip through • Go back to like/pass
         </Text>
-        <Text style={styles.desc}>{userData.description}</Text>
-        <Text style={styles.tags}>{userData.tags}</Text>
+      </ScrollView>
+    );
+  }
+
+  // Double dating view
+  return (
+    <View style={styles.doubleDatingContainer}>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>💑 Double Dating</Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={loadProfiles}>
+          <Text style={styles.refreshText}>🔄 Refresh</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <Text style={styles.userIndicator}>Viewing as: {currentUserId}</Text>
+
+      {topProfile && (
+        <TouchableOpacity 
+          style={styles.halfCard}
+          onPress={() => handleProfileClick(topProfile)}
+          activeOpacity={0.9}
+        >
+          <Image 
+            source={{ uri: topProfile.photos[0] }} 
+            style={styles.halfImage} 
+            resizeMode="cover" 
+          />
+          <View style={styles.halfCardOverlay}>
+            <Text style={styles.halfCardText}>
+              {topProfile.name} {topProfile.age ? `, ${topProfile.age}` : ""}
+            </Text>
+            <Text style={styles.tapToView}>Tap to view profile</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.swipeActions}>
+        <TouchableOpacity 
+          style={styles.passButton}
+          onPress={() => handleSwipeComplete("left")}
+        >
+          <Text style={styles.actionButtonText}>✗ PASS BOTH</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.likeButton}
+          onPress={() => handleSwipeComplete("right")}
+        >
+          <Text style={styles.actionButtonText}>❤️ LIKE BOTH</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Instructions */}
+      {bottomProfile ? (
+        <TouchableOpacity 
+          style={styles.halfCard}
+          onPress={() => handleProfileClick(bottomProfile)}
+          activeOpacity={0.9}
+        >
+          <Image 
+            source={{ uri: bottomProfile.photos[0] }} 
+            style={styles.halfImage} 
+            resizeMode="cover" 
+          />
+          <View style={styles.halfCardOverlay}>
+            <Text style={styles.halfCardText}>
+              {bottomProfile.name} {bottomProfile.age ? `, ${bottomProfile.age}` : ""}
+            </Text>
+            <Text style={styles.tapToView}>Tap to view profile</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <View style={[styles.halfCard, styles.emptyCard]}>
+          <Text style={styles.emptyText}>No more profiles</Text>
+        </View>
+      )}
+
       <Text style={styles.instructions}>
-        👈 Swipe left for NO  |  Swipe right for YES 👉
+        Tap profiles to view details • Swipe or use buttons to decide
       </Text>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -209,10 +309,127 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 20,
   },
+  doubleDatingContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "white",
+    marginTop: 20,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "95%",
+    marginTop: 20,
+    marginBottom: 5,
+  },
+  refreshButton: {
+    backgroundColor: "white",
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 15,
+  },
+  refreshText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  userIndicator: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.8)",
+    marginBottom: 10,
+  },
+  halfCard: {
+    width: "95%",
+    height: "35%",
+    borderRadius: 20,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+    overflow: "hidden",
+    position: "relative",
+  },
+  halfImage: {
+    width: "100%",
+    height: "100%",
+  },
+  halfCardOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 15,
+  },
+  halfCardText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "white",
+  },
+  tapToView: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 5,
+  },
+  swipeActions: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "95%",
+    marginVertical: 15,
+  },
+  passButton: {
+    backgroundColor: "#F44336",
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+    flex: 1,
+    marginRight: 10,
+    alignItems: "center",
+  },
+  likeButton: {
+    backgroundColor: "#4CAF50",
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+    flex: 1,
+    marginLeft: 10,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  emptyCard: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#888",
+  },
+  backButton: {
+    backgroundColor: "white",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
   },
   imageCard: {
     width: "95%",
@@ -231,35 +448,23 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 20,
   },
-  likeLabel: {
+  leftTapZone: {
     position: "absolute",
-    top: 50,
-    right: 40,
-    borderWidth: 4,
-    borderColor: "#4CAF50",
-    borderRadius: 10,
-    padding: 10,
-    transform: [{ rotate: "20deg" }],
+    top: 0,
+    left: 0,
+    width: "50%",
+    height: "100%",
+    backgroundColor: "transparent",
+    zIndex: 100,
   },
-  likeText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#4CAF50",
-  },
-  nopeLabel: {
+  rightTapZone: {
     position: "absolute",
-    top: 50,
-    left: 40,
-    borderWidth: 4,
-    borderColor: "#F44336",
-    borderRadius: 10,
-    padding: 10,
-    transform: [{ rotate: "-20deg" }],
-  },
-  nopeText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#F44336",
+    top: 0,
+    right: 0,
+    width: "50%",
+    height: "100%",
+    backgroundColor: "transparent",
+    zIndex: 100,
   },
   dotsContainer: {
     position: "absolute",
@@ -316,9 +521,77 @@ const styles = StyleSheet.create({
   },
   instructions: {
     color: "white",
-    fontSize: 16,
+    fontSize: 14,
     textAlign: "center",
     marginBottom: 20,
+    paddingHorizontal: 20,
+    fontStyle: "italic",
+  },
+  rateButton: {
+    backgroundColor: "#FFD700",
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 20,
+    marginTop: 15,
+    alignItems: "center",
+  },
+  rateButtonText: {
+    fontSize: 16,
     fontWeight: "bold",
+    color: "#333",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  ratingModal: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 30,
+    width: "85%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 25,
+    textAlign: "center",
+  },
+  starsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+    marginBottom: 20,
+  },
+  starButton: {
+    alignItems: "center",
+    padding: 10,
+  },
+  starText: {
+    fontSize: 40,
+  },
+  starNumber: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginTop: 5,
+    color: "#333",
+  },
+  cancelButton: {
+    backgroundColor: "#ccc",
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 20,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: "#333",
   },
 });

@@ -9,19 +9,26 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
 
   return (
     <UserProvider>
       <SafeAreaView style={styles.container}>
-        <View style={styles.contentContainer}>
-          {activeTab === "dating" && <DatingScreen />}
-          {activeTab === "explore" && <ExploreScreen />}
-          {activeTab === "profile" && <ProfileScreen />}
-          {activeTab === "messages" && <ChatScreen />}
-          {activeTab === "premium" && <PremiumScreen />}
-        </View>
+        {/* IMPORTANT: Messages tab gets full flex, others get normal layout */}
+        {activeTab === "messages" ? (
+          <View style={styles.fullScreenContainer}>
+            <ChatScreen />
+          </View>
+        ) : (
+          <View style={styles.contentContainer}>
+            {activeTab === "dating" && <DatingScreen />}
+            {activeTab === "explore" && <ExploreScreen />}
+            {activeTab === "profile" && <ProfileScreen />}
+            {activeTab === "premium" && <PremiumScreen />}
+          </View>
+        )}
 
         <View style={styles.navBar}>
           <ScrollView 
@@ -56,11 +63,15 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-    backgroundColor: "#1E90FF"
+    backgroundColor: "#D1D1D1"
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: "#1E90FF"
+    backgroundColor: "#D1D1D1"
+  },
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: "#D1D1D1"
   },
   navBar: {
     borderTopWidth: 1,
@@ -79,7 +90,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   activeButton: { 
-    backgroundColor: "#1E90FF", 
+    backgroundColor: "#D1D1D1", 
     borderRadius: 10 
   },
   navText: { 
