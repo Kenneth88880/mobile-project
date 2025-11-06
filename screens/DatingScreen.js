@@ -1,16 +1,17 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated, Alert } from "react-native";
-import { getAllProfiles, saveRating } from "../profileService";
+import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe } from "../profileService";
 import { CURRENT_USER_ID } from "../UserConfig";
 
 export default function DatingScreen() {
-  const [profiles, setProfiles] = useState([]);
+  const [duoPairs, setDuoPairs] = useState([]);
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingProfile, setRatingProfile] = useState(null);
+  const [currentDuo, setCurrentDuo] = useState(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
@@ -18,16 +19,29 @@ export default function DatingScreen() {
   const currentUserId = CURRENT_USER_ID;
 
   useEffect(() => {
-    loadProfiles();
+    loadData();
   }, []);
 
-  const loadProfiles = async () => {
+  const loadData = async () => {
     setLoading(true);
-    const fetchedProfiles = await getAllProfiles(currentUserId);
-    console.log(`Loaded ${fetchedProfiles.length} profiles for user: ${currentUserId}`);
-    setProfiles(fetchedProfiles);
-    setCurrentPairIndex(0); // Reset to first pair
-    setLoading(false);
+    try {
+      // Load current duo
+      const duo = await getCurrentDuoPartner(currentUserId);
+      setCurrentDuo(duo);
+      
+      // Load duo pairs
+      console.log("Starting to load duo pairs...");
+      const fetchedPairs = await getAllDuoPairs(currentUserId);
+      console.log(`Loaded ${fetchedPairs.length} duo pairs for user: ${currentUserId}`);
+      setDuoPairs(fetchedPairs);
+      setCurrentPairIndex(0);
+    } catch (error) {
+      console.error("Error in loadData:", error);
+      Alert.alert("Error", "Failed to load duo pairs. Check console for details.");
+    } finally {
+      setLoading(false);
+      console.log("Finished loading duo pairs, loading set to false");
+    }
   };
 
   const handleProfileClick = (profile) => {
@@ -70,12 +84,54 @@ export default function DatingScreen() {
     }
   };
 
-  const handleSwipeComplete = (direction) => {
+  const handleSwipeComplete = async (direction) => {
+    if (currentPairIndex >= duoPairs.length) return;
+
+    const currentDuoPair = duoPairs[currentPairIndex];
     const action = direction === "right" ? "like" : "pass";
-    console.log(`${action} on both profiles!`);
     
-    // Move to next pair
-    setCurrentPairIndex((prevIndex) => prevIndex + 2);
+    console.log(`${action} on duo pair!`);
+
+    if (!currentDuo) {
+      Alert.alert("No Duo", "You need a duo partner to swipe on duos! Go to your Profile to find one.");
+      setCurrentPairIndex((prevIndex) => prevIndex + 1);
+      return;
+    }
+
+    if (action === "like") {
+      // Delete any existing like first to allow re-requesting
+      await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.duoId);
+      
+      // Save the duo like (this also saves the swipe internally)
+      const result = await saveDuoLike(
+        currentDuo.duoId,
+        currentDuoPair.duoId,
+        currentUserId,
+        currentDuo.partnerId,
+        currentDuoPair.user1.userId,
+        currentDuoPair.user2.userId
+      );
+
+      if (result.success) {
+        Alert.alert("💕 Duo Like Sent!", "They'll see your like in their Requests tab!");
+      } else if (result.message === "Already liked") {
+        Alert.alert("Already Liked", "You've already liked this duo!");
+      }
+    } else {
+      // action === "pass" - save the pass swipe so they never see this duo again
+      await saveDuoSwipe(currentDuo.duoId, currentDuoPair.duoId, "pass");
+      console.log("Passed on duo - won't see them again");
+    }
+    
+    // Remove the swiped duo from the current list immediately
+    setDuoPairs((prevPairs) => {
+      const newPairs = prevPairs.filter(pair => pair.duoId !== currentDuoPair.duoId);
+      console.log(`Removed duo from list. ${newPairs.length} duos remaining`);
+      return newPairs;
+    });
+    
+    // Don't increment index since we removed the item from the array
+    // The next duo will automatically be at the current index
   };
 
   const panResponder = useRef(
@@ -102,18 +158,26 @@ export default function DatingScreen() {
     );
   }
 
-  if (currentPairIndex >= profiles.length) {
+  if (currentPairIndex >= duoPairs.length) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={{ color: "white", fontSize: 18 }}>
-          No more profiles! Check back later.
+        <Text style={{ color: "white", fontSize: 18, textAlign: "center", paddingHorizontal: 20 }}>
+          No more duo pairs available!{"\n"}
+          Duo pairs are two people teaming up for double dating.
         </Text>
+        <TouchableOpacity 
+          style={styles.refreshButtonLarge}
+          onPress={loadData}
+        >
+          <Text style={styles.refreshButtonText}>🔄 Reload</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  const topProfile = profiles[currentPairIndex];
-  const bottomProfile = profiles[currentPairIndex + 1];
+  const currentDuoPair = duoPairs[currentPairIndex];
+  const topProfile = currentDuoPair?.user1;
+  const bottomProfile = currentDuoPair?.user2;
 
   // Rating Modal
   if (showRatingModal && ratingProfile) {
@@ -227,12 +291,22 @@ export default function DatingScreen() {
     <View style={styles.doubleDatingContainer}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>💑 Double Dating</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={loadProfiles}>
+        <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshText}>🔄 Refresh</Text>
         </TouchableOpacity>
       </View>
       
       <Text style={styles.userIndicator}>Viewing as: {currentUserId}</Text>
+      {currentDuo ? (
+        <Text style={styles.duoStatus}>
+          👯 Your duo: You + {currentDuo.partnerName}
+        </Text>
+      ) : (
+        <Text style={styles.noDuoWarning}>
+          ⚠️ Find a duo partner in Profile to like duos!
+        </Text>
+      )}
+      <Text style={styles.duoExplanation}>👯 These are duo partners teaming up!</Text>
 
       {topProfile && (
         <TouchableOpacity 
@@ -343,10 +417,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
+  refreshButtonLarge: {
+    backgroundColor: "white",
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  refreshButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
   userIndicator: {
     fontSize: 12,
     color: "rgba(255,255,255,0.8)",
+    marginBottom: 5,
+  },
+  duoStatus: {
+    fontSize: 14,
+    color: "#4CAF50",
+    marginBottom: 5,
+    fontWeight: "bold",
+  },
+  noDuoWarning: {
+    fontSize: 13,
+    color: "#FFD700",
+    marginBottom: 5,
+    fontWeight: "bold",
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  duoExplanation: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.9)",
     marginBottom: 10,
+    fontWeight: "bold",
   },
   halfCard: {
     width: "95%",
