@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { StyleSheet, Text, TextInput, Button, View, TouchableOpacity, ScrollView, FlatList, Image, ActivityIndicator, Alert } from "react-native";
+import { StyleSheet, Text, TextInput, Button, View, TouchableOpacity, ScrollView, FlatList, Image, ActivityIndicator, Alert, Modal, SafeAreaView, KeyboardAvoidingView, Platform } from "react-native";
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, doc, getDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { getUserProfile, saveRating } from "../profileService";
 import { CURRENT_USER_ID } from "../UserConfig";
 
 const getUserID = () => {
@@ -24,6 +25,45 @@ const deleteChat = async (chatId) => {
     return true;
   } catch (error) {
     console.error("Error deleting chat:", error);
+    return false;
+  }
+};
+
+// Report a chat - removes from user's view but keeps logs for moderation
+const reportChat = async (chatId, reportingUserId) => {
+  try {
+    const chatRef = doc(db, "chats", chatId);
+    const chatDoc = await getDoc(chatRef);
+    
+    if (chatDoc.exists()) {
+      const data = chatDoc.data();
+      
+      // Add report to the chat document
+      const reports = data.reports || [];
+      reports.push({
+        reportedBy: reportingUserId,
+        reportedAt: serverTimestamp(),
+        reason: "User reported inappropriate content"
+      });
+      
+      // Remove the reporting user from participants
+      const participants = data.participants || [];
+      const updatedParticipants = participants.filter(id => id !== reportingUserId);
+      
+      // Mark chat as flagged for moderation
+      await updateDoc(chatRef, {
+        reports: reports,
+        participants: updatedParticipants,
+        flaggedForModeration: true,
+        lastReportedAt: serverTimestamp()
+      });
+      
+      console.log(`Chat ${chatId} reported by user ${reportingUserId}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error reporting chat:", error);
     return false;
   }
 };
@@ -94,23 +134,116 @@ function ChatListScreen({ onChatSelect }) {
     return messageDate.toLocaleDateString();
   };
 
-  const handleDeleteChat = (chatId, chatName) => {
+  const congratsMessages = [
+  "Amazing! So happy you four met! 🎉💕",
+  "Double the love, double the fun! Congratulations to both couples! 🥳❤️",
+  "This is what it's all about! So excited for all four of you! 🎊💫",
+  "Two couples, one perfect match! Congrats! 💝✨",
+  "Your double date story begins! Congratulations! 🌟💖",
+  "Match made in heaven times two! Best wishes to both couples! 🎈💕",
+  "So thrilled you all connected! Wishing all four of you the best! 🎉💗",
+  "The beginning of something beautiful for both duos! Congrats! 🌸💫",
+  "Four hearts, endless possibilities! So happy for you all! 💕🎊",
+  "What a fantastic match! Hope you all had an amazing time together! 🌟❤️",
+  "Two couples, one unforgettable connection! Congrats! 🎉💝",
+  "Love it when duos connect! Best wishes to all of you! 🥳💖",
+  ];
+
+  const handleEveryoneMet = (chatId, chatName) => {
+    const randomMessage = congratsMessages[Math.floor(Math.random() * congratsMessages.length)];
+    
     Alert.alert(
-      "Delete Chat",
-      `Are you sure you want to delete "${chatName}"? This will permanently delete all messages.`,
+      "Everyone Met! 🎉",
+      randomMessage,
       [
-        { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Thanks!",
+          onPress: async () => {
+            const success = await deleteChat(chatId);
+            if (!success) {
+              Alert.alert("Error", "Failed to close chat");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleUnmatchDuo = (chatId, chatName) => {
+    Alert.alert(
+      "Unmatch Duo",
+      `Are you sure you want to unmatch with "${chatName}"? This will permanently delete the chat and all messages.`,
+      [
+        { 
+          text: "Cancel", 
+          style: "cancel" 
+        },
+        {
+          text: "Unmatch",
           style: "destructive",
           onPress: async () => {
             const success = await deleteChat(chatId);
             if (success) {
-              Alert.alert("Deleted", "Chat has been removed");
+              Alert.alert("Unmatched", "You have been unmatched from this duo");
             } else {
-              Alert.alert("Error", "Failed to delete chat");
+              Alert.alert("Error", "Failed to unmatch");
             }
           }
+        }
+      ]
+    );
+  };
+
+  const handleReport = (chatId, chatName) => {
+    Alert.alert(
+      "Report Chat",
+      `Are you sure you want to report "${chatName}"? This chat will be removed from your messages and flagged for moderation.`,
+      [
+        { 
+          text: "Cancel", 
+          style: "cancel" 
+        },
+        {
+          text: "Report",
+          style: "destructive",
+          onPress: async () => {
+            const success = await reportChat(chatId, currentUserId);
+            if (success) {
+              Alert.alert(
+                "Reported", 
+                "Thank you for reporting. Our moderation team will review this chat. The conversation has been removed from your messages."
+              );
+            } else {
+              Alert.alert("Error", "Failed to report chat");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const showChatOptions = (chatId, chatName) => {
+    Alert.alert(
+      "Chat Options",
+      null,
+      [
+        {
+          text: "Everyone Met 🎉",
+          onPress: () => handleEveryoneMet(chatId, chatName)
+        },
+        {
+          text: "Unmatch Duo",
+          onPress: () => handleUnmatchDuo(chatId, chatName),
+          style: "destructive"
+        },
+        {
+          text: "Report",
+          onPress: () => handleReport(chatId, chatName),
+          style: "destructive"
+        },
+        {
+          text: "Cancel",
+          style: "cancel"
         }
       ]
     );
@@ -172,12 +305,12 @@ function ChatListScreen({ onChatSelect }) {
           </View>
         </TouchableOpacity>
         
-        {/* Delete Button */}
+        {/* Three Dot Menu Button */}
         <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteChat(item.id, item.groupName || 'Chat')}
+          style={styles.menuButton}
+          onPress={() => showChatOptions(item.id, item.groupName || 'Chat')}
         >
-          <Text style={styles.deleteButtonText}>🗑️</Text>
+          <Text style={styles.menuButtonText}>⋯</Text>
         </TouchableOpacity>
       </View>
     );
@@ -222,11 +355,23 @@ function IndividualChatScreen({ chat, onBack }) {
   const currentUserId = getUserID();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false); // Separate visibility control
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [userProfiles, setUserProfiles] = useState({}); // Store user profiles by userId
 
   useEffect(() => {
     if (!chat?.id) return;
     
     console.log('💬 Opening chat:', chat.id);
+    
+    // Load group members if it's a group chat
+    if (chat.isGroupChat && chat.participants) {
+      loadGroupMembers(chat.participants);
+      loadAllUserProfiles(chat.participants);
+    }
     
     // Listen to messages in this chat
     const messagesRef = collection(db, "chats", chat.id, "messages");
@@ -247,6 +392,38 @@ function IndividualChatScreen({ chat, onBack }) {
 
     return unsubscribe;
   }, [chat?.id]);
+
+  const loadAllUserProfiles = async (participantIds) => {
+    try {
+      const profiles = {};
+      for (const userId of participantIds) {
+        const profile = await getUserProfile(userId);
+        if (profile) {
+          profiles[userId] = profile;
+        }
+      }
+      setUserProfiles(profiles);
+    } catch (error) {
+      console.error("Error loading user profiles:", error);
+    }
+  };
+
+  const loadGroupMembers = async (participantIds) => {
+    try {
+      const members = [];
+      for (const userId of participantIds) {
+        if (userId !== currentUserId) { // Don't include yourself
+          const profile = await getUserProfile(userId);
+          if (profile) {
+            members.push(profile);
+          }
+        }
+      }
+      setGroupMembers(members);
+    } catch (error) {
+      console.error("Error loading group members:", error);
+    }
+  };
 
   const markAsRead = async () => {
     try {
@@ -289,12 +466,15 @@ function IndividualChatScreen({ chat, onBack }) {
       if (chatDoc.exists()) {
         const data = chatDoc.data();
         const participants = data.participants || [];
-        const unreadCount = data.unreadCount || {};
         
-        // Increment unread count for all participants except sender
+        // Create unread counts for all participants except sender
+        const unreadCount = {};
         participants.forEach(participantId => {
           if (participantId !== currentUserId) {
-            unreadCount[participantId] = (unreadCount[participantId] || 0) + 1;
+            const currentCount = data.unreadCount?.[participantId] || 0;
+            unreadCount[participantId] = currentCount + 1;
+          } else {
+            unreadCount[participantId] = 0;
           }
         });
 
@@ -304,12 +484,43 @@ function IndividualChatScreen({ chat, onBack }) {
           unreadCount: unreadCount,
         });
       }
-
-      setInputText("");
     } catch (error) {
       console.error("Error sending message:", error);
     }
   }, [chat.id, currentUserId]);
+
+  const handleViewProfile = (profile) => {
+    console.log('👤 Opening profile for:', profile.name);
+    setSelectedProfile(profile);
+    setCurrentImageIndex(0);
+    setShowProfileModal(true);
+  };
+
+  // Force re-render when selectedProfile changes
+  useEffect(() => {
+    if (selectedProfile) {
+      console.log('✅ Selected profile updated:', selectedProfile.name);
+      console.log('📸 Current photo index:', currentImageIndex);
+      console.log('🖼️ Photos array:', selectedProfile.photos);
+    }
+  }, [selectedProfile, currentImageIndex]);
+
+  const handleNextImage = () => {
+    if (selectedProfile?.photos && currentImageIndex < selectedProfile.photos.length - 1) {
+      setCurrentImageIndex(currentImageIndex + 1);
+    }
+  };
+
+  const handlePreviousImage = () => {
+    if (currentImageIndex > 0) {
+      setCurrentImageIndex(currentImageIndex - 1);
+    }
+  };
+
+  const handleCloseProfile = () => {
+    console.log('🚪 Closing profile');
+    setShowProfileModal(false);
+  };
 
   const renderBubble = (props) => {
     return (
@@ -317,82 +528,281 @@ function IndividualChatScreen({ chat, onBack }) {
         {...props}
         wrapperStyle={{
           right: {
-            backgroundColor: '#000000',
+            backgroundColor: '#007AFF',
           },
           left: {
             backgroundColor: '#E5E5EA',
+          },
+        }}
+        textStyle={{
+          right: {
+            color: '#fff',
+          },
+          left: {
+            color: '#000',
           },
         }}
       />
     );
   };
 
-  const renderComposer = (props) => {
+  // Show profile full screen instead of Modal
+  if (showProfileModal && selectedProfile) {
+    const hasPhotos = selectedProfile?.photos && Array.isArray(selectedProfile.photos) && selectedProfile.photos.length > 0;
+    const currentPhoto = hasPhotos ? selectedProfile.photos[currentImageIndex] : null;
+    
     return (
+      <SafeAreaView style={[styles.container, { backgroundColor: '#fff' }]}>
+        <View style={styles.profileModalHeader}>
+          <TouchableOpacity onPress={handleCloseProfile}>
+            <Text style={styles.backButtonText}>← Back to Chat</Text>
+          </TouchableOpacity>
+          <Text style={styles.groupInfoTitle}>{selectedProfile.name}'s Profile</Text>
+        </View>
+        
+        <ScrollView style={styles.profileViewContainer} showsVerticalScrollIndicator={false}>
+          <View style={styles.profileImageCard}>
+            {currentPhoto ? (
+              <View style={{ width: '100%', height: '100%' }}>
+                <Image 
+                  source={{ uri: currentPhoto }} 
+                  style={styles.fullProfileImage}
+                  resizeMode="cover"
+                />
+                
+                {hasPhotos && selectedProfile.photos.length > 1 && (
+                  <>
+                    <TouchableOpacity 
+                      style={styles.leftTapZone}
+                      onPress={handlePreviousImage}
+                      activeOpacity={1}
+                    />
+                    <TouchableOpacity 
+                      style={styles.rightTapZone}
+                      onPress={handleNextImage}
+                      activeOpacity={1}
+                    />
+                    
+                    <View style={styles.dotsContainer}>
+                      {selectedProfile.photos.map((_, index) => (
+                        <View
+                          key={`dot-${index}`}
+                          style={[
+                            styles.photoDot,
+                            index === currentImageIndex && styles.activePhotoDot
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : (
+              <View style={styles.noPhotoContainer}>
+                <Text style={styles.noPhotoText}>👤</Text>
+                <Text style={styles.noPhotoSubtext}>No photo available</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.profileInfoCard}>
+            <Text style={styles.profileName}>
+              {selectedProfile.name || 'Unknown'}, {selectedProfile.age || '?'}
+            </Text>
+            <Text style={styles.profileDescription}>
+              {selectedProfile.description || 'No description'}
+            </Text>
+            {selectedProfile.tags && Array.isArray(selectedProfile.tags) && selectedProfile.tags.length > 0 && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.profileTags}>
+                  {selectedProfile.tags.join(', ')}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (showGroupInfo) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.groupInfoHeader}>
+          <TouchableOpacity onPress={() => setShowGroupInfo(false)}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.groupInfoTitle}>Group Members</Text>
+        </View>
+        
+        <ScrollView style={styles.groupMembersList}>
+          <Text style={styles.groupNameDisplay}>{chat.groupName || 'Group Chat'}</Text>
+          <Text style={styles.memberCount}>{groupMembers.length} members</Text>
+          
+          {groupMembers.map((member, index) => (
+            <TouchableOpacity 
+              key={index} 
+              style={styles.memberCard}
+              onPress={() => handleViewProfile(member)}
+            >
+              <View style={styles.memberAvatar}>
+                {member.photos && member.photos.length > 0 ? (
+                  <Image source={{ uri: member.photos[0] }} style={styles.memberAvatarImage} />
+                ) : (
+                  <Text style={styles.memberAvatarText}>👤</Text>
+                )}
+              </View>
+              <View style={styles.memberInfo}>
+                <Text style={styles.memberName}>{member.name}, {member.age}</Text>
+                <Text style={styles.memberLabel}>Duo Member</Text>
+                <Text style={styles.tapToViewProfile}>Tap to view profile</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Main chat return
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <View style={styles.chatHeader}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.chatHeaderContent}
+          onPress={() => setShowGroupInfo(true)}
+        >
+          <Text style={styles.chatHeaderText}>{chat.groupName || 'Chat'}</Text>
+          {chat.isGroupChat && (
+            <Text style={styles.chatHeaderSubtext}>Tap to view members</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+      
+      {/* Custom Messages List */}
+      <FlatList
+        data={messages}
+        renderItem={({ item }) => {
+          const isMyMessage = item.user._id === currentUserId;
+          const senderProfile = userProfiles[item.user._id];
+          const senderPhoto = senderProfile?.photos?.[0];
+          
+          return (
+            <View
+              style={[
+                styles.messageRow,
+                isMyMessage ? styles.myMessageRow : styles.theirMessageRow,
+              ]}
+            >
+              {/* Avatar for other users (left side) */}
+              {!isMyMessage && (
+                <TouchableOpacity 
+                  onPress={() => senderProfile && handleViewProfile(senderProfile)}
+                  style={styles.avatarContainer}
+                >
+                  {senderPhoto ? (
+                    <Image source={{ uri: senderPhoto }} style={styles.messageAvatar} />
+                  ) : (
+                    <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+                      <Text style={styles.avatarPlaceholderText}>👤</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+              
+              {/* Message Bubble */}
+              <View
+                style={[
+                  styles.messageBubble,
+                  isMyMessage ? styles.myMessage : styles.theirMessage,
+                ]}
+              >
+                {/* Show sender name for group chats (not your messages) */}
+                {!isMyMessage && chat.isGroupChat && senderProfile && (
+                  <Text style={styles.senderName}>{senderProfile.name}</Text>
+                )}
+                
+                <Text 
+                  style={[
+                    styles.messageText,
+                    isMyMessage && styles.myMessageText
+                  ]}
+                >
+                  {item.text}
+                </Text>
+                <Text style={styles.messageTime}>
+                  {item.createdAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+              
+              {/* Avatar for current user (right side) */}
+              {isMyMessage && userProfiles[currentUserId] && (
+                <View style={styles.avatarContainer}>
+                  {userProfiles[currentUserId].photos?.[0] ? (
+                    <Image 
+                      source={{ uri: userProfiles[currentUserId].photos[0] }} 
+                      style={styles.messageAvatar} 
+                    />
+                  ) : (
+                    <View style={[styles.messageAvatar, styles.messageAvatarPlaceholder]}>
+                      <Text style={styles.avatarPlaceholderText}>👤</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        }}
+        keyExtractor={(item) => item._id}
+        inverted
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesListContent}
+      />
+      
+      {/* Custom Input Composer */}
       <View style={styles.composerContainer}>
         <TextInput
           style={styles.textInput}
           value={inputText}
           onChangeText={setInputText}
           placeholder="Type a message..."
+          placeholderTextColor="#999"
           multiline
-          returnKeyType="default"
+          maxLength={1000}
         />
         <TouchableOpacity
-          style={styles.sendButton}
-          onPress={handleSend}
+          style={[
+            styles.sendButton,
+            !inputText.trim() && styles.sendButtonDisabled
+          ]}
+          onPress={() => {
+            if (inputText.trim()) {
+              onSend([{
+                _id: Math.random().toString(),
+                text: inputText.trim(),
+                createdAt: new Date(),
+                user: { _id: currentUserId }
+              }]);
+              setInputText('');
+            }
+          }}
+          disabled={!inputText.trim()}
         >
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
-    );
-  };
-
-  const handleSend = () => {
-    if (inputText.trim()) {
-      const newMessage = {
-        _id: Math.random().toString(),
-        text: inputText.trim(),
-        createdAt: new Date(),
-        user: { _id: currentUserId, name: "You" }
-      };
-      onSend([newMessage]);
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={styles.chatHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.chatHeaderContent}>
-          <Text style={styles.chatHeaderText}>{chat.groupName || "Chat"}</Text>
-          {chat.isGroupChat && (
-            <Text style={styles.chatHeaderSubtext}>
-              {chat.participants?.length || 0} participants
-            </Text>
-          )}
-        </View>
-      </View>
-      <GiftedChat
-        messages={messages}
-        onSend={(msgs) => onSend(msgs)}
-        user={{
-          _id: currentUserId,
-          name: "You",
-        }}
-        renderBubble={renderBubble}
-        renderComposer={renderComposer}
-        text={inputText}
-        onInputTextChanged={setInputText}
-        scrollToBottom
-      />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-// Main ChatScreen - now primarily shows the chat list
+// Main Export Component
 export default function ChatScreen() {
   const [selectedChat, setSelectedChat] = useState(null);
 
@@ -418,31 +828,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: '#fff',
+    paddingVertical: 15,
+    paddingHorizontal: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    backgroundColor: '#fff',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#000',
   },
   listContent: {
-    paddingVertical: 8,
+    flexGrow: 1,
   },
   chatItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   chatItem: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   avatarContainer: {
     marginRight: 12,
@@ -451,13 +863,12 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#e0e0e0',
   },
   groupAvatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#e0e0e0',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -511,13 +922,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  deleteButton: {
+  menuButton: {
     padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  deleteButtonText: {
-    fontSize: 24,
+  menuButtonText: {
+    fontSize: 28,
+    color: '#666',
+    fontWeight: 'bold',
   },
   emptyContainer: {
     padding: 40,
@@ -546,7 +959,7 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   backButtonText: {
-    color: 'white',
+    color: '#000000ff',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -592,9 +1005,258 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  sendButtonDisabled: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
   sendButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  messagesList: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  messagesListContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginVertical: 4,
+  },
+  myMessageRow: {
+    justifyContent: 'flex-end',
+  },
+  theirMessageRow: {
+    justifyContent: 'flex-start',
+  },
+  avatarContainer: {
+    marginHorizontal: 8,
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  messageAvatarPlaceholder: {
+    backgroundColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarPlaceholderText: {
+    fontSize: 16,
+  },
+  messageBubble: {
+    maxWidth: '70%',
+    padding: 12,
+    borderRadius: 18,
+  },
+  myMessage: {
+    backgroundColor: '#007AFF',
+    borderBottomRightRadius: 4,
+  },
+  theirMessage: {
+    backgroundColor: '#E5E5EA',
+    borderBottomLeftRadius: 4,
+  },
+  senderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  messageText: {
+    fontSize: 16,
+    color: '#000',
+  },
+  myMessageText: {
+    color: '#fff',
+  },
+  messageTime: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  groupInfoHeader: {
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  groupInfoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 15,
+  },
+  groupMembersList: {
+    flex: 1,
+    padding: 15,
+  },
+  groupNameDisplay: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 15,
+    color: '#333',
+  },
+  memberCount: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#666',
+    marginBottom: 20,
+  },
+  memberCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  memberAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  memberAvatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 15,
+  },
+  memberAvatarText: {
+    fontSize: 24,
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  memberLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  tapToViewProfile: {
+    fontSize: 12,
+    color: '#1E90FF',
+    marginTop: 2,
+  },
+  profileModalHeader: {
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 15,
+  },
+  profileViewContainer: {
+    padding: 15,
+  },
+  profileImageCard: {
+    width: '100%',
+    height: 500,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+    overflow: 'hidden',
+    marginBottom: 15,
+  },
+  fullProfileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  leftTapZone: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '50%',
+    height: '100%',
+    backgroundColor: 'transparent',
+    zIndex: 100,
+  },
+  rightTapZone: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: '50%',
+    height: '100%',
+    backgroundColor: 'transparent',
+    zIndex: 100,
+  },
+  dotsContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  photoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    marginHorizontal: 4,
+  },
+  activePhotoDot: {
+    backgroundColor: 'white',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  noPhotoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  noPhotoText: {
+    fontSize: 80,
+  },
+  noPhotoSubtext: {
+    fontSize: 16,
+    color: '#666',
+  },
+  profileInfoCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
+  profileDescription: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 10,
+  },
+  profileTags: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
   },
 });

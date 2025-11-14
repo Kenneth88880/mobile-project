@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, RefreshControl } from "react-native";
 import { db } from "../firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { acceptDuoLike, getCurrentDuoPartner, deleteDuoLike, getUserProfile, saveDuoSwipe } from "../profileService";
+import { acceptDuoLike, getCurrentDuoPartner, deleteDuoLike, getUserProfile, saveDuoSwipe, saveRating } from "../profileService";
 import { CURRENT_USER_ID } from "../UserConfig";
 
 export default function RequestsScreen() {
@@ -10,6 +10,9 @@ export default function RequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentDuo, setCurrentDuo] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showRatingModal, setShowRatingModal] = useState(false);
   
   const currentUserId = CURRENT_USER_ID;
 
@@ -113,19 +116,25 @@ export default function RequestsScreen() {
     }
   };
 
-  const handleDecline = async (likeId) => {
+  const handleDecline = async (likeId, fromDuoId) => {
+    if (!currentDuo) return;
+    
     Alert.alert(
       "Decline Request",
-      "Are you sure you want to decline this duo like? This will permanently remove it.",
+      "Are you sure you want to decline this duo like? This will permanently remove it and you won't see them again.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Decline",
           style: "destructive",
           onPress: async () => {
+            // Save the decline swipe so they never see this duo again
+            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
+            
+            // Delete the duo like
             const success = await deleteDuoLike(likeId);
             if (success) {
-              Alert.alert("Declined", "Request has been removed");
+              Alert.alert("Declined", "Request has been removed - you won't see this duo again");
               // No need to reload - real-time listener will update automatically
             } else {
               Alert.alert("Error", "Failed to decline request");
@@ -135,6 +144,165 @@ export default function RequestsScreen() {
       ]
     );
   };
+
+  const handleProfileClick = (profile) => {
+    setSelectedProfile(profile);
+    setCurrentImageIndex(0);
+  };
+
+  const handleNextImage = () => {
+    if (selectedProfile && selectedProfile.photos && selectedProfile.photos.length > 1) {
+      setCurrentImageIndex((prevIndex) => 
+        (prevIndex + 1) % selectedProfile.photos.length
+      );
+    }
+  };
+
+  const handlePrevImage = () => {
+    if (selectedProfile && selectedProfile.photos && selectedProfile.photos.length > 1) {
+      setCurrentImageIndex((prevIndex) => 
+        prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1
+      );
+    }
+  };
+
+  const handleRateProfile = () => {
+    setShowRatingModal(true);
+  };
+
+  const submitRating = async (rating) => {
+    if (selectedProfile) {
+      await saveRating(currentUserId, selectedProfile.userId, rating);
+      Alert.alert("Rating Submitted", `You rated ${selectedProfile.name} ${rating} stars!`);
+      setShowRatingModal(false);
+    }
+  };
+
+  // Rating Modal
+  if (showRatingModal && selectedProfile) {
+    return (
+      <View style={styles.modalContainer}>
+        <View style={styles.ratingModal}>
+          <Text style={styles.modalTitle}>Rate {selectedProfile.name}</Text>
+          <Text style={styles.modalSubtitle}>How would you rate this profile?</Text>
+          
+          <View style={styles.starsContainer}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                style={styles.starButton}
+                onPress={() => submitRating(star)}
+              >
+                <Text style={styles.starText}>⭐</Text>
+                <Text style={styles.starNumber}>{star}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => setShowRatingModal(false)}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // If viewing a single profile
+  if (selectedProfile) {
+    const hasPhotos = selectedProfile.photos && selectedProfile.photos.length > 0;
+    const currentPhoto = hasPhotos ? selectedProfile.photos[currentImageIndex] : null;
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => setSelectedProfile(null)} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Back to Requests</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.profileViewContainer}>
+            <View style={styles.imageCard}>
+              {currentPhoto ? (
+                <>
+                  <Image 
+                    source={{ uri: currentPhoto }} 
+                    style={styles.fullProfileImage} 
+                    resizeMode="cover" 
+                  />
+                  
+                  {/* Left tap zone for previous image */}
+                  {hasPhotos && selectedProfile.photos.length > 1 && (
+                    <>
+                      <TouchableOpacity 
+                        style={styles.leftTapZone}
+                        onPress={handlePrevImage}
+                        activeOpacity={1}
+                      />
+                      
+                      {/* Right tap zone for next image */}
+                      <TouchableOpacity 
+                        style={styles.rightTapZone}
+                        onPress={handleNextImage}
+                        activeOpacity={1}
+                      />
+                    </>
+                  )}
+                  
+                  {hasPhotos && selectedProfile.photos.length > 1 && (
+                    <View style={styles.dotsContainer} pointerEvents="none">
+                      {selectedProfile.photos.map((_, index) => (
+                        <View 
+                          key={index} 
+                          style={[
+                            styles.dot,
+                            index === currentImageIndex && styles.activeDot
+                          ]} 
+                        />
+                      ))}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.noPhotoContainer}>
+                  <Text style={styles.noPhotoText}>📷</Text>
+                  <Text style={styles.noPhotoSubtext}>No photos available</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.profileInfoCard}>
+              <Text style={styles.profileDetailName}>
+                {selectedProfile.name || "Unknown"}, {selectedProfile.age || "?"}
+              </Text>
+              <Text style={styles.profileDetailDescription}>
+                {selectedProfile.description || "No description"}
+              </Text>
+              <Text style={styles.profileDetailTags}>
+                {selectedProfile.tags || "No tags"}
+              </Text>
+              
+              <TouchableOpacity 
+                style={styles.rateButton}
+                onPress={handleRateProfile}
+              >
+                <Text style={styles.rateButtonText}>⭐ Rate this profile</Text>
+              </TouchableOpacity>
+            </View>
+
+            {hasPhotos && selectedProfile.photos.length > 1 && (
+              <Text style={styles.instructions}>
+                Tap left/right on image to see more photos
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   if (!currentDuo) {
     return (
@@ -221,7 +389,11 @@ export default function RequestsScreen() {
               {/* Show the duo that liked you */}
               <View style={styles.duoPairContainer}>
                 {/* User 1 */}
-                <View style={styles.profileCard}>
+                <TouchableOpacity 
+                  style={styles.profileCard}
+                  onPress={() => handleProfileClick(like.user1)}
+                  activeOpacity={0.7}
+                >
                   <Image 
                     source={{ uri: like.user1.photos[0] }} 
                     style={styles.profileImage} 
@@ -229,17 +401,22 @@ export default function RequestsScreen() {
                   <Text style={styles.profileName}>
                     {like.user1.name}, {like.user1.age}
                   </Text>
+                  <Text style={styles.tapToView}>Tap to view</Text>
                   {fromUser1Accepted && (
                     <View style={styles.acceptedBadge}>
                       <Text style={styles.acceptedText}>✓ Accepted</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
 
                 <Text style={styles.plusSign}>+</Text>
 
                 {/* User 2 */}
-                <View style={styles.profileCard}>
+                <TouchableOpacity 
+                  style={styles.profileCard}
+                  onPress={() => handleProfileClick(like.user2)}
+                  activeOpacity={0.7}
+                >
                   <Image 
                     source={{ uri: like.user2.photos[0] }} 
                     style={styles.profileImage} 
@@ -247,12 +424,13 @@ export default function RequestsScreen() {
                   <Text style={styles.profileName}>
                     {like.user2.name}, {like.user2.age}
                   </Text>
+                  <Text style={styles.tapToView}>Tap to view</Text>
                   {fromUser2Accepted && (
                     <View style={styles.acceptedBadge}>
                       <Text style={styles.acceptedText}>✓ Accepted</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               </View>
 
               {/* Acceptance Status */}
@@ -279,7 +457,7 @@ export default function RequestsScreen() {
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={styles.declineButton}
-                        onPress={() => handleDecline(like.id)}
+                        onPress={() => handleDecline(like.id, like.fromDuoId)}
                       >
                         <Text style={styles.buttonText}>✗ Decline</Text>
                       </TouchableOpacity>
@@ -391,6 +569,11 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#e0e0e0",
   },
+  fullProfileImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 20,
+  },
   profileName: {
     fontSize: 16,
     fontWeight: "bold",
@@ -488,5 +671,198 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     fontStyle: "italic",
+  },
+  backButton: {
+    padding: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1E90FF",
+  },
+  profileViewContainer: {
+    padding: 15,
+  },
+  imageCard: {
+    width: "100%",
+    height: 500,
+    borderRadius: 20,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+    overflow: "hidden",
+    marginBottom: 15,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: "#e0e0e0",
+  },
+  leftTapZone: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "50%",
+    height: "100%",
+    backgroundColor: "transparent",
+    zIndex: 100,
+  },
+  rightTapZone: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: "50%",
+    height: "100%",
+    backgroundColor: "transparent",
+    zIndex: 100,
+  },
+  dotsContainer: {
+    position: "absolute",
+    top: 10,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    marginHorizontal: 4,
+  },
+  activeDot: {
+    backgroundColor: "white",
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  profileInfoCard: {
+    backgroundColor: "white",
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+    marginBottom: 15,
+  },
+  profileDetailName: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  profileDetailDescription: {
+    fontSize: 16,
+    color: "#666",
+    lineHeight: 24,
+    marginBottom: 10,
+  },
+  profileDetailTags: {
+    fontSize: 14,
+    color: "#888",
+    fontStyle: "italic",
+  },
+  instructions: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    fontStyle: "italic",
+    marginBottom: 20,
+  },
+  tapToView: {
+    fontSize: 12,
+    color: "#1E90FF",
+    marginTop: 5,
+    textAlign: "center",
+  },
+  noPhotoContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+  },
+  noPhotoText: {
+    fontSize: 80,
+    marginBottom: 10,
+  },
+  noPhotoSubtext: {
+    fontSize: 16,
+    color: "#666",
+  },
+  rateButton: {
+    backgroundColor: "#FFD700",
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 20,
+    marginTop: 15,
+    alignItems: "center",
+  },
+  rateButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  ratingModal: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 30,
+    width: "85%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 25,
+    textAlign: "center",
+  },
+  starsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+    marginBottom: 20,
+  },
+  starButton: {
+    alignItems: "center",
+    padding: 10,
+  },
+  starText: {
+    fontSize: 40,
+  },
+  starNumber: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginTop: 5,
+    color: "#333",
+  },
+  cancelButton: {
+    backgroundColor: "#ccc",
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 20,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: "#333",
   },
 });
