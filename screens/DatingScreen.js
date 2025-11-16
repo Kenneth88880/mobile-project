@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated, Alert } from "react-native";
-import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe } from "../profileService";
+import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe, getUserProfile } from "../profileService";
 import { CURRENT_USER_ID } from "../UserConfig";
+import { getDistanceToProfile } from "../utils/locationUtils";
+import { formatLastActive } from "../utils/locationTracker";
 
 export default function DatingScreen() {
   const [duoPairs, setDuoPairs] = useState([]);
@@ -12,9 +14,12 @@ export default function DatingScreen() {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingProfile, setRatingProfile] = useState(null);
   const [currentDuo, setCurrentDuo] = useState(null);
+  const [swipeFeedback, setSwipeFeedback] = useState(null); // "like" or "pass"
+  const [currentUserLocation, setCurrentUserLocation] = useState(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
   const currentUserId = CURRENT_USER_ID;
 
@@ -25,6 +30,22 @@ export default function DatingScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load current user's profile to get location
+      const currentUserProfile = await getUserProfile(currentUserId);
+      if (currentUserProfile && currentUserProfile.latitude && currentUserProfile.longitude) {
+        setCurrentUserLocation({
+          latitude: currentUserProfile.latitude,
+          longitude: currentUserProfile.longitude,
+          city: currentUserProfile.city || 'Unknown'
+        });
+        console.log('Current user location loaded:', {
+          city: currentUserProfile.city,
+          hasCoordinates: true
+        });
+      } else {
+        console.log('Current user has no location data - distance will not show');
+      }
+      
       // Load current duo
       const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
@@ -44,8 +65,38 @@ export default function DatingScreen() {
     }
   };
 
-  const handleProfileClick = (profile) => {
-    setSelectedProfile(profile);
+  const handleProfileClick = async (profile) => {
+    console.log('Profile clicked, loading full data for:', profile.userId);
+    // Load full profile data to ensure we have location info
+    try {
+      const fullProfile = await getUserProfile(profile.userId);
+      if (fullProfile) {
+        console.log('Full profile loaded:', {
+          name: fullProfile.name,
+          hasLocation: !!(fullProfile.latitude && fullProfile.longitude),
+          city: fullProfile.city,
+          hasLastActive: !!fullProfile.lastActive
+        });
+        // Merge the full profile data with existing data
+        setSelectedProfile({
+          ...profile,
+          ...fullProfile,
+          // Ensure we have all location fields
+          city: fullProfile.city || profile.city,
+          latitude: fullProfile.latitude || profile.latitude,
+          longitude: fullProfile.longitude || profile.longitude,
+          lastActive: fullProfile.lastActive || profile.lastActive,
+          isOnline: fullProfile.isOnline || profile.isOnline,
+        });
+      } else {
+        console.log('Failed to load full profile, using cached data');
+        // Fallback to original profile if fetch fails
+        setSelectedProfile(profile);
+      }
+    } catch (error) {
+      console.error('Error loading full profile:', error);
+      setSelectedProfile(profile);
+    }
     setCurrentImageIndex(0);
   };
 
@@ -98,40 +149,64 @@ export default function DatingScreen() {
       return;
     }
 
-    if (action === "like") {
-      // Delete any existing like first to allow re-requesting
-      await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.duoId);
-      
-      // Save the duo like (this also saves the swipe internally)
-      const result = await saveDuoLike(
-        currentDuo.duoId,
-        currentDuoPair.duoId,
-        currentUserId,
-        currentDuo.partnerId,
-        currentDuoPair.user1.userId,
-        currentDuoPair.user2.userId
-      );
+    // Show visual feedback
+    setSwipeFeedback(action);
 
-      if (result.success) {
-        Alert.alert("💕 Duo Like Sent!", "They'll see your like in their Requests tab!");
-      } else if (result.message === "Already liked") {
-        Alert.alert("Already Liked", "You've already liked this duo!");
+    // Animate the swipe
+    const toX = direction === "right" ? 500 : -500;
+    const toRotate = direction === "right" ? 20 : -20;
+
+    Animated.parallel([
+      Animated.timing(pan.x, {
+        toValue: toX,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(rotate, {
+        toValue: toRotate,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+    ]).start(async () => {
+      // After animation completes, process the action
+      if (action === "like") {
+        // Delete any existing like first to allow re-requesting
+        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.duoId);
+        
+        // Save the duo like (this also saves the swipe internally)
+        await saveDuoLike(
+          currentDuo.duoId,
+          currentDuoPair.duoId,
+          currentUserId,
+          currentDuo.partnerId,
+          currentDuoPair.user1.userId,
+          currentDuoPair.user2.userId
+        );
+      } else {
+        // action === "pass" - save the pass swipe so they never see this duo again
+        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.duoId, "pass");
+        console.log("Passed on duo - won't see them again");
       }
-    } else {
-      // action === "pass" - save the pass swipe so they never see this duo again
-      await saveDuoSwipe(currentDuo.duoId, currentDuoPair.duoId, "pass");
-      console.log("Passed on duo - won't see them again");
-    }
-    
-    // Remove the swiped duo from the current list immediately
-    setDuoPairs((prevPairs) => {
-      const newPairs = prevPairs.filter(pair => pair.duoId !== currentDuoPair.duoId);
-      console.log(`Removed duo from list. ${newPairs.length} duos remaining`);
-      return newPairs;
+      
+      // Remove the swiped duo from the current list immediately
+      setDuoPairs((prevPairs) => {
+        const newPairs = prevPairs.filter(pair => pair.duoId !== currentDuoPair.duoId);
+        console.log(`Removed duo from list. ${newPairs.length} duos remaining`);
+        return newPairs;
+      });
+      
+      // Reset animations for next card
+      pan.setValue({ x: 0, y: 0 });
+      rotate.setValue(0);
+      opacity.setValue(1);
+      scale.setValue(1);
+      setSwipeFeedback(null);
     });
-    
-    // Don't increment index since we removed the item from the array
-    // The next duo will automatically be at the current index
   };
 
   const panResponder = useRef(
@@ -268,6 +343,29 @@ export default function DatingScreen() {
           <Text style={styles.cardText}>
             {selectedProfile.name || "Unknown"} {selectedProfile.age ? `, ${selectedProfile.age}` : ""}
           </Text>
+          
+          {/* Last Active Status - only if user allows */}
+          {selectedProfile.showOnlineStatus !== false && selectedProfile.lastActive && (
+            <Text style={styles.lastActiveText}>
+              {formatLastActive(selectedProfile.lastActive, selectedProfile.isOnline)}
+            </Text>
+          )}
+          
+          {/* Distance or City */}
+          {currentUserLocation && selectedProfile.latitude && selectedProfile.longitude ? (
+            <Text style={styles.distanceText}>
+              {getDistanceToProfile(currentUserLocation, {
+                latitude: selectedProfile.latitude,
+                longitude: selectedProfile.longitude,
+                city: selectedProfile.city
+              })}
+            </Text>
+          ) : selectedProfile.city ? (
+            <Text style={styles.distanceText}>
+              📍 {selectedProfile.city}
+            </Text>
+          ) : null}
+          
           <Text style={styles.desc}>{selectedProfile.description}</Text>
           <Text style={styles.tags}>{selectedProfile.tags}</Text>
           
@@ -287,6 +385,21 @@ export default function DatingScreen() {
   }
 
   // Double dating view
+  const cardTransform = {
+    transform: [
+      { translateX: pan.x },
+      { translateY: pan.y },
+      { 
+        rotate: rotate.interpolate({
+          inputRange: [-20, 0, 20],
+          outputRange: ['-20deg', '0deg', '20deg']
+        })
+      },
+      { scale: scale }
+    ],
+    opacity: opacity
+  };
+
   return (
     <View style={styles.doubleDatingContainer}>
       <View style={styles.headerRow}>
@@ -308,65 +421,117 @@ export default function DatingScreen() {
       )}
       <Text style={styles.duoExplanation}>👯 These are duo partners teaming up!</Text>
 
-      {topProfile && (
-        <TouchableOpacity 
-          style={styles.halfCard}
-          onPress={() => handleProfileClick(topProfile)}
-          activeOpacity={0.9}
-        >
-          <Image 
-            source={{ uri: topProfile.photos[0] }} 
-            style={styles.halfImage} 
-            resizeMode="cover" 
-          />
-          <View style={styles.halfCardOverlay}>
-            <Text style={styles.halfCardText}>
-              {topProfile.name} {topProfile.age ? `, ${topProfile.age}` : ""}
-            </Text>
-            <Text style={styles.tapToView}>Tap to view profile</Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      <Animated.View style={[styles.cardsContainer, cardTransform]}>
+        {topProfile && (
+          <TouchableOpacity 
+            style={styles.halfCard}
+            onPress={() => handleProfileClick(topProfile)}
+            activeOpacity={0.9}
+          >
+            <Image 
+              source={{ uri: topProfile.photos[0] }} 
+              style={styles.halfImage} 
+              resizeMode="cover" 
+            />
+            <View style={styles.halfCardOverlay}>
+              <Text style={styles.halfCardText}>
+                {topProfile.name} {topProfile.age ? `, ${topProfile.age}` : ""}
+              </Text>
+              {topProfile.showOnlineStatus !== false && topProfile.lastActive && (
+                <Text style={styles.lastActiveTextSmall}>
+                  {formatLastActive(topProfile.lastActive, topProfile.isOnline)}
+                </Text>
+              )}
+              {currentUserLocation && topProfile.latitude && topProfile.longitude ? (
+                <Text style={styles.distanceTextSmall}>
+                  {getDistanceToProfile(currentUserLocation, {
+                    latitude: topProfile.latitude,
+                    longitude: topProfile.longitude,
+                    city: topProfile.city
+                  })}
+                </Text>
+              ) : topProfile.city ? (
+                <Text style={styles.distanceTextSmall}>
+                  📍 {topProfile.city}
+                </Text>
+              ) : null}
+              <Text style={styles.tapToView}>Tap to view profile</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
-      <View style={styles.swipeActions}>
-        <TouchableOpacity 
-          style={styles.passButton}
-          onPress={() => handleSwipeComplete("left")}
-        >
-          <Text style={styles.actionButtonText}>✗ PASS BOTH</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.likeButton}
-          onPress={() => handleSwipeComplete("right")}
-        >
-          <Text style={styles.actionButtonText}>❤️ LIKE BOTH</Text>
-        </TouchableOpacity>
-      </View>
-
-      {bottomProfile ? (
-        <TouchableOpacity 
-          style={styles.halfCard}
-          onPress={() => handleProfileClick(bottomProfile)}
-          activeOpacity={0.9}
-        >
-          <Image 
-            source={{ uri: bottomProfile.photos[0] }} 
-            style={styles.halfImage} 
-            resizeMode="cover" 
-          />
-          <View style={styles.halfCardOverlay}>
-            <Text style={styles.halfCardText}>
-              {bottomProfile.name} {bottomProfile.age ? `, ${bottomProfile.age}` : ""}
-            </Text>
-            <Text style={styles.tapToView}>Tap to view profile</Text>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <View style={[styles.halfCard, styles.emptyCard]}>
-          <Text style={styles.emptyText}>No more profiles</Text>
+        <View style={styles.swipeActions}>
+          <TouchableOpacity 
+            style={styles.passButton}
+            onPress={() => handleSwipeComplete("left")}
+          >
+            <Text style={styles.actionButtonText}>✗ PASS BOTH</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.likeButton}
+            onPress={() => handleSwipeComplete("right")}
+          >
+            <Text style={styles.actionButtonText}>❤️ LIKE BOTH</Text>
+          </TouchableOpacity>
         </View>
-      )}
+
+        {bottomProfile ? (
+          <TouchableOpacity 
+            style={styles.halfCard}
+            onPress={() => handleProfileClick(bottomProfile)}
+            activeOpacity={0.9}
+          >
+            <Image 
+              source={{ uri: bottomProfile.photos[0] }} 
+              style={styles.halfImage} 
+              resizeMode="cover" 
+            />
+            <View style={styles.halfCardOverlay}>
+              <Text style={styles.halfCardText}>
+                {bottomProfile.name} {bottomProfile.age ? `, ${bottomProfile.age}` : ""}
+              </Text>
+              {bottomProfile.showOnlineStatus !== false && bottomProfile.lastActive && (
+                <Text style={styles.lastActiveTextSmall}>
+                  {formatLastActive(bottomProfile.lastActive, bottomProfile.isOnline)}
+                </Text>
+              )}
+              {currentUserLocation && bottomProfile.latitude && bottomProfile.longitude ? (
+                <Text style={styles.distanceTextSmall}>
+                  {getDistanceToProfile(currentUserLocation, {
+                    latitude: bottomProfile.latitude,
+                    longitude: bottomProfile.longitude,
+                    city: bottomProfile.city
+                  })}
+                </Text>
+              ) : bottomProfile.city ? (
+                <Text style={styles.distanceTextSmall}>
+                  📍 {bottomProfile.city}
+                </Text>
+              ) : null}
+              <Text style={styles.tapToView}>Tap to view profile</Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.halfCard, styles.emptyCard]}>
+            <Text style={styles.emptyText}>No more profiles</Text>
+          </View>
+        )}
+
+        {/* Swipe Feedback Overlay */}
+        {swipeFeedback && (
+          <View style={styles.feedbackOverlay}>
+            <View style={[
+              styles.feedbackBadge,
+              swipeFeedback === "like" ? styles.likeBadge : styles.passBadge
+            ]}>
+              <Text style={styles.feedbackText}>
+                {swipeFeedback === "like" ? "❤️ LIKE" : "✗ PASS"}
+              </Text>
+            </View>
+          </View>
+        )}
+      </Animated.View>
 
       <Text style={styles.instructions}>
         Tap profiles to view details • Swipe or use buttons to decide
@@ -699,5 +864,62 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     color: "#333",
+  },
+  cardsContainer: {
+    width: "100%",
+    alignItems: "center",
+  },
+  feedbackOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    pointerEvents: "none",
+  },
+  feedbackBadge: {
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    borderRadius: 20,
+    borderWidth: 4,
+  },
+  likeBadge: {
+    borderColor: "#4CAF50",
+    backgroundColor: "rgba(76, 175, 80, 0.9)",
+  },
+  passBadge: {
+    borderColor: "#F44336",
+    backgroundColor: "rgba(244, 67, 54, 0.9)",
+  },
+  feedbackText: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "white",
+  },
+  distanceText: {
+    fontSize: 15,
+    color: "#666",
+    marginTop: 5,
+    marginBottom: 10,
+  },
+  distanceTextSmall: {
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: 3,
+  },
+  lastActiveText: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 5,
+    marginBottom: 5,
+    fontWeight: "500",
+  },
+  lastActiveTextSmall: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.95)",
+    marginTop: 3,
+    fontWeight: "600",
   },
 });
