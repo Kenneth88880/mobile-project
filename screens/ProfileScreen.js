@@ -17,6 +17,7 @@ import { getUserProfile, saveUserProfile, getAverageRating, resetAllDuoData } fr
 import PhotoPicker from '../components/PhotoPicker';
 import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { formatLastActive } from '../utils/locationTracker';
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -143,6 +144,10 @@ export default function ProfileScreen() {
     photos: [],
     tags: [],
     duoPartnerId: null,
+    city: '',
+    latitude: null,
+    longitude: null,
+    showOnlineStatus: true, // Privacy setting - show/hide online status
   });
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
   const [showTagPicker, setShowTagPicker] = useState(false);
@@ -255,6 +260,10 @@ export default function ProfileScreen() {
           photos: Array.isArray(userProfile.photos) ? userProfile.photos : [],
           tags: Array.isArray(userProfile.tags) ? userProfile.tags : [],
           duoPartnerId: null,
+          city: userProfile.city || '',
+          latitude: userProfile.latitude || null,
+          longitude: userProfile.longitude || null,
+          showOnlineStatus: userProfile.showOnlineStatus !== false, // Default to true if not set
         };
         
         setProfile(cleanedProfile);
@@ -867,6 +876,52 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
+          {/* Location Display */}
+          {profile.city ? (
+            <View>
+              <Text style={styles.locationText}>
+                📍 {profile.city}
+              </Text>
+              <Text style={styles.locationHint}>
+                Updates automatically while using the app
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.locationHint}>
+              Location will appear after using the app
+            </Text>
+          )}
+
+          {/* Privacy Toggle */}
+          <View style={styles.privacySection}>
+            <View style={styles.privacyHeader}>
+              <Text style={styles.privacyLabel}>🔒 Show Online Status</Text>
+              <TouchableOpacity
+                style={[styles.toggleButton, profile.showOnlineStatus && styles.toggleButtonActive]}
+                onPress={async () => {
+                  const newStatus = !profile.showOnlineStatus;
+                  setProfile({ ...profile, showOnlineStatus: newStatus });
+                  await saveUserProfile(CURRENT_USER_ID, { ...profile, showOnlineStatus: newStatus });
+                  Alert.alert(
+                    'Privacy Updated',
+                    newStatus 
+                      ? 'Others can now see when you\'re online'
+                      : 'Your online status is now hidden from others'
+                  );
+                }}
+              >
+                <Text style={styles.toggleButtonText}>
+                  {profile.showOnlineStatus ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.privacyHint}>
+              {profile.showOnlineStatus 
+                ? 'Others can see "Active now" and when you were last online'
+                : 'Your activity status is hidden. Distance still shown.'}
+            </Text>
+          </View>
+
           <Text style={styles.description}>
             {profile.description || 'No description'}
           </Text>
@@ -908,6 +963,14 @@ export default function ProfileScreen() {
                 <Text style={styles.name}>
                   {duoPartnerProfile.name || 'No name'}, {duoPartnerProfile.age || '?'}
                 </Text>
+                
+                {/* Last Active Status for Partner - only if they allow */}
+                {duoPartnerProfile.showOnlineStatus !== false && duoPartnerProfile.lastActive && (
+                  <Text style={styles.lastActiveText}>
+                    {formatLastActive(duoPartnerProfile.lastActive, duoPartnerProfile.isOnline)}
+                  </Text>
+                )}
+                
                 <Text style={styles.description}>
                   {duoPartnerProfile.description || 'No description'}
                 </Text>
@@ -1030,6 +1093,34 @@ export default function ProfileScreen() {
           multiline
           numberOfLines={4}
         />
+      </View>
+
+      {/* Privacy Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🔒 Privacy</Text>
+        <View style={styles.privacyCard}>
+          <View style={styles.privacyRow}>
+            <View style={styles.privacyInfo}>
+              <Text style={styles.privacyCardLabel}>Show Online Status</Text>
+              <Text style={styles.privacyCardHint}>
+                {profile.showOnlineStatus 
+                  ? 'Others can see when you\'re active'
+                  : 'Activity status hidden from others'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleButtonLarge, profile.showOnlineStatus && styles.toggleButtonLargeActive]}
+              onPress={() => setProfile({ ...profile, showOnlineStatus: !profile.showOnlineStatus })}
+            >
+              <Text style={styles.toggleButtonLargeText}>
+                {profile.showOnlineStatus ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.privacyNote}>
+            When OFF: Others won't see "Active now" or last active time. Your location/distance will still be shown for matching.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -1263,6 +1354,113 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 10,
     textAlign: 'center',
+  },
+  locationText: {
+    fontSize: 15,
+    color: '#555',
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  lastActiveText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 5,
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  locationHint: {
+    fontSize: 12,
+    color: '#999',
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  privacySection: {
+    marginTop: 15,
+    marginBottom: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  privacyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  privacyLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  privacyHint: {
+    fontSize: 12,
+    color: '#999',
+    lineHeight: 18,
+  },
+  toggleButton: {
+    backgroundColor: '#ccc',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 15,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#34C759',
+  },
+  toggleButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  privacyCard: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  privacyInfo: {
+    flex: 1,
+    marginRight: 15,
+  },
+  privacyCardLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  privacyCardHint: {
+    fontSize: 13,
+    color: '#666',
+  },
+  privacyNote: {
+    fontSize: 12,
+    color: '#999',
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+  toggleButtonLarge: {
+    backgroundColor: '#ccc',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  toggleButtonLargeActive: {
+    backgroundColor: '#34C759',
+  },
+  toggleButtonLargeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   description: {
     fontSize: 16,

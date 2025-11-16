@@ -8,7 +8,6 @@ import ExploreScreen from "./screens/ExploreScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import RequestsScreen from "./screens/RequestsScreen";
 
 
 export default function App() {
@@ -26,7 +25,6 @@ export default function App() {
           <View style={styles.contentContainer}>
             {activeTab === "dating" && <DatingScreen />}
             {activeTab === "explore" && <ExploreScreen />}
-            {activeTab === "requests" && <RequestsScreen />}
             {activeTab === "profile" && <ProfileScreen />}
             {activeTab === "premium" && <PremiumScreen />}
           </View>
@@ -38,7 +36,7 @@ export default function App() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.navScrollContent}
           >
-            {["dating", "explore", "requests", "messages", "premium", "profile"].map((tab) => (
+            {["dating", "explore", "messages", "premium", "profile"].map((tab) => (
               <TouchableOpacity
                 key={tab}
                 style={[styles.navButton, activeTab === tab && styles.activeButton]}
@@ -47,7 +45,6 @@ export default function App() {
                 <Text style={styles.navText}>
                   {tab === "dating" ? "💘 Dating" :
                    tab === "explore" ? "🧭 Explore" :
-                   tab === "requests" ? "💌 Requests" :
                    tab === "messages" ? "💬 Messages" :
                    tab === "premium" ? "⭐ Premium" :
                    "👤 Profile"}
