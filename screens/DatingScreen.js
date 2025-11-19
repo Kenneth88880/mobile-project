@@ -31,8 +31,8 @@ import {
   deleteDuoLikeBetween,
   saveDuoSwipe,
   getUserProfile,
-} from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+} from "../services/profileService";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 import { getDistanceToProfile } from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 

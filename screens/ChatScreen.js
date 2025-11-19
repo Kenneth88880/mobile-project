@@ -27,7 +27,7 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-import { db } from "../firebaseConfig";
+import { db } from "../services/firebaseConfig";
 import {
   collection,
   addDoc,
@@ -49,8 +49,8 @@ import {
   acceptDuoLike,
   deleteDuoLike,
   saveDuoSwipe,
-} from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+} from "../services/profileService";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
 const getUserID = () => CURRENT_USER_ID;
