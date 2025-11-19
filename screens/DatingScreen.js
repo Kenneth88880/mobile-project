@@ -1,11 +1,43 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated, Alert } from "react-native";
-import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe, getUserProfile } from "../profileService";
+import {
+  View,
+  Image,
+  ScrollView,
+  Animated,
+  Alert,
+  StyleSheet,
+} from "react-native";
+import {
+  Text,
+  Card,
+  Button,
+  IconButton,
+  Chip,
+  Surface,
+  ActivityIndicator,
+  useTheme,
+} from "react-native-paper";
+import {
+  ProfilePhoto,
+  StarRating,
+  EmptyState,
+  ProfileInfoCard,
+} from "../components/CommonComponents";
+import {
+  getAllDuoPairs,
+  saveRating,
+  getCurrentDuoPartner,
+  saveDuoLike,
+  deleteDuoLikeBetween,
+  saveDuoSwipe,
+  getUserProfile,
+} from "../profileService";
 import { CURRENT_USER_ID } from "../UserConfig";
 import { getDistanceToProfile } from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 
 export default function DatingScreen() {
+  const theme = useTheme();
   const [duoPairs, setDuoPairs] = useState([]);
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -14,8 +46,9 @@ export default function DatingScreen() {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingProfile, setRatingProfile] = useState(null);
   const [currentDuo, setCurrentDuo] = useState(null);
-  const [swipeFeedback, setSwipeFeedback] = useState(null); // "like" or "pass"
+  const [swipeFeedback, setSwipeFeedback] = useState(null);
   const [currentUserLocation, setCurrentUserLocation] = useState(null);
+
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
@@ -30,58 +63,36 @@ export default function DatingScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load current user's profile to get location
       const currentUserProfile = await getUserProfile(currentUserId);
-      if (currentUserProfile && currentUserProfile.latitude && currentUserProfile.longitude) {
+      if (currentUserProfile?.latitude && currentUserProfile?.longitude) {
         setCurrentUserLocation({
           latitude: currentUserProfile.latitude,
           longitude: currentUserProfile.longitude,
-          city: currentUserProfile.city || 'Unknown'
+          city: currentUserProfile.city || "Unknown",
         });
-        console.log('Current user location loaded:', {
-          city: currentUserProfile.city,
-          hasCoordinates: true
-        });
-      } else {
-        console.log('Current user has no location data - distance will not show');
       }
-      
-      // Load current duo
+
       const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
-      
-      // Load duo pairs
-      console.log("Starting to load duo pairs...");
+
       const fetchedPairs = await getAllDuoPairs(currentUserId);
-      console.log(`Loaded ${fetchedPairs.length} duo pairs for user: ${currentUserId}`);
       setDuoPairs(fetchedPairs);
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);
-      Alert.alert("Error", "Failed to load duo pairs. Check console for details.");
+      Alert.alert("Error", "Failed to load duo pairs.");
     } finally {
       setLoading(false);
-      console.log("Finished loading duo pairs, loading set to false");
     }
   };
 
   const handleProfileClick = async (profile) => {
-    console.log('Profile clicked, loading full data for:', profile.userId);
-    // Load full profile data to ensure we have location info
     try {
       const fullProfile = await getUserProfile(profile.userId);
       if (fullProfile) {
-        console.log('Full profile loaded:', {
-          name: fullProfile.name,
-          hasLocation: !!(fullProfile.latitude && fullProfile.longitude),
-          city: fullProfile.city,
-          hasLastActive: !!fullProfile.lastActive
-        });
-        // Merge the full profile data with existing data
         setSelectedProfile({
           ...profile,
           ...fullProfile,
-          // Ensure we have all location fields
           city: fullProfile.city || profile.city,
           latitude: fullProfile.latitude || profile.latitude,
           longitude: fullProfile.longitude || profile.longitude,
@@ -89,12 +100,10 @@ export default function DatingScreen() {
           isOnline: fullProfile.isOnline || profile.isOnline,
         });
       } else {
-        console.log('Failed to load full profile, using cached data');
-        // Fallback to original profile if fetch fails
         setSelectedProfile(profile);
       }
     } catch (error) {
-      console.error('Error loading full profile:', error);
+      console.error("Error loading full profile:", error);
       setSelectedProfile(profile);
     }
     setCurrentImageIndex(0);
@@ -113,23 +122,26 @@ export default function DatingScreen() {
   const submitRating = async (rating) => {
     if (ratingProfile) {
       await saveRating(currentUserId, ratingProfile.userId, rating);
-      Alert.alert("Rating Submitted", `You rated ${ratingProfile.name} ${rating} stars!`);
+      Alert.alert(
+        "Success",
+        `You rated ${ratingProfile.name} ${rating} stars!`
+      );
       setShowRatingModal(false);
       setRatingProfile(null);
     }
   };
 
   const handleNextImage = () => {
-    if (selectedProfile && selectedProfile.photos.length > 1) {
-      setCurrentImageIndex((prevIndex) => 
-        (prevIndex + 1) % selectedProfile.photos.length
+    if (selectedProfile?.photos?.length > 1) {
+      setCurrentImageIndex(
+        (prevIndex) => (prevIndex + 1) % selectedProfile.photos.length
       );
     }
   };
 
   const handlePrevImage = () => {
-    if (selectedProfile && selectedProfile.photos.length > 1) {
-      setCurrentImageIndex((prevIndex) => 
+    if (selectedProfile?.photos?.length > 1) {
+      setCurrentImageIndex((prevIndex) =>
         prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1
       );
     }
@@ -140,19 +152,15 @@ export default function DatingScreen() {
 
     const currentDuoPair = duoPairs[currentPairIndex];
     const action = direction === "right" ? "like" : "pass";
-    
-    console.log(`${action} on duo pair!`);
 
     if (!currentDuo) {
-      Alert.alert("No Duo", "You need a duo partner to swipe on duos! Go to your Profile to find one.");
+      Alert.alert("No Duo", "You need a duo partner to swipe! Go to Profile.");
       setCurrentPairIndex((prevIndex) => prevIndex + 1);
       return;
     }
 
-    // Show visual feedback
     setSwipeFeedback(action);
 
-    // Animate the swipe
     const toX = direction === "right" ? 500 : -500;
     const toRotate = direction === "right" ? 20 : -20;
 
@@ -173,12 +181,8 @@ export default function DatingScreen() {
         useNativeDriver: false,
       }),
     ]).start(async () => {
-      // After animation completes, process the action
       if (action === "like") {
-        // Delete any existing like first to allow re-requesting
         await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.duoId);
-        
-        // Save the duo like (this also saves the swipe internally)
         await saveDuoLike(
           currentDuo.duoId,
           currentDuoPair.duoId,
@@ -188,19 +192,13 @@ export default function DatingScreen() {
           currentDuoPair.user2.userId
         );
       } else {
-        // action === "pass" - save the pass swipe so they never see this duo again
         await saveDuoSwipe(currentDuo.duoId, currentDuoPair.duoId, "pass");
-        console.log("Passed on duo - won't see them again");
       }
-      
-      // Remove the swiped duo from the current list immediately
-      setDuoPairs((prevPairs) => {
-        const newPairs = prevPairs.filter(pair => pair.duoId !== currentDuoPair.duoId);
-        console.log(`Removed duo from list. ${newPairs.length} duos remaining`);
-        return newPairs;
-      });
-      
-      // Reset animations for next card
+
+      setDuoPairs((prevPairs) =>
+        prevPairs.filter((pair) => pair.duoId !== currentDuoPair.duoId)
+      );
+
       pan.setValue({ x: 0, y: 0 });
       rotate.setValue(0);
       opacity.setValue(1);
@@ -209,43 +207,31 @@ export default function DatingScreen() {
     });
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => false,
-      onPanResponderRelease: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
-          if (gestureState.x0 < 200) {
-            handlePrevImage();
-          } else {
-            handleNextImage();
-          }
-        }
-      },
-    })
-  ).current;
-
   if (loading) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={{ color: "white", fontSize: 18 }}>Loading profiles...</Text>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <ActivityIndicator size="large" />
+        <Text variant="bodyLarge" style={styles.loadingText}>
+          Loading profiles...
+        </Text>
       </View>
     );
   }
 
   if (currentPairIndex >= duoPairs.length) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={{ color: "white", fontSize: 18, textAlign: "center", paddingHorizontal: 20 }}>
-          No more duo pairs available!{"\n"}
-          Duo pairs are two people teaming up for double dating.
-        </Text>
-        <TouchableOpacity 
-          style={styles.refreshButtonLarge}
-          onPress={loadData}
-        >
-          <Text style={styles.refreshButtonText}>🔄 Reload</Text>
-        </TouchableOpacity>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <EmptyState
+          icon="heart-multiple"
+          title="No More Duo Pairs"
+          message="Duo pairs are two people teaming up for double dating."
+          actionLabel="Reload"
+          onAction={loadData}
+        />
       </View>
     );
   }
@@ -257,283 +243,292 @@ export default function DatingScreen() {
   // Rating Modal
   if (showRatingModal && ratingProfile) {
     return (
-      <View style={styles.modalContainer}>
-        <View style={styles.ratingModal}>
-          <Text style={styles.modalTitle}>Rate {ratingProfile.name}</Text>
-          <Text style={styles.modalSubtitle}>How would you rate this profile?</Text>
-          
-          <View style={styles.starsContainer}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity
-                key={star}
-                style={styles.starButton}
-                onPress={() => submitRating(star)}
-              >
-                <Text style={styles.starText}>⭐</Text>
-                <Text style={styles.starNumber}>{star}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.cancelButton}
-            onPress={() => {
-              setShowRatingModal(false);
-              setRatingProfile(null);
-            }}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.modalOverlay}>
+        <Card style={styles.ratingCard}>
+          <Card.Title
+            title={`Rate ${ratingProfile.name}`}
+            subtitle="How would you rate this profile?"
+          />
+          <Card.Content>
+            <View style={styles.ratingStars}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <IconButton
+                  key={star}
+                  icon="star"
+                  size={40}
+                  onPress={() => submitRating(star)}
+                />
+              ))}
+            </View>
+          </Card.Content>
+          <Card.Actions>
+            <Button
+              onPress={() => {
+                setShowRatingModal(false);
+                setRatingProfile(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </Card.Actions>
+        </Card>
       </View>
     );
   }
 
-  // If viewing a single profile
+  // Single Profile View
   if (selectedProfile) {
     return (
-      <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={styles.scrollContent}
       >
-        <TouchableOpacity style={styles.backButton} onPress={handleBackToDouble}>
-          <Text style={styles.backButtonText}>← Back to Double Dating</Text>
-        </TouchableOpacity>
-
-        <View 
-          style={styles.imageCard}
+        <Button
+          mode="text"
+          icon="arrow-left"
+          onPress={handleBackToDouble}
+          style={styles.backButton}
         >
-          <Image 
-            source={{ uri: selectedProfile.photos[currentImageIndex] }} 
-            style={styles.image} 
-            resizeMode="cover" 
+          Back to Double Dating
+        </Button>
+
+        <Card style={styles.imageCard}>
+          <Card.Cover
+            source={{ uri: selectedProfile.photos[currentImageIndex] }}
+            style={styles.cardCover}
           />
-          
-          {/* Left tap zone for previous image */}
-          <TouchableOpacity 
-            style={styles.leftTapZone}
-            onPress={handlePrevImage}
-            activeOpacity={1}
-          />
-          
-          {/* Right tap zone for next image */}
-          <TouchableOpacity 
-            style={styles.rightTapZone}
-            onPress={handleNextImage}
-            activeOpacity={1}
-          />
-          
+
           {selectedProfile.photos.length > 1 && (
-            <View style={styles.dotsContainer} pointerEvents="none">
-              {selectedProfile.photos.map((_, index) => (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.dot,
-                    index === currentImageIndex && styles.activeDot
-                  ]} 
-                />
-              ))}
+            <View style={styles.imageNavigation}>
+              <IconButton icon="chevron-left" onPress={handlePrevImage} />
+              <View style={styles.dotsContainer}>
+                {selectedProfile.photos.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.dot,
+                      index === currentImageIndex && styles.activeDot,
+                    ]}
+                  />
+                ))}
+              </View>
+              <IconButton icon="chevron-right" onPress={handleNextImage} />
             </View>
           )}
-        </View>
+        </Card>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.cardText}>
-            {selectedProfile.name || "Unknown"} {selectedProfile.age ? `, ${selectedProfile.age}` : ""}
-          </Text>
-          
-          {/* Last Active Status - only if user allows */}
-          {selectedProfile.showOnlineStatus !== false && selectedProfile.lastActive && (
-            <Text style={styles.lastActiveText}>
-              {formatLastActive(selectedProfile.lastActive, selectedProfile.isOnline)}
-            </Text>
-          )}
-          
-          {/* Distance or City */}
-          {currentUserLocation && selectedProfile.latitude && selectedProfile.longitude ? (
-            <Text style={styles.distanceText}>
-              {getDistanceToProfile(currentUserLocation, {
-                latitude: selectedProfile.latitude,
-                longitude: selectedProfile.longitude,
-                city: selectedProfile.city
-              })}
-            </Text>
-          ) : selectedProfile.city ? (
-            <Text style={styles.distanceText}>
-              📍 {selectedProfile.city}
-            </Text>
-          ) : null}
-          
-          <Text style={styles.desc}>{selectedProfile.description}</Text>
-          <Text style={styles.tags}>{selectedProfile.tags}</Text>
-          
-          <TouchableOpacity 
-            style={styles.rateButton}
-            onPress={() => handleRateProfile(selectedProfile)}
-          >
-            <Text style={styles.rateButtonText}>⭐ Rate this profile</Text>
-          </TouchableOpacity>
-        </View>
+        <ProfileInfoCard
+          name={selectedProfile.name}
+          age={selectedProfile.age}
+          description={selectedProfile.description}
+          tags={selectedProfile.tags}
+          city={selectedProfile.city}
+          lastActive={
+            selectedProfile.showOnlineStatus !== false &&
+            selectedProfile.lastActive
+              ? formatLastActive(
+                  selectedProfile.lastActive,
+                  selectedProfile.isOnline
+                )
+              : null
+          }
+          showOnlineStatus={selectedProfile.showOnlineStatus !== false}
+        />
 
-        <Text style={styles.instructions}>
-          Tap left/right on images to flip through • Go back to like/pass
-        </Text>
+        <Button
+          mode="contained"
+          icon="star"
+          onPress={() => handleRateProfile(selectedProfile)}
+          style={styles.rateButton}
+        >
+          Rate this profile
+        </Button>
       </ScrollView>
     );
   }
 
-  // Double dating view
+  // Double Dating View
   const cardTransform = {
     transform: [
       { translateX: pan.x },
       { translateY: pan.y },
-      { 
+      {
         rotate: rotate.interpolate({
           inputRange: [-20, 0, 20],
-          outputRange: ['-20deg', '0deg', '20deg']
-        })
+          outputRange: ["-20deg", "0deg", "20deg"],
+        }),
       },
-      { scale: scale }
+      { scale: scale },
     ],
-    opacity: opacity
+    opacity: opacity,
   };
 
   return (
-    <View style={styles.doubleDatingContainer}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>💑 Double Dating</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
-          <Text style={styles.refreshText}>🔄 Refresh</Text>
-        </TouchableOpacity>
-      </View>
-      
-      <Text style={styles.userIndicator}>Viewing as: {currentUserId}</Text>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Surface style={styles.header} elevation={2}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <IconButton icon="heart-multiple" size={24} style={{ margin: 0 }} />
+          <Text variant="titleLarge">Double Dating</Text>
+        </View>
+        <IconButton
+          icon="refresh"
+          size={24}
+          onPress={loadData}
+          style={{ margin: 0 }}
+        />
+      </Surface>
+
       {currentDuo ? (
-        <Text style={styles.duoStatus}>
-          👯 Your duo: You + {currentDuo.partnerName}
-        </Text>
+        <Chip icon="account-multiple" style={styles.duoChip}>
+          Your duo: You + {currentDuo.partnerName}
+        </Chip>
       ) : (
-        <Text style={styles.noDuoWarning}>
-          ⚠️ Find a duo partner in Profile to like duos!
-        </Text>
+        <Chip icon="alert" style={styles.warningChip}>
+          Find a duo partner in Profile to like duos!
+        </Chip>
       )}
-      <Text style={styles.duoExplanation}>👯 These are duo partners teaming up!</Text>
 
       <Animated.View style={[styles.cardsContainer, cardTransform]}>
-        {topProfile && (
-          <TouchableOpacity 
+        <Card style={styles.duoCard} elevation={0}>
+          <Card
             style={styles.halfCard}
             onPress={() => handleProfileClick(topProfile)}
-            activeOpacity={0.9}
           >
-            <Image 
-              source={{ uri: topProfile.photos[0] }} 
-              style={styles.halfImage} 
-              resizeMode="cover" 
-            />
-            <View style={styles.halfCardOverlay}>
-              <Text style={styles.halfCardText}>
-                {topProfile.name} {topProfile.age ? `, ${topProfile.age}` : ""}
+            <Card.Cover source={{ uri: topProfile.photos[0] }} />
+            <Card.Content style={styles.cardOverlay}>
+              <Text variant="titleLarge" style={styles.overlayText}>
+                {topProfile.name}, {topProfile.age}
               </Text>
-              {topProfile.showOnlineStatus !== false && topProfile.lastActive && (
-                <Text style={styles.lastActiveTextSmall}>
-                  {formatLastActive(topProfile.lastActive, topProfile.isOnline)}
-                </Text>
-              )}
-              {currentUserLocation && topProfile.latitude && topProfile.longitude ? (
-                <Text style={styles.distanceTextSmall}>
+              {topProfile.showOnlineStatus !== false &&
+                topProfile.lastActive && (
+                  <Text variant="bodySmall" style={styles.overlayText}>
+                    {formatLastActive(
+                      topProfile.lastActive,
+                      topProfile.isOnline
+                    )}
+                  </Text>
+                )}
+              {currentUserLocation &&
+              topProfile.latitude &&
+              topProfile.longitude ? (
+                <Text variant="bodySmall" style={styles.overlayText}>
                   {getDistanceToProfile(currentUserLocation, {
                     latitude: topProfile.latitude,
                     longitude: topProfile.longitude,
-                    city: topProfile.city
+                    city: topProfile.city,
                   })}
                 </Text>
-              ) : topProfile.city ? (
-                <Text style={styles.distanceTextSmall}>
-                  📍 {topProfile.city}
-                </Text>
-              ) : null}
-              <Text style={styles.tapToView}>Tap to view profile</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+              ) : (
+                topProfile.city && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <IconButton
+                      icon="map-marker"
+                      size={14}
+                      iconColor="white"
+                      style={{ margin: 0, padding: 0 }}
+                    />
+                    <Text variant="bodySmall" style={styles.overlayText}>
+                      {topProfile.city}
+                    </Text>
+                  </View>
+                )
+              )}
+            </Card.Content>
+          </Card>
 
-        <View style={styles.swipeActions}>
-          <TouchableOpacity 
-            style={styles.passButton}
-            onPress={() => handleSwipeComplete("left")}
-          >
-            <Text style={styles.actionButtonText}>✗ PASS BOTH</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.likeButton}
-            onPress={() => handleSwipeComplete("right")}
-          >
-            <Text style={styles.actionButtonText}>❤️ LIKE BOTH</Text>
-          </TouchableOpacity>
-        </View>
-
-        {bottomProfile ? (
-          <TouchableOpacity 
+          <Card
             style={styles.halfCard}
             onPress={() => handleProfileClick(bottomProfile)}
-            activeOpacity={0.9}
           >
-            <Image 
-              source={{ uri: bottomProfile.photos[0] }} 
-              style={styles.halfImage} 
-              resizeMode="cover" 
-            />
-            <View style={styles.halfCardOverlay}>
-              <Text style={styles.halfCardText}>
-                {bottomProfile.name} {bottomProfile.age ? `, ${bottomProfile.age}` : ""}
+            <Card.Cover source={{ uri: bottomProfile.photos[0] }} />
+            <Card.Content style={styles.cardOverlay}>
+              <Text variant="titleLarge" style={styles.overlayText}>
+                {bottomProfile.name}, {bottomProfile.age}
               </Text>
-              {bottomProfile.showOnlineStatus !== false && bottomProfile.lastActive && (
-                <Text style={styles.lastActiveTextSmall}>
-                  {formatLastActive(bottomProfile.lastActive, bottomProfile.isOnline)}
-                </Text>
-              )}
-              {currentUserLocation && bottomProfile.latitude && bottomProfile.longitude ? (
-                <Text style={styles.distanceTextSmall}>
+              {bottomProfile.showOnlineStatus !== false &&
+                bottomProfile.lastActive && (
+                  <Text variant="bodySmall" style={styles.overlayText}>
+                    {formatLastActive(
+                      bottomProfile.lastActive,
+                      bottomProfile.isOnline
+                    )}
+                  </Text>
+                )}
+              {currentUserLocation &&
+              bottomProfile.latitude &&
+              bottomProfile.longitude ? (
+                <Text variant="bodySmall" style={styles.overlayText}>
                   {getDistanceToProfile(currentUserLocation, {
                     latitude: bottomProfile.latitude,
                     longitude: bottomProfile.longitude,
-                    city: bottomProfile.city
+                    city: bottomProfile.city,
                   })}
                 </Text>
-              ) : bottomProfile.city ? (
-                <Text style={styles.distanceTextSmall}>
-                  📍 {bottomProfile.city}
-                </Text>
-              ) : null}
-              <Text style={styles.tapToView}>Tap to view profile</Text>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.halfCard, styles.emptyCard]}>
-            <Text style={styles.emptyText}>No more profiles</Text>
-          </View>
-        )}
+              ) : (
+                bottomProfile.city && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <IconButton
+                      icon="map-marker"
+                      size={14}
+                      iconColor="white"
+                      style={{ margin: 0, padding: 0 }}
+                    />
+                    <Text variant="bodySmall" style={styles.overlayText}>
+                      {bottomProfile.city}
+                    </Text>
+                  </View>
+                )
+              )}
+            </Card.Content>
+          </Card>
+        </Card>
 
-        {/* Swipe Feedback Overlay */}
         {swipeFeedback && (
-          <View style={styles.feedbackOverlay}>
-            <View style={[
-              styles.feedbackBadge,
-              swipeFeedback === "like" ? styles.likeBadge : styles.passBadge
-            ]}>
-              <Text style={styles.feedbackText}>
-                {swipeFeedback === "like" ? "❤️ LIKE" : "✗ PASS"}
-              </Text>
-            </View>
-          </View>
+          <Surface style={styles.feedbackOverlay} elevation={4}>
+            <Text variant="displaySmall" style={styles.feedbackText}>
+              {swipeFeedback === "like" ? "LIKE" : "PASS"}
+            </Text>
+          </Surface>
         )}
       </Animated.View>
 
-      <Text style={styles.instructions}>
+      <View style={styles.buttonContainer}>
+        <Button
+          mode="outlined"
+          icon="close"
+          onPress={() => handleSwipeComplete("left")}
+          style={styles.passButton}
+          labelStyle={styles.buttonLabel}
+          buttonColor={theme.colors.surface}
+        >
+          PASS DUO
+        </Button>
+        <Button
+          mode="contained"
+          icon="heart"
+          onPress={() => handleSwipeComplete("right")}
+          style={styles.likeButton}
+          labelStyle={styles.buttonLabel}
+        >
+          LIKE DUO
+        </Button>
+      </View>
+
+      <Text variant="bodySmall" style={styles.instructions}>
         Tap profiles to view details • Swipe or use buttons to decide
       </Text>
     </View>
@@ -541,218 +536,118 @@ export default function DatingScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flex: 1,
-  },
   container: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  doubleDatingContainer: {
     flex: 1,
-    alignItems: "center",
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  scrollContent: {
+    padding: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "white",
-    marginTop: 20,
+  loadingText: {
+    marginTop: 16,
   },
-  headerRow: {
+  header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    width: "95%",
-    marginTop: 20,
-    marginBottom: 5,
-  },
-  refreshButton: {
-    backgroundColor: "white",
+    alignItems: "center",
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 15,
+    height: 56,
   },
-  refreshText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
+  duoChip: {
+    margin: 8,
+    alignSelf: "center",
   },
-  refreshButtonLarge: {
-    backgroundColor: "white",
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    marginTop: 20,
+  warningChip: {
+    margin: 8,
+    alignSelf: "center",
+    backgroundColor: "#FFD700",
   },
-  refreshButtonText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+  cardsContainer: {
+    flex: 1,
+    padding: 8,
   },
-  userIndicator: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.8)",
-    marginBottom: 5,
-  },
-  duoStatus: {
-    fontSize: 14,
-    color: "#4CAF50",
-    marginBottom: 5,
-    fontWeight: "bold",
-  },
-  noDuoWarning: {
-    fontSize: 13,
-    color: "#FFD700",
-    marginBottom: 5,
-    fontWeight: "bold",
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  duoExplanation: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-    marginBottom: 10,
-    fontWeight: "bold",
+  duoCard: {
+    flex: 1,
+    marginBottom: 8,
+    backgroundColor: "transparent",
   },
   halfCard: {
-    width: "95%",
-    height: "35%",
-    borderRadius: 20,
-    backgroundColor: "white",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-    overflow: "hidden",
-    position: "relative",
+    marginVertical: 8,
+    height: 250,
   },
-  halfImage: {
-    width: "100%",
-    height: "100%",
-  },
-  halfCardOverlay: {
+  cardOverlay: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: "rgba(0,0,0,0.6)",
-    padding: 15,
+    padding: 12,
   },
-  halfCardText: {
-    fontSize: 20,
-    fontWeight: "bold",
+  overlayText: {
     color: "white",
   },
-  tapToView: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.8)",
-    marginTop: 5,
+  feedbackOverlay: {
+    position: "absolute",
+    top: "40%",
+    left: "25%",
+    right: "25%",
+    padding: 20,
+    borderRadius: 20,
+    alignItems: "center",
   },
-  swipeActions: {
+  feedbackText: {
+    fontWeight: "bold",
+  },
+  buttonContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    width: "95%",
-    marginVertical: 15,
+    justifyContent: "space-evenly",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
   passButton: {
-    backgroundColor: "#F44336",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
     flex: 1,
-    marginRight: 10,
-    alignItems: "center",
+    borderWidth: 2,
   },
   likeButton: {
-    backgroundColor: "#4CAF50",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
     flex: 1,
-    marginLeft: 10,
-    alignItems: "center",
   },
-  actionButtonText: {
-    color: "white",
-    fontSize: 16,
+  buttonLabel: {
+    fontSize: 14,
     fontWeight: "bold",
   },
-  emptyCard: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#888",
+  instructions: {
+    textAlign: "center",
+    padding: 16,
+    fontStyle: "italic",
   },
   backButton: {
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    marginBottom: 8,
   },
   imageCard: {
-    width: "95%",
-    height: 500,
-    borderRadius: 20,
-    backgroundColor: "white",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-    overflow: "hidden",
-    marginBottom: 15,
+    marginBottom: 16,
   },
-  image: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 20,
+  cardCover: {
+    height: 400,
   },
-  leftTapZone: {
+  imageNavigation: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    width: "50%",
-    height: "100%",
-    backgroundColor: "transparent",
-    zIndex: 100,
-  },
-  rightTapZone: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: "50%",
-    height: "100%",
-    backgroundColor: "transparent",
-    zIndex: 100,
-  },
-  dotsContainer: {
-    position: "absolute",
-    top: 10,
+    bottom: 16,
     left: 0,
     right: 0,
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "space-between",
     alignItems: "center",
-    zIndex: 10,
+  },
+  dotsContainer: {
+    flexDirection: "row",
+    gap: 8,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: "rgba(255, 255, 255, 0.5)",
-    marginHorizontal: 4,
   },
   activeDot: {
     backgroundColor: "white",
@@ -760,166 +655,23 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  infoCard: {
-    width: "95%",
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-    marginBottom: 20,
-  },
-  cardText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  desc: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 5,
-    color: "#555",
-    lineHeight: 22,
-  },
-  tags: {
-    fontSize: 14,
-    textAlign: "center",
-    color: "#888",
-    marginTop: 10,
-  },
-  instructions: {
-    color: "white",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 20,
-    paddingHorizontal: 20,
-    fontStyle: "italic",
-  },
   rateButton: {
-    backgroundColor: "#FFD700",
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 20,
-    marginTop: 15,
-    alignItems: "center",
+    marginTop: 16,
   },
-  rateButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
-    alignItems: "center",
+    padding: 20,
   },
-  ratingModal: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 30,
-    width: "85%",
-    alignItems: "center",
+  ratingCard: {
+    maxWidth: 400,
+    alignSelf: "center",
+    width: "100%",
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
-    color: "#333",
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 25,
-    textAlign: "center",
-  },
-  starsContainer: {
+  ratingStars: {
     flexDirection: "row",
     justifyContent: "space-around",
-    width: "100%",
-    marginBottom: 20,
-  },
-  starButton: {
-    alignItems: "center",
-    padding: 10,
-  },
-  starText: {
-    fontSize: 40,
-  },
-  starNumber: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginTop: 5,
-    color: "#333",
-  },
-  cancelButton: {
-    backgroundColor: "#ccc",
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 20,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  cardsContainer: {
-    width: "100%",
-    alignItems: "center",
-  },
-  feedbackOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    pointerEvents: "none",
-  },
-  feedbackBadge: {
     paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderRadius: 20,
-    borderWidth: 4,
-  },
-  likeBadge: {
-    borderColor: "#4CAF50",
-    backgroundColor: "rgba(76, 175, 80, 0.9)",
-  },
-  passBadge: {
-    borderColor: "#F44336",
-    backgroundColor: "rgba(244, 67, 54, 0.9)",
-  },
-  feedbackText: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "white",
-  },
-  distanceText: {
-    fontSize: 15,
-    color: "#666",
-    marginTop: 5,
-    marginBottom: 10,
-  },
-  distanceTextSmall: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    marginTop: 3,
-  },
-  lastActiveText: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 5,
-    marginBottom: 5,
-    fontWeight: "500",
-  },
-  lastActiveTextSmall: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.95)",
-    marginTop: 3,
-    fontWeight: "600",
   },
 });
