@@ -297,16 +297,20 @@ function RequestsModal({ visible, onClose }) {
 
         {/* Profile Detail Modal */}
         {selectedProfile && (
-          <Modal visible={true} animationType="fade" transparent={true}>
-            <View style={styles.profileModalOverlay}>
-              <View style={styles.profileModalContent}>
+          <Modal visible={true} animationType="slide" transparent={false}>
+            <SafeAreaView style={styles.profileModalFullScreen}>
+              <View style={styles.profileModalHeader}>
                 <TouchableOpacity 
-                  style={styles.profileModalClose}
+                  style={styles.profileModalBackButton}
                   onPress={() => setSelectedProfile(null)}
                 >
-                  <Text style={styles.profileModalCloseText}>✕</Text>
+                  <Text style={styles.profileModalBackText}>← Back</Text>
                 </TouchableOpacity>
+                <Text style={styles.profileModalHeaderTitle}>Profile</Text>
+                <View style={styles.profileModalHeaderSpacer} />
+              </View>
 
+              <ScrollView style={styles.profileModalScrollView}>
                 {selectedProfile.photos && selectedProfile.photos.length > 0 ? (
                   <View style={styles.photoViewerContainer}>
                     <TouchableOpacity 
@@ -347,7 +351,7 @@ function RequestsModal({ visible, onClose }) {
                   </View>
                 )}
 
-                <ScrollView style={styles.profileInfo}>
+                <View style={styles.profileInfoSection}>
                   <Text style={styles.profileName}>
                     {selectedProfile.name}, {selectedProfile.age}
                   </Text>
@@ -355,13 +359,20 @@ function RequestsModal({ visible, onClose }) {
                     {selectedProfile.description || "No description"}
                   </Text>
                   {selectedProfile.tags && selectedProfile.tags.length > 0 && (
-                    <Text style={styles.profileTags}>
-                      {selectedProfile.tags.join(" • ")}
-                    </Text>
+                    <View style={styles.tagsContainer}>
+                      <Text style={styles.tagsLabel}>Interests:</Text>
+                      <View style={styles.tagsDisplay}>
+                        {selectedProfile.tags.map((tag, index) => (
+                          <View key={index} style={styles.tag}>
+                            <Text style={styles.tagText}>{tag}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
                   )}
-                </ScrollView>
-              </View>
-            </View>
+                </View>
+              </ScrollView>
+            </SafeAreaView>
           </Modal>
         )}
       </SafeAreaView>
@@ -1589,7 +1600,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  // Profile modal styles
+  // Profile modal styles (Requests)
+  profileModalFullScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  profileModalBackButton: {
+    padding: 5,
+  },
+  profileModalBackText: {
+    fontSize: 16,
+    color: '#007AFF',
+  },
+  profileModalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  profileModalHeaderSpacer: {
+    width: 60,
+  },
+  profileModalScrollView: {
+    flex: 1,
+  },
+  profileInfoSection: {
+    padding: 20,
+  },
+  tagsContainer: {
+    marginTop: 15,
+  },
+  tagsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#333',
+  },
+  tagsDisplay: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    backgroundColor: '#E8F4FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   profileModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
@@ -1605,24 +1681,30 @@ const styles = StyleSheet.create({
   },
   profileModalClose: {
     position: 'absolute',
-    top: 15,
+    top: 50,
     right: 15,
     zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
   },
   profileModalCloseText: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
   },
   photoViewerContainer: {
-    height: '60%',
+    height: 400,
     position: 'relative',
+    backgroundColor: '#000',
   },
   photoTouchLeft: {
     position: 'absolute',
@@ -1668,7 +1750,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   noPhotoContainer: {
-    height: '60%',
+    height: 400,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f0f0f0',
@@ -1685,9 +1767,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   profileName: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 15,
     color: '#333',
   },
   profileDescription: {
