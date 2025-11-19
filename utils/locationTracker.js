@@ -1,6 +1,6 @@
 // locationTracker.js
 import * as Location from 'expo-location';
-import { saveUserProfile, getUserProfile } from '../profileService';
+import { saveUserProfile, getUserProfile } from '../services/profileService';
 import { serverTimestamp } from 'firebase/firestore';
 
 /**
