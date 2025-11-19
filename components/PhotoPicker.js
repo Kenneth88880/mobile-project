@@ -1,25 +1,40 @@
 import React from "react";
-import { View, Image, TouchableOpacity, Text, ScrollView, StyleSheet, Alert, StatusBar } from "react-native";
+import {
+  View,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  StatusBar,
+} from "react-native";
+import { Text, IconButton, Surface, useTheme } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
 
 export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
   const pickImage = async () => {
     // Hide status bar before opening picker
     StatusBar.setHidden(true);
-    
+
     // Request permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
+
+    if (status !== "granted") {
       StatusBar.setHidden(false);
-      Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload photos!');
+      Alert.alert(
+        "Permission Required",
+        "Sorry, we need camera roll permissions to upload photos!"
+      );
       return;
     }
 
     // Check if already at max photos
     if (photos.length >= maxPhotos) {
       StatusBar.setHidden(false);
-      Alert.alert('Max Photos Reached', `You can only upload up to ${maxPhotos} photos.`);
+      Alert.alert(
+        "Max Photos Reached",
+        `You can only upload up to ${maxPhotos} photos.`
+      );
       return;
     }
 
@@ -41,47 +56,63 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
   };
 
   const removePhoto = (indexToRemove) => {
-    Alert.alert(
-      'Remove Photo',
-      'Are you sure you want to remove this photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            const updatedPhotos = photos.filter((_, index) => index !== indexToRemove);
-            onPhotosChange(updatedPhotos);
-          }
-        }
-      ]
-    );
+    Alert.alert("Remove Photo", "Are you sure you want to remove this photo?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          const updatedPhotos = photos.filter(
+            (_, index) => index !== indexToRemove
+          );
+          onPhotosChange(updatedPhotos);
+        },
+      },
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+      >
         {photos.map((uri, index) => (
-          <View key={index} style={styles.photoContainer}>
+          <Surface key={index} style={styles.photoContainer} elevation={2}>
             <Image source={{ uri }} style={styles.image} />
-            <TouchableOpacity 
+            <IconButton
+              icon="close-circle"
+              size={24}
+              iconColor="white"
               style={styles.removeButton}
               onPress={() => removePhoto(index)}
-            >
-              <Text style={styles.removeButtonText}>×</Text>
-            </TouchableOpacity>
-          </View>
+            />
+          </Surface>
         ))}
-        
+
         {photos.length < maxPhotos && (
-          <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-            <Text style={styles.addPhotoText}>+</Text>
-            <Text style={styles.addPhotoLabel}>Add Photo</Text>
-          </TouchableOpacity>
+          <Surface
+            style={[
+              styles.addPhotoButton,
+              { borderColor: theme.colors.primary },
+            ]}
+            elevation={1}
+          >
+            <IconButton
+              icon="plus"
+              size={40}
+              iconColor={theme.colors.primary}
+              onPress={pickImage}
+            />
+            <Text variant="bodySmall" style={{ color: theme.colors.primary }}>
+              Add Photo
+            </Text>
+          </Surface>
         )}
       </ScrollView>
-      
-      <Text style={styles.photoCount}>
+
+      <Text variant="bodySmall" style={styles.photoCount}>
         {photos.length} / {maxPhotos} photos
       </Text>
     </View>
@@ -95,9 +126,14 @@ const styles = StyleSheet.create({
   scroll: {
     marginBottom: 10,
   },
+  scrollContent: {
+    paddingRight: 10,
+  },
   photoContainer: {
-    position: 'relative',
+    position: "relative",
     marginRight: 10,
+    borderRadius: 10,
+    overflow: "hidden",
   },
   image: {
     width: 120,
@@ -105,46 +141,24 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   removeButton: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeButtonText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: -3,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    margin: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   addPhotoButton: {
     width: 120,
     height: 160,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#007AFF',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f8ff',
-  },
-  addPhotoText: {
-    fontSize: 40,
-    color: '#007AFF',
-    marginBottom: 5,
-  },
-  addPhotoLabel: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "transparent",
   },
   photoCount: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    textAlign: "center",
+    opacity: 0.7,
   },
 });

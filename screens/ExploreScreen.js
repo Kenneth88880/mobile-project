@@ -1,23 +1,45 @@
 import React, { useEffect, useState } from "react";
 import {
   View,
-  Text,
-  TextInput,
   StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  FlatList,
   Dimensions,
   Alert,
   Modal,
+  ScrollView,
+  Linking,
+  Platform,
 } from "react-native";
+import {
+  Text,
+  Searchbar,
+  Chip,
+  Card,
+  Button,
+  List,
+  Portal,
+  Dialog,
+  Surface,
+  useTheme,
+  Icon,
+  IconButton,
+} from "react-native-paper";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const categories = ["Restaurants", "Parks", "Cafes", "Museums", "Gyms", "Libraries", "Malls", "Hospitals"];
+const categories = [
+  "Restaurants",
+  "Parks",
+  "Cafes",
+  "Museums",
+  "Gyms",
+  "Libraries",
+  "Malls",
+  "Hospitals",
+];
 
 export default function ExploreScreen() {
+  const theme = useTheme();
   const [region, setRegion] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [pins, setPins] = useState([]);
@@ -29,8 +51,9 @@ export default function ExploreScreen() {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [placeDetails, setPlaceDetails] = useState(null);
   const [reviews, setReviews] = useState([]);
+  const [locationPermission, setLocationPermission] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load previous searches
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem("previousSearches");
@@ -38,31 +61,86 @@ export default function ExploreScreen() {
     })();
   }, []);
 
-  // Get user location
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission denied", "Location is required for Explore features.");
-        setRegion({
-          latitude: 43.6532,
-          longitude: -79.3832,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        });
-        return;
+    checkLocationPermission();
+  }, []);
+
+  const checkLocationPermission = async () => {
+    try {
+      setIsLoading(true);
+      const { status } = await Location.getForegroundPermissionsAsync();
+      setLocationPermission(status);
+
+      if (status === "granted") {
+        await fetchUserLocation();
+      } else {
+        setIsLoading(false);
       }
-      const loc = await Location.getCurrentPositionAsync({});
+    } catch (error) {
+      console.error("Permission check error:", error);
+      setLocationPermission("denied");
+      setIsLoading(false);
+    }
+  };
+
+  const fetchUserLocation = async () => {
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Location timeout")), 10000)
+      );
+
+      const locationPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const loc = await Promise.race([locationPromise, timeoutPromise]);
+
       setRegion({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         latitudeDelta: 0.1,
         longitudeDelta: 0.1,
       });
-    })();
-  }, []);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Location fetch error:", error);
+      setIsLoading(false);
+    }
+  };
 
-  // Generate mock nearby places
+  const handleRequestPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status);
+
+      if (status === "granted") {
+        setIsLoading(true);
+        await fetchUserLocation();
+      } else if (status === "denied") {
+        Alert.alert(
+          "Location Access Required",
+          "Please enable location access in your device settings to use this feature.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => {
+                if (Platform.OS === "ios") {
+                  Linking.openURL("app-settings:");
+                } else {
+                  Linking.openSettings();
+                }
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Permission request error:", error);
+      Alert.alert("Error", "Failed to request location permission.");
+    }
+  };
+
   const generateMockPlaces = (category) => {
     if (!region) return [];
     const newPlaces = Array.from({ length: 40 }).map((_, i) => ({
@@ -98,12 +176,13 @@ export default function ExploreScreen() {
     setSearchText(term);
     setShowHistory(false);
 
-    // Save search history (keep only last 15)
-    const newHistory = [term, ...previousSearches.filter((t) => t !== term)].slice(0, 15);
+    const newHistory = [
+      term,
+      ...previousSearches.filter((t) => t !== term),
+    ].slice(0, 15);
     setPreviousSearches(newHistory);
     await AsyncStorage.setItem("previousSearches", JSON.stringify(newHistory));
 
-    // Default mock fallback
     const result = generateMockPlaces(term);
     setPins(result);
     setPlaces(result);
@@ -115,28 +194,6 @@ export default function ExploreScreen() {
         longitude: result[0].longitude,
       });
     }
-
-    /*
-    // --- GOOGLE PLACES API SEARCH (uncomment to use) ---
-    const GOOGLE_API_KEY = "YOUR_API_KEY_HERE";
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(term)}&location=${region.latitude},${region.longitude}&radius=50000&key=${GOOGLE_API_KEY}`
-      );
-      const data = await response.json();
-      const placesData = data.results.map((p, index) => ({
-        id: p.place_id || index.toString(),
-        name: p.name,
-        latitude: p.geometry.location.lat,
-        longitude: p.geometry.location.lng,
-        distance: ((p.distance || Math.random() * 50).toFixed(1)),
-      }));
-      setPins(placesData);
-      setPlaces(placesData);
-    } catch (err) {
-      console.error("Google Places API Error:", err);
-    }
-    */
   };
 
   const handleSelectPlace = async (place) => {
@@ -160,71 +217,125 @@ export default function ExploreScreen() {
     setReviews(mockReviews);
   };
 
-  const closeOverlay = () => {
-    setSelectedPlace(null);
-    setPlaceDetails(null);
-    setReviews([]);
-  };
-
-  if (!region) {
+  if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Fetching location...</Text>
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Icon source="map-marker-radius" size={48} color={theme.colors.primary} />
+        <Text variant="titleMedium" style={{ marginTop: 16 }}>
+          Fetching location...
+        </Text>
+      </View>
+    );
+  }
+
+  if (locationPermission !== "granted" || !region) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Card style={styles.permissionCard} elevation={2}>
+          <Card.Content style={styles.permissionContent}>
+            <Icon
+              source="map-marker-off"
+              size={64}
+              color={theme.colors.primary}
+            />
+            <Text
+              variant="headlineSmall"
+              style={[styles.permissionTitle, { color: theme.colors.onSurface }]}
+            >
+              Location Access Required
+            </Text>
+            <Text
+              variant="bodyMedium"
+              style={[
+                styles.permissionDescription,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              To use this feature, you need to allow location access. This helps
+              us show you nearby places and explore your surroundings.
+            </Text>
+            <Button
+              mode="contained"
+              onPress={handleRequestPermission}
+              icon="map-marker-check"
+              style={styles.permissionButton}
+            >
+              Enable Location Access
+            </Button>
+          </Card.Content>
+        </Card>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🧭 Explore Nearby</Text>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Surface style={styles.header} elevation={2}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Icon source="compass" size={28} color={theme.colors.primary} />
+          <Text variant="headlineMedium">Explore Nearby</Text>
+        </View>
+      </Surface>
 
-      {/* Search bar */}
-      <View style={{ marginBottom: 10 }}>
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Search for places..."
-          value={searchText}
-          onFocus={() => setShowHistory(true)}
-          onBlur={() => setShowHistory(false)} // hides when not in use
-          onChangeText={setSearchText}
-          onSubmitEditing={() => handleSearch(searchText)}
-        />
-        {showHistory && previousSearches.length > 0 && (
-          <View style={styles.historyContainer}>
-            <ScrollView style={{ maxHeight: 150 }}>
-              {previousSearches.map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => handleSearch(item)}
-                  style={styles.historyItem}
-                >
-                  <Text>{item}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
+      <Searchbar
+        placeholder="Search for places..."
+        value={searchText}
+        onFocus={() => setShowHistory(true)}
+        onBlur={() => setShowHistory(false)}
+        onChangeText={setSearchText}
+        onSubmitEditing={() => handleSearch(searchText)}
+        style={styles.searchBar}
+      />
 
-      {/* Category buttons */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+      {showHistory && previousSearches.length > 0 && (
+        <Card style={styles.historyCard}>
+          <Card.Content>
+            {previousSearches.slice(0, 5).map((item, index) => (
+              <List.Item
+                key={index}
+                title={item}
+                left={(props) => <List.Icon {...props} icon="history" />}
+                onPress={() => handleSearch(item)}
+              />
+            ))}
+          </Card.Content>
+        </Card>
+      )}
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
+      >
         {categories.map((cat) => (
-          <TouchableOpacity
+          <Chip
             key={cat}
-            style={[styles.categoryButton, selectedCategory === cat && styles.activeButton]}
+            selected={selectedCategory === cat}
             onPress={() => handleCategorySelect(cat)}
+            style={styles.categoryChip}
           >
-            <Text style={[styles.categoryText, selectedCategory === cat && styles.activeText]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
+            {cat}
+          </Chip>
         ))}
       </ScrollView>
 
-      {/* Map */}
       <View style={styles.mapContainer}>
         <MapView style={styles.map} region={region}>
-          <Marker coordinate={region} title="You are here" />
+          <Marker coordinate={region} title="You are here" pinColor="blue" />
           {pins.map((p) => (
             <Marker
               key={p.id}
@@ -237,108 +348,152 @@ export default function ExploreScreen() {
         </MapView>
       </View>
 
-      {/* Cards */}
-      <FlatList
-        data={places.slice(0, visibleCount)}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => handleSelectPlace(item)}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardSubtitle}>{item.distance} km away</Text>
-            </View>
-          </TouchableOpacity>
+      <ScrollView style={styles.placesList}>
+        {places.slice(0, visibleCount).map((item) => (
+          <Card
+            key={item.id}
+            style={styles.placeCard}
+            onPress={() => handleSelectPlace(item)}
+          >
+            <Card.Content>
+              <Text variant="titleMedium">{item.name}</Text>
+              <Text variant="bodySmall">{item.distance} km away</Text>
+            </Card.Content>
+          </Card>
+        ))}
+
+        {visibleCount < places.length && (
+          <Button
+            mode="contained"
+            onPress={handleShowMore}
+            style={styles.showMoreButton}
+          >
+            Show More
+          </Button>
         )}
-        ListFooterComponent={
-          visibleCount < places.length && (
-            <TouchableOpacity style={styles.showMoreBtn} onPress={handleShowMore}>
-              <Text style={styles.showMoreText}>Show More</Text>
-            </TouchableOpacity>
-          )
-        }
-      />
+      </ScrollView>
 
-      {/* Overlay for details */}
-      <Modal visible={!!selectedPlace} transparent animationType="fade">
-        <View style={styles.overlay}>
-          <View style={styles.detailCard}>
-            <TouchableOpacity style={styles.closeBtn} onPress={closeOverlay}>
-              <Text style={{ fontSize: 18, fontWeight: "bold" }}>✖</Text>
-            </TouchableOpacity>
-
+      <Portal>
+        <Dialog
+          visible={!!selectedPlace}
+          onDismiss={() => setSelectedPlace(null)}
+        >
+          <Dialog.Title>{selectedPlace?.name}</Dialog.Title>
+          <Dialog.ScrollArea>
             <ScrollView>
-              {selectedPlace && (
+              {placeDetails && (
                 <>
-                  <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-                  {placeDetails && (
-                    <>
-                      <Text style={styles.detailText}>
-                        📍 {placeDetails.address || "Unknown address"}
-                      </Text>
-                      <Text style={styles.detailText}>
-                        ⭐ {placeDetails.rating} ({placeDetails.totalReviews} reviews)
-                      </Text>
-                    </>
-                  )}
-                  <Text style={styles.sectionHeader}>User Reviews:</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                    <Icon source="map-marker" size={16} />
+                    <Text variant="bodyMedium">{placeDetails.address}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                    <Icon source="star" size={16} color="#FFD700" />
+                    <Text variant="bodyMedium">
+                      {placeDetails.rating} ({placeDetails.totalReviews}{" "}
+                      reviews)
+                    </Text>
+                  </View>
+                  <Text variant="titleSmall" style={styles.reviewsTitle}>
+                    User Reviews:
+                  </Text>
                   {reviews.map((r) => (
-                    <View key={r.id} style={styles.reviewCard}>
-                      <Text style={{ fontWeight: "bold" }}>{r.user}</Text>
-                      <Text>{r.comment}</Text>
-                      <Text style={{ color: "#777" }}>⭐ {r.rating}</Text>
-                    </View>
+                    <Card key={r.id} style={styles.reviewCard}>
+                      <Card.Content>
+                        <Text variant="labelLarge">{r.user}</Text>
+                        <Text variant="bodySmall">{r.comment}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                          <Icon source="star" size={14} color="#FFD700" />
+                          <Text variant="bodySmall">{r.rating}</Text>
+                        </View>
+                      </Card.Content>
+                    </Card>
                   ))}
                 </>
               )}
             </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setSelectedPlace(null)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
 
-const { height, width } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10, backgroundColor: "#fff" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
-  searchBar: { borderColor: "#ccc", borderWidth: 1, borderRadius: 10, padding: 8 },
-  historyContainer: { backgroundColor: "#f5f5f5", borderRadius: 8, marginTop: 4, paddingVertical: 4 },
-  historyItem: { padding: 8, borderBottomColor: "#ddd", borderBottomWidth: 1 },
-  categoryScroll: { marginBottom: 10 },
-  categoryButton: { backgroundColor: "#eee", borderRadius: 20, paddingVertical: 8, paddingHorizontal: 15, marginRight: 8 },
-  activeButton: { backgroundColor: "#000" },
-  categoryText: { color: "#333", fontWeight: "500" },
-  activeText: { color: "#fff" },
-  mapContainer: { height: height * 0.35, borderRadius: 10, overflow: "hidden", marginBottom: 10 },
-  map: { flex: 1 },
-  card: { backgroundColor: "#f8f8f8", padding: 15, borderRadius: 10, marginBottom: 8 },
-  cardTitle: { fontSize: 16, fontWeight: "bold" },
-  cardSubtitle: { color: "#555" },
-  showMoreBtn: { backgroundColor: "#000", padding: 10, borderRadius: 10, alignItems: "center", marginVertical: 10 },
-  showMoreText: { color: "#fff", fontWeight: "bold" },
-  overlay: {
+  container: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  centerContent: {
     justifyContent: "center",
     alignItems: "center",
+    padding: 16,
   },
-  detailCard: {
-    width: width * 0.9,
-    height: height * 0.65,
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 15,
+  permissionCard: {
+    maxWidth: 400,
+    width: "100%",
   },
-  closeBtn: { alignSelf: "flex-end", padding: 5 },
-  detailTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 5 },
-  detailText: { fontSize: 15, marginBottom: 3 },
-  sectionHeader: { fontSize: 17, fontWeight: "bold", marginTop: 10, marginBottom: 5 },
-  reviewCard: {
-    backgroundColor: "#f0f0f0",
+  permissionContent: {
+    alignItems: "center",
+    padding: 24,
+  },
+  permissionTitle: {
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  permissionDescription: {
+    marginBottom: 24,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  permissionButton: {
+    marginTop: 8,
+  },
+  header: {
+    padding: 16,
+  },
+  searchBar: {
+    margin: 8,
+  },
+  historyCard: {
+    margin: 8,
+  },
+  categoryScroll: {
+    maxHeight: 60,
+    paddingHorizontal: 8,
+  },
+  categoryChip: {
+    marginRight: 8,
+    marginVertical: 8,
+  },
+  mapContainer: {
+    height: height * 0.35,
+    margin: 8,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  map: {
+    flex: 1,
+  },
+  placesList: {
+    flex: 1,
     padding: 8,
-    borderRadius: 8,
+  },
+  placeCard: {
+    marginBottom: 8,
+  },
+  showMoreButton: {
+    margin: 8,
+  },
+  reviewsTitle: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  reviewCard: {
     marginBottom: 8,
   },
 });
