@@ -1,8 +1,10 @@
 import React, { useContext } from "react";
-import { View, TextInput, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text, TextInput, useTheme } from "react-native-paper";
 import { UserContext } from "../context/UserContext";
 
 export default function ProfileInfo() {
+  const theme = useTheme();
   const { userData, setUserData } = useContext(UserContext);
 
   const handleChange = (key, value) => {
@@ -10,52 +12,75 @@ export default function ProfileInfo() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Name:</Text>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <TextInput
-        style={styles.input}
+        label="Name"
+        mode="outlined"
         value={userData.name}
         onChangeText={(text) => handleChange("name", text)}
         placeholder="Enter your name"
+        style={styles.input}
+        left={<TextInput.Icon icon="account" />}
       />
 
-      <Text style={styles.label}>Age:</Text>
       <TextInput
-        style={styles.input}
+        label="Age"
+        mode="outlined"
         value={userData.age}
         onChangeText={(text) => handleChange("age", text)}
         placeholder="Enter your age"
         keyboardType="numeric"
+        style={styles.input}
+        left={<TextInput.Icon icon="cake-variant" />}
       />
 
-      <Text style={styles.label}>Description:</Text>
       <TextInput
-        style={[styles.input, { height: 80 }]}
+        label="Description"
+        mode="outlined"
         value={userData.description}
         onChangeText={(text) => handleChange("description", text)}
         placeholder="Describe yourself"
         multiline
+        numberOfLines={4}
+        style={[styles.input, styles.textArea]}
+        left={<TextInput.Icon icon="text" />}
       />
 
-      <Text style={styles.label}>Tags:</Text>
       <TextInput
-        style={styles.input}
+        label="Tags"
+        mode="outlined"
         value={userData.tags}
         onChangeText={(text) => handleChange("tags", text)}
         placeholder="#gaming #music #foodie"
+        style={styles.input}
+        left={<TextInput.Icon icon="tag-multiple" />}
+        right={<TextInput.Affix text="#" />}
       />
+
+      <Text variant="bodySmall" style={styles.helperText}>
+        Separate tags with spaces (e.g., #gaming #music #travel)
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { width: "100%", padding: 10 },
-  label: { fontSize: 16, fontWeight: "bold", marginTop: 10 },
+  container: {
+    width: "100%",
+    padding: 16,
+  },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 8,
-    marginTop: 4,
+    marginBottom: 16,
+  },
+  textArea: {
+    minHeight: 100,
+  },
+  helperText: {
+    marginTop: -8,
+    marginBottom: 8,
+    marginLeft: 12,
+    opacity: 0.7,
   },
 });
