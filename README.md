@@ -1,4 +1,14 @@
-# mobile-project
-make sure to add the firebase config file on your own versions
+# Update Log
 
-go into profilescreen and dating screen to change profiles
+## Things to do before release
+* Report bug system
+* ~~Premium notifications~~
+* ~~User interface~~
+* Onboarding system
+* Star system
+* Duo system
+* Chat system
+* ~~Like/request system~~
+* Profile system
+* Explore system
+
