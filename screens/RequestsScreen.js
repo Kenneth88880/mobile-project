@@ -19,7 +19,7 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-import { db } from "../firebaseConfig";
+import { db } from "../services/firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import {
   acceptDuoLike,
@@ -28,8 +28,8 @@ import {
   getUserProfile,
   saveDuoSwipe,
   saveRating,
-} from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+} from "../services/profileService";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   EmptyState,
   ProfilePhoto,

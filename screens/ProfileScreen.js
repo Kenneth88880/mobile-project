@@ -25,13 +25,13 @@ import {
   List,
   useTheme,
 } from "react-native-paper";
-import { CURRENT_USER_ID } from "../UserConfig";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   getUserProfile,
   saveUserProfile,
   getAverageRating,
   resetAllDuoData,
-} from "../profileService";
+} from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
 import {
   collection,
@@ -45,7 +45,7 @@ import {
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { db } from "../services/firebaseConfig";
 import { formatLastActive } from "../utils/locationTracker";
 
 // Pre-defined tags users can choose from
