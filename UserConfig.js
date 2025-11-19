@@ -2,7 +2,7 @@
 // Change this value to switch between different user accounts for testing
 // Examples: "user123", "user456", "user789", etc.
 
-export const CURRENT_USER_ID = "userpeter";
+export const CURRENT_USER_ID = "usertom";
 
 // Instructions for testing:
 // 1. To test as a different user, just change the value above
