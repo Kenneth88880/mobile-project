@@ -55,6 +55,11 @@ export default function App() {
       unfocusedIcon: "star-outline",
     },
     {
+      key: "payment",
+      focusedIcon: "credit-card",
+      unfocusedIcon: "credit-card-outline",
+    },
+    {
       key: "profile",
       focusedIcon: "account",
       unfocusedIcon: "account-outline",
@@ -66,6 +71,7 @@ export default function App() {
     explore: () => <ExploreScreen />,
     messages: () => <ChatScreen />,
     premium: () => <PremiumScreen />,
+    payment: () => <CheckoutScreen />,
     profile: () => (
       <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
     ),
