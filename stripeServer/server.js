@@ -1,7 +1,7 @@
 // server.js
 import Stripe from 'stripe';
 import express from 'express';
-import { STRIPE_SECRET_KEY} from '../stripeConfig.js';
+import { STRIPE_SECRET_KEY} from '../services/stripeConfig.js';
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const app = express();
