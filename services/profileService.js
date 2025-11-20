@@ -1047,14 +1047,23 @@ export const deleteChat = async (chatId) => {
 // Master reset function - deletes ALL duo-related data
 export const resetAllDuoData = async () => {
   try {
+    console.log("Starting complete duo data reset...");
+    
     const likes = await deleteAllDuoLikes();
+    const swipes = await deleteAllDuoSwipes();  // FIXED: Added swipes deletion
     const matches = await deleteAllDuoMatches();
     const chats = await deleteAllDuoChats();
     
     console.log("Complete duo data reset finished");
+    console.log(`- Likes deleted: ${likes.count}`);
+    console.log(`- Swipes deleted: ${swipes.count}`);
+    console.log(`- Matches deleted: ${matches.count}`);
+    console.log(`- Chats deleted: ${chats.count}`);
+    
     return {
       success: true,
       likesDeleted: likes.count,
+      swipesDeleted: swipes.count,  // FIXED: Added swipes count
       matchesDeleted: matches.count,
       chatsDeleted: chats.count,
     };
@@ -1063,6 +1072,7 @@ export const resetAllDuoData = async () => {
     return {
       success: false,
       likesDeleted: 0,
+      swipesDeleted: 0,
       matchesDeleted: 0,
       chatsDeleted: 0,
     };

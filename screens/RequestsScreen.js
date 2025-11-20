@@ -1,93 +1,114 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, RefreshControl } from "react-native";
-import { db } from "../firebaseConfig";
+import {
+  View,
+  ScrollView,
+  Alert,
+  RefreshControl,
+  StyleSheet,
+  Image,
+} from "react-native";
+import {
+  Text,
+  Card,
+  Button,
+  Chip,
+  Surface,
+  ActivityIndicator,
+  IconButton,
+  useTheme,
+  Divider,
+  Icon,
+} from "react-native-paper";
+import { db } from "../services/firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { acceptDuoLike, getCurrentDuoPartner, deleteDuoLike, getUserProfile, saveDuoSwipe } from "../services/profileService.js";
+import {
+  acceptDuoLike,
+  getCurrentDuoPartner,
+  deleteDuoLike,
+  getUserProfile,
+  saveDuoSwipe,
+  saveRating,
+} from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
+import {
+  EmptyState,
+  ProfilePhoto,
+  StarRating,
+} from "../components/CommonComponents";
 
 export default function RequestsScreen() {
+  const theme = useTheme();
   const [duoLikes, setDuoLikes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentDuo, setCurrentDuo] = useState(null);
-  
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+
   const currentUserId = CURRENT_USER_ID;
 
   useEffect(() => {
     loadDuoPartner();
   }, []);
 
-  // Load current duo partner first
   const loadDuoPartner = async () => {
     setLoading(true);
     try {
       const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
-      
-      if (!duo) {
-        setLoading(false);
-      }
+      if (!duo) setLoading(false);
     } catch (error) {
       console.error("Error loading duo partner:", error);
       setLoading(false);
     }
   };
 
-  // Set up real-time listener for duo likes
   useEffect(() => {
     if (!currentDuo) return;
 
-    console.log("Setting up real-time listener for duo likes...");
-    
-    // Listen to duo likes in real-time
     const likesQuery = query(
       collection(db, "duoLikes"),
       where("toDuoId", "==", currentDuo.duoId),
       where("status", "==", "pending")
     );
 
-    const unsubscribe = onSnapshot(likesQuery, async (snapshot) => {
-      console.log(`Received ${snapshot.docs.length} duo likes from Firestore`);
-      
-      const likes = [];
-      for (const doc of snapshot.docs) {
-        const likeData = doc.data();
-        
-        // Get profiles for the duo that liked you
-        const user1Profile = await getUserProfile(likeData.fromUser1);
-        const user2Profile = await getUserProfile(likeData.fromUser2);
+    const unsubscribe = onSnapshot(
+      likesQuery,
+      async (snapshot) => {
+        const likes = [];
+        for (const doc of snapshot.docs) {
+          const likeData = doc.data();
+          const user1Profile = await getUserProfile(likeData.fromUser1);
+          const user2Profile = await getUserProfile(likeData.fromUser2);
 
-        if (user1Profile && user2Profile) {
-          likes.push({
-            id: doc.id,
-            fromDuoId: likeData.fromDuoId,
-            toDuoId: likeData.toDuoId,
-            user1: user1Profile,
-            user2: user2Profile,
-            acceptedBy: likeData.acceptedBy || [],
-            timestamp: likeData.timestamp,
-            status: likeData.status,
-          });
+          if (user1Profile && user2Profile) {
+            likes.push({
+              id: doc.id,
+              fromDuoId: likeData.fromDuoId,
+              toDuoId: likeData.toDuoId,
+              user1: user1Profile,
+              user2: user2Profile,
+              acceptedBy: likeData.acceptedBy || [],
+              timestamp: likeData.timestamp,
+              status: likeData.status,
+            });
+          }
         }
+
+        setDuoLikes(likes);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error in duo likes listener:", error);
+        setLoading(false);
       }
+    );
 
-      setDuoLikes(likes);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error in duo likes listener:", error);
-      setLoading(false);
-    });
-
-    // Cleanup listener on unmount
-    return () => {
-      console.log("Cleaning up duo likes listener");
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [currentDuo]);
 
   const loadData = async () => {
-    // This is now handled by the real-time listener
-    // Just reload the duo partner
     await loadDuoPartner();
   };
 
@@ -103,30 +124,35 @@ export default function RequestsScreen() {
       return;
     }
 
-    const success = await acceptDuoLike(likeId, currentUserId, currentDuo.duoId, fromDuoId);
-    
+    const success = await acceptDuoLike(
+      likeId,
+      currentUserId,
+      currentDuo.duoId,
+      fromDuoId
+    );
     if (success) {
       Alert.alert("Accepted!", "You've accepted this duo request");
-      // No need to reload - real-time listener will update automatically
     } else {
       Alert.alert("Error", "Failed to accept request");
     }
   };
 
-  const handleDecline = async (likeId) => {
+  const handleDecline = async (likeId, fromDuoId) => {
+    if (!currentDuo) return;
+
     Alert.alert(
       "Decline Request",
-      "Are you sure you want to decline this duo like? This will permanently remove it.",
+      "Are you sure you want to decline this duo like?",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Decline",
           style: "destructive",
           onPress: async () => {
+            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
             const success = await deleteDuoLike(likeId);
             if (success) {
               Alert.alert("Declined", "Request has been removed");
-              // No need to reload - real-time listener will update automatically
             } else {
               Alert.alert("Error", "Failed to decline request");
             }
@@ -136,22 +162,197 @@ export default function RequestsScreen() {
     );
   };
 
+  const handleProfileClick = (profile) => {
+    setSelectedProfile(profile);
+    setCurrentImageIndex(0);
+  };
+
+  const handleNextImage = () => {
+    if (
+      selectedProfile?.photos &&
+      currentImageIndex < selectedProfile.photos.length - 1
+    ) {
+      setCurrentImageIndex(currentImageIndex + 1);
+    }
+  };
+
+  const handlePrevImage = () => {
+    if (
+      selectedProfile?.photos &&
+      currentImageIndex > 1 &&
+      currentImageIndex > 0
+    ) {
+      setCurrentImageIndex(currentImageIndex - 1);
+    }
+  };
+
+  const handleRateProfile = () => {
+    setShowRatingModal(true);
+  };
+
+  const submitRating = async (rating) => {
+    if (selectedProfile) {
+      await saveRating(currentUserId, selectedProfile.userId, rating);
+      Alert.alert(
+        "Success",
+        `You rated ${selectedProfile.name} ${rating} stars!`
+      );
+      setShowRatingModal(false);
+    }
+  };
+
+  // Rating Modal
+  if (showRatingModal && selectedProfile) {
+    return (
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Surface style={styles.modalSurface} elevation={4}>
+          <Card style={styles.ratingCard}>
+            <Card.Title
+              title={`Rate ${selectedProfile.name}`}
+              subtitle="How would you rate this profile?"
+            />
+            <Card.Content>
+              <View style={styles.ratingStars}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <IconButton
+                    key={star}
+                    icon="star"
+                    size={48}
+                    iconColor="#FFD700"
+                    onPress={() => submitRating(star)}
+                  />
+                ))}
+              </View>
+            </Card.Content>
+            <Card.Actions>
+              <Button onPress={() => setShowRatingModal(false)}>Cancel</Button>
+            </Card.Actions>
+          </Card>
+        </Surface>
+      </View>
+    );
+  }
+
+  // Single Profile View
+  if (selectedProfile) {
+    const hasPhotos =
+      selectedProfile.photos && selectedProfile.photos.length > 0;
+    const currentPhoto = hasPhotos
+      ? selectedProfile.photos[currentImageIndex]
+      : null;
+
+    return (
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Surface style={styles.header} elevation={2}>
+          <IconButton
+            icon="arrow-left"
+            onPress={() => setSelectedProfile(null)}
+          />
+          <Text variant="titleLarge">Profile</Text>
+          <IconButton icon="star" onPress={handleRateProfile} />
+        </Surface>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Card style={styles.profileCard}>
+            {currentPhoto ? (
+              <Card.Cover
+                source={{ uri: currentPhoto }}
+                style={styles.profileCover}
+              />
+            ) : (
+              <View style={styles.noPhotoContainer}>
+                <ProfilePhoto size={120} />
+                <Text variant="bodyLarge">No photos available</Text>
+              </View>
+            )}
+
+            {hasPhotos && selectedProfile.photos.length > 1 && (
+              <View style={styles.photoNavigation}>
+                <IconButton icon="chevron-left" onPress={handlePrevImage} />
+                <View style={styles.dotsContainer}>
+                  {selectedProfile.photos.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.dot,
+                        index === currentImageIndex && styles.activeDot,
+                      ]}
+                    />
+                  ))}
+                </View>
+                <IconButton icon="chevron-right" onPress={handleNextImage} />
+              </View>
+            )}
+          </Card>
+
+          <Card style={styles.infoCard}>
+            <Card.Content>
+              <Text variant="headlineMedium">
+                {selectedProfile.name || "Unknown"},{" "}
+                {selectedProfile.age || "?"}
+              </Text>
+
+              {selectedProfile.description && (
+                <Text variant="bodyLarge" style={styles.description}>
+                  {selectedProfile.description}
+                </Text>
+              )}
+
+              {selectedProfile.tags && selectedProfile.tags.length > 0 && (
+                <View style={styles.tagsContainer}>
+                  <Text variant="titleSmall">Interests:</Text>
+                  <View style={styles.tagsDisplay}>
+                    {selectedProfile.tags.map((tag, index) => (
+                      <Chip key={index} style={styles.tag} compact>
+                        {tag}
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </Card.Content>
+            <Card.Actions>
+              <Button mode="contained" icon="star" onPress={handleRateProfile}>
+                Rate Profile
+              </Button>
+            </Card.Actions>
+          </Card>
+        </ScrollView>
+      </View>
+    );
+  }
+
   if (!currentDuo) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>👯 No Duo Partner</Text>
-        <Text style={styles.emptyText}>
-          You need to be in a duo to receive double date requests!{"\n\n"}
-          Go to your Profile tab to find a duo partner.
-        </Text>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <EmptyState
+          icon="account-multiple"
+          title="No Duo Partner"
+          message="You need to be in a duo to receive double date requests! Go to your Profile tab to find a duo partner."
+        />
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Loading requests...</Text>
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" />
+        <Text variant="bodyLarge" style={styles.loadingText}>
+          Loading requests...
+        </Text>
       </View>
     );
   }
@@ -159,153 +360,178 @@ export default function RequestsScreen() {
   if (duoLikes.length === 0) {
     return (
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>💌 Duo Requests</Text>
-          <Text style={styles.subtitle}>
+        <Surface style={styles.header} elevation={2}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="email-heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Duo Requests</Text>
+          </View>
+          <Chip icon="account-multiple">
             Your duo with {currentDuo.partnerName}
-          </Text>
-        </View>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Requests Yet</Text>
-          <Text style={styles.emptyText}>
-            When other duos like you, they'll appear here!{"\n\n"}
-            Both you and {currentDuo.partnerName} need to accept before matching.
-          </Text>
-        </View>
+          </Chip>
+        </Surface>
+        <EmptyState
+          icon="email-heart"
+          title="No Requests Yet"
+          message={`When other duos like you, they'll appear here!\n\nBoth you and ${currentDuo.partnerName} need to accept before matching.`}
+        />
       </ScrollView>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>💌 Duo Requests</Text>
-        <Text style={styles.subtitle}>
-          Your duo with {currentDuo.partnerName}
-        </Text>
-      </View>
+      <Surface style={styles.header} elevation={2}>
+        <View style={styles.headerContent}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="email-heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Duo Requests</Text>
+          </View>
+          <Chip icon="account-multiple" style={styles.duoChip}>
+            Your duo with {currentDuo.partnerName}
+          </Chip>
+        </View>
+      </Surface>
 
       <View style={styles.requestsList}>
         {duoLikes.map((like) => {
-          // Check who has accepted
-          const fromUser1Accepted = like.acceptedBy?.includes(like.user1.userId) || false;
-          const fromUser2Accepted = like.acceptedBy?.includes(like.user2.userId) || false;
-          const currentUserAccepted = like.acceptedBy?.includes(currentUserId) || false;
-          const partnerAccepted = currentDuo ? like.acceptedBy?.includes(currentDuo.partnerId) || false : false;
-          
-          // Count acceptances from the SENDING duo (who liked you)
-          const sendingDuoAcceptances = (fromUser1Accepted ? 1 : 0) + (fromUser2Accepted ? 1 : 0);
-          
-          // Check if your duo has fully accepted
+          const fromUser1Accepted =
+            like.acceptedBy?.includes(like.user1.userId) || false;
+          const fromUser2Accepted =
+            like.acceptedBy?.includes(like.user2.userId) || false;
+          const currentUserAccepted =
+            like.acceptedBy?.includes(currentUserId) || false;
+          const partnerAccepted = currentDuo
+            ? like.acceptedBy?.includes(currentDuo.partnerId) || false
+            : false;
+
+          const sendingDuoAcceptances =
+            (fromUser1Accepted ? 1 : 0) + (fromUser2Accepted ? 1 : 0);
           const yourDuoFullyAccepted = currentUserAccepted && partnerAccepted;
-          
-          // Check if a match is ready (all 4 have accepted)
-          const allAccepted = sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
+          const allAccepted =
+            sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
 
           return (
-            <View key={like.id} style={styles.requestCard}>
-              <Text style={styles.requestTitle}>
-                {allAccepted ? "✅ Match Ready!" : "💕 Duo Like"}
-              </Text>
-
-              {/* Show the duo that liked you */}
-              <View style={styles.duoPairContainer}>
-                {/* User 1 */}
-                <View style={styles.profileCard}>
-                  <Image 
-                    source={{ uri: like.user1.photos[0] }} 
-                    style={styles.profileImage} 
+            <Card key={like.id} style={styles.requestCard}>
+              <Card.Title
+                title={allAccepted ? "Match Ready!" : "Duo Like"}
+                titleVariant="titleLarge"
+                left={(props) => (
+                  <Icon
+                    source={allAccepted ? "check-circle" : "heart"}
+                    size={24}
+                    color={allAccepted ? "#4CAF50" : theme.colors.primary}
                   />
-                  <Text style={styles.profileName}>
-                    {like.user1.name}, {like.user1.age}
-                  </Text>
-                  {fromUser1Accepted && (
-                    <View style={styles.acceptedBadge}>
-                      <Text style={styles.acceptedText}>✓ Accepted</Text>
-                    </View>
-                  )}
-                </View>
-
-                <Text style={styles.plusSign}>+</Text>
-
-                {/* User 2 */}
-                <View style={styles.profileCard}>
-                  <Image 
-                    source={{ uri: like.user2.photos[0] }} 
-                    style={styles.profileImage} 
-                  />
-                  <Text style={styles.profileName}>
-                    {like.user2.name}, {like.user2.age}
-                  </Text>
-                  {fromUser2Accepted && (
-                    <View style={styles.acceptedBadge}>
-                      <Text style={styles.acceptedText}>✓ Accepted</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Acceptance Status */}
-              <View style={styles.statusContainer}>
-                <Text style={styles.statusTitle}>Acceptance Status:</Text>
-                <Text style={styles.statusText}>
-                  Their duo: {sendingDuoAcceptances}/2 accepted ✓
-                </Text>
-                <Text style={styles.statusText}>
-                  Your duo: {currentUserAccepted ? "✓ You" : "○ You"} • {partnerAccepted ? `✓ ${currentDuo.partnerName}` : `○ ${currentDuo.partnerName}`}
-                </Text>
-              </View>
-
-              {/* Action Buttons */}
-              {!allAccepted && (
-                <View style={styles.buttonContainer}>
-                  {!currentUserAccepted ? (
-                    <>
-                      <TouchableOpacity 
-                        style={styles.acceptButton}
-                        onPress={() => handleAccept(like.id, like.fromDuoId)}
-                      >
-                        <Text style={styles.buttonText}>✓ Accept</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.declineButton}
-                        onPress={() => handleDecline(like.id)}
-                      >
-                        <Text style={styles.buttonText}>✗ Decline</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <View style={styles.waitingCard}>
-                      <Text style={styles.waitingText}>
-                        ⏳ Waiting for {currentDuo.partnerName} to accept
+                )}
+              />
+              <Card.Content>
+                <View style={styles.duoPairContainer}>
+                  <Button
+                    mode="text"
+                    onPress={() => handleProfileClick(like.user1)}
+                    style={styles.profileButton}
+                  >
+                    <View style={styles.profileCard}>
+                      <ProfilePhoto uri={like.user1.photos?.[0]} size={80} />
+                      <Text variant="titleMedium" style={styles.profileName}>
+                        {like.user1.name}, {like.user1.age}
                       </Text>
+                      {fromUser1Accepted && (
+                        <Chip icon="check" style={styles.acceptedChip} compact>
+                          Accepted
+                        </Chip>
+                      )}
                     </View>
-                  )}
-                </View>
-              )}
+                  </Button>
 
-              {allAccepted && (
-                <View style={styles.matchedCard}>
-                  <Text style={styles.matchedText}>
-                    🎉 Match complete! Check Messages to chat!
+                  <Text variant="displaySmall" style={styles.plusSign}>
+                    +
                   </Text>
-                </View>
-              )}
 
-              <Text style={styles.timestamp}>
-                Liked on {new Date(like.timestamp?.toDate()).toLocaleDateString()}
-              </Text>
-            </View>
+                  <Button
+                    mode="text"
+                    onPress={() => handleProfileClick(like.user2)}
+                    style={styles.profileButton}
+                  >
+                    <View style={styles.profileCard}>
+                      <ProfilePhoto uri={like.user2.photos?.[0]} size={80} />
+                      <Text variant="titleMedium" style={styles.profileName}>
+                        {like.user2.name}, {like.user2.age}
+                      </Text>
+                      {fromUser2Accepted && (
+                        <Chip icon="check" style={styles.acceptedChip} compact>
+                          Accepted
+                        </Chip>
+                      )}
+                    </View>
+                  </Button>
+                </View>
+
+                <Divider style={styles.divider} />
+
+                <Surface style={styles.statusSection} elevation={1}>
+                  <Text variant="titleSmall">Acceptance Status:</Text>
+                  <Text variant="bodyMedium" style={styles.statusText}>
+                    Their duo: {sendingDuoAcceptances}/2 accepted
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.statusText}>
+                    Your duo: {currentUserAccepted ? "You (accepted)" : "You (pending)"} •{" "}
+                    {partnerAccepted
+                      ? `${currentDuo.partnerName} (accepted)`
+                      : `${currentDuo.partnerName} (pending)`}
+                  </Text>
+                </Surface>
+
+                {!allAccepted && (
+                  <View style={styles.actionButtons}>
+                    {!currentUserAccepted ? (
+                      <>
+                        <Button
+                          mode="outlined"
+                          icon="close"
+                          onPress={() => handleDecline(like.id, like.fromDuoId)}
+                          style={styles.actionButton}
+                        >
+                          Decline
+                        </Button>
+                        <Button
+                          mode="contained"
+                          icon="check"
+                          onPress={() => handleAccept(like.id, like.fromDuoId)}
+                          style={styles.actionButton}
+                        >
+                          Accept
+                        </Button>
+                      </>
+                    ) : (
+                      <Chip icon="clock" style={styles.waitingChip}>
+                        Waiting for {currentDuo.partnerName} to accept
+                      </Chip>
+                    )}
+                  </View>
+                )}
+
+                {allAccepted && (
+                  <Chip icon="check-circle" style={styles.matchedChip}>
+                    Match complete! Check Messages to chat!
+                  </Chip>
+                )}
+
+                <Text variant="bodySmall" style={styles.timestamp}>
+                  Liked on{" "}
+                  {new Date(like.timestamp?.toDate()).toLocaleDateString()}
+                </Text>
+              </Card.Content>
+            </Card>
           );
         })}
       </View>
@@ -316,177 +542,156 @@ export default function RequestsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
   },
   header: {
-    backgroundColor: "white",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    padding: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 5,
-    color: "#333",
+  headerContent: {
+    gap: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    fontStyle: "italic",
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 15,
-    color: "#333",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 24,
+  duoChip: {
+    alignSelf: "flex-start",
   },
   requestsList: {
-    padding: 15,
+    padding: 16,
   },
   requestCard: {
-    backgroundColor: "white",
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  requestTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 15,
-    textAlign: "center",
-    color: "#333",
+    marginBottom: 16,
   },
   duoPairContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  profileButton: {
+    flex: 1,
   },
   profileCard: {
     alignItems: "center",
-    flex: 1,
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 10,
-    borderWidth: 3,
-    borderColor: "#e0e0e0",
+    padding: 8,
   },
   profileName: {
-    fontSize: 16,
-    fontWeight: "bold",
+    marginTop: 8,
     textAlign: "center",
-    color: "#333",
   },
   plusSign: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#1E90FF",
-    marginHorizontal: 10,
+    marginHorizontal: 8,
+    color: "#2196F3",
   },
-  acceptedBadge: {
+  acceptedChip: {
+    marginTop: 4,
     backgroundColor: "#4CAF50",
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-    marginTop: 5,
   },
-  acceptedText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
+  divider: {
+    marginVertical: 12,
   },
-  statusContainer: {
-    backgroundColor: "#f9f9f9",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-  statusTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#333",
+  statusSection: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
   },
   statusText: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 4,
+    marginTop: 4,
   },
-  buttonContainer: {
+  actionButtons: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+    gap: 8,
+    marginTop: 12,
   },
-  acceptButton: {
+  actionButton: {
+    flex: 1,
+  },
+  waitingChip: {
+    backgroundColor: "#FF9800",
+  },
+  matchedChip: {
+    marginTop: 12,
     backgroundColor: "#4CAF50",
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
-    marginRight: 10,
-    alignItems: "center",
-  },
-  declineButton: {
-    backgroundColor: "#F44336",
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  waitingCard: {
-    backgroundColor: "#FFF3CD",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    flex: 1,
-  },
-  waitingText: {
-    color: "#856404",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  matchedCard: {
-    backgroundColor: "#D4EDDA",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  matchedText: {
-    color: "#155724",
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
   },
   timestamp: {
-    fontSize: 12,
-    color: "#999",
+    marginTop: 12,
     textAlign: "center",
-    fontStyle: "italic",
+    opacity: 0.7,
+  },
+  modalSurface: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 20,
+  },
+  ratingCard: {
+    width: "100%",
+    maxWidth: 400,
+  },
+  ratingStars: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 20,
+  },
+  profileCard: {
+    marginBottom: 16,
+  },
+  profileCover: {
+    height: 400,
+  },
+  noPhotoContainer: {
+    height: 400,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+  },
+  photoNavigation: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dotsContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+  },
+  activeDot: {
+    backgroundColor: "white",
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  infoCard: {
+    margin: 16,
+  },
+  description: {
+    marginTop: 12,
+    lineHeight: 24,
+  },
+  tagsContainer: {
+    marginTop: 16,
+  },
+  tagsDisplay: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+    gap: 8,
+  },
+  tag: {
+    marginRight: 4,
+    marginBottom: 4,
   },
 });

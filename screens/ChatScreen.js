@@ -1,26 +1,71 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { StyleSheet, Text, TextInput, Button, View, TouchableOpacity, ScrollView, FlatList, Image, ActivityIndicator, Alert } from "react-native";
-import { GiftedChat, Bubble } from "react-native-gifted-chat";
-import { db } from "../firebaseConfig";
-import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, doc, getDoc, deleteDoc, getDocs } from "firebase/firestore";
+import {
+  View,
+  FlatList,
+  Image,
+  Alert,
+  Modal,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  ScrollView,
+} from "react-native";
+import {
+  Text,
+  Card,
+  Button,
+  TextInput,
+  Avatar,
+  List,
+  Badge,
+  IconButton,
+  Chip,
+  Surface,
+  ActivityIndicator,
+  useTheme,
+  Divider,
+  Icon,
+} from "react-native-paper";
+import { db } from "../services/firebaseConfig";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  serverTimestamp,
+  updateDoc,
+  doc,
+  getDoc,
+  deleteDoc,
+  getDocs,
+} from "firebase/firestore";
+import {
+  getUserProfile,
+  saveRating,
+  getCurrentDuoPartner,
+  acceptDuoLike,
+  deleteDuoLike,
+  saveDuoSwipe,
+} from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
+import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
-const getUserID = () => {
-  return CURRENT_USER_ID;
-};
+const getUserID = () => CURRENT_USER_ID;
 
 // Delete a specific chat
 const deleteChat = async (chatId) => {
   try {
-    // Delete all messages in the chat first
-    const messagesSnapshot = await getDocs(collection(db, "chats", chatId, "messages"));
-    const deleteMessagesPromises = messagesSnapshot.docs.map(msgDoc => deleteDoc(msgDoc.ref));
+    const messagesSnapshot = await getDocs(
+      collection(db, "chats", chatId, "messages")
+    );
+    const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
+      deleteDoc(msgDoc.ref)
+    );
     await Promise.all(deleteMessagesPromises);
-    
-    // Then delete the chat document itself
     await deleteDoc(doc(db, "chats", chatId));
-    
-    console.log(`Deleted chat ${chatId} and ${messagesSnapshot.size} messages`);
     return true;
   } catch (error) {
     console.error("Error deleting chat:", error);
@@ -28,253 +73,599 @@ const deleteChat = async (chatId) => {
   }
 };
 
-// Chat List Component - shows all chats the user is part of
-function ChatListScreen({ onChatSelect }) {
+// Report a chat
+const reportChat = async (chatId, reportingUserId) => {
+  try {
+    const chatRef = doc(db, "chats", chatId);
+    const chatDoc = await getDoc(chatRef);
+
+    if (chatDoc.exists()) {
+      const data = chatDoc.data();
+      const reports = data.reports || [];
+      reports.push({
+        reportedBy: reportingUserId,
+        reportedAt: serverTimestamp(),
+        reason: "User reported inappropriate content",
+      });
+
+      const participants = data.participants || [];
+      const updatedParticipants = participants.filter(
+        (id) => id !== reportingUserId
+      );
+
+      await updateDoc(chatRef, {
+        reports: reports,
+        participants: updatedParticipants,
+        flaggedForModeration: true,
+        lastReportedAt: serverTimestamp(),
+      });
+
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error reporting chat:", error);
+    return false;
+  }
+};
+
+// Requests Modal Component
+function RequestsModal({ visible, onClose }) {
+  const theme = useTheme();
+  const [duoLikes, setDuoLikes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentDuo, setCurrentDuo] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const currentUserId = CURRENT_USER_ID;
+
+  useEffect(() => {
+    if (visible) {
+      loadDuoPartner();
+    }
+  }, [visible]);
+
+  const loadDuoPartner = async () => {
+    setLoading(true);
+    try {
+      const duo = await getCurrentDuoPartner(currentUserId);
+      setCurrentDuo(duo);
+      if (!duo) setLoading(false);
+    } catch (error) {
+      console.error("Error loading duo partner:", error);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentDuo || !visible) return;
+
+    const likesQuery = query(
+      collection(db, "duoLikes"),
+      where("toDuoId", "==", currentDuo.duoId),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(likesQuery, async (snapshot) => {
+      const likes = [];
+      for (const doc of snapshot.docs) {
+        const likeData = doc.data();
+        const user1Profile = await getUserProfile(likeData.fromUser1);
+        const user2Profile = await getUserProfile(likeData.fromUser2);
+
+        if (user1Profile && user2Profile) {
+          likes.push({
+            id: doc.id,
+            fromDuoId: likeData.fromDuoId,
+            toDuoId: likeData.toDuoId,
+            user1: user1Profile,
+            user2: user2Profile,
+            acceptedBy: likeData.acceptedBy || [],
+            timestamp: likeData.timestamp,
+            status: likeData.status,
+          });
+        }
+      }
+
+      setDuoLikes(likes);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentDuo, visible]);
+
+  const handleAccept = async (likeId, fromDuoId) => {
+    if (!currentDuo) {
+      Alert.alert("Error", "You need to be in a duo to accept requests");
+      return;
+    }
+
+    const success = await acceptDuoLike(
+      likeId,
+      currentUserId,
+      currentDuo.duoId,
+      fromDuoId
+    );
+    if (success) {
+      Alert.alert("Accepted!", "You've accepted this duo request");
+    } else {
+      Alert.alert("Error", "Failed to accept request");
+    }
+  };
+
+  const handleDecline = async (likeId, fromDuoId) => {
+    if (!currentDuo) return;
+
+    Alert.alert(
+      "Decline Request",
+      "Are you sure you want to decline this duo like?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
+            const success = await deleteDuoLike(likeId);
+            if (success) {
+              Alert.alert("Declined", "Request has been removed");
+            } else {
+              Alert.alert("Error", "Failed to decline request");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleProfileClick = (profile) => {
+    setSelectedProfile(profile);
+    setCurrentImageIndex(0);
+  };
+
+  const handleNextPhoto = () => {
+    if (
+      selectedProfile?.photos &&
+      currentImageIndex < selectedProfile.photos.length - 1
+    ) {
+      setCurrentImageIndex(currentImageIndex + 1);
+    }
+  };
+
+  const handlePreviousPhoto = () => {
+    if (currentImageIndex > 0) {
+      setCurrentImageIndex(currentImageIndex - 1);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView
+        style={[
+          styles.modalContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Surface style={styles.modalHeader} elevation={2}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="email-heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Requests</Text>
+          </View>
+          <IconButton icon="close" onPress={onClose} />
+        </Surface>
+
+        {loading ? (
+          <View style={styles.centerContent}>
+            <ActivityIndicator size="large" />
+            <Text variant="bodyLarge" style={styles.marginTop}>
+              Loading requests...
+            </Text>
+          </View>
+        ) : !currentDuo ? (
+          <EmptyState
+            icon="account-multiple"
+            title="No Duo Partner"
+            message="You need to set up a duo partner in your profile to receive duo requests."
+          />
+        ) : duoLikes.length === 0 ? (
+          <EmptyState
+            icon="email-heart"
+            title="No Requests"
+            message="When duos like you, they'll appear here!"
+          />
+        ) : (
+          <ScrollView style={styles.requestsList}>
+            {duoLikes.map((like) => {
+              const youAccepted = like.acceptedBy.includes(currentUserId);
+              const partnerAccepted = currentDuo
+                ? like.acceptedBy.includes(currentDuo.partnerId)
+                : false;
+              const bothAccepted = youAccepted && partnerAccepted;
+
+              return (
+                <Card key={like.id} style={styles.requestCard}>
+                  <Card.Content>
+                    <View style={styles.duoContainer}>
+                      <Button
+                        mode="text"
+                        onPress={() => handleProfileClick(like.user1)}
+                      >
+                        <View style={styles.userCard}>
+                          <ProfilePhoto
+                            uri={like.user1.photos?.[0]}
+                            size={80}
+                          />
+                          <Text variant="titleMedium">
+                            {like.user1.name}, {like.user1.age}
+                          </Text>
+                        </View>
+                      </Button>
+
+                      <Text variant="displaySmall">+</Text>
+
+                      <Button
+                        mode="text"
+                        onPress={() => handleProfileClick(like.user2)}
+                      >
+                        <View style={styles.userCard}>
+                          <ProfilePhoto
+                            uri={like.user2.photos?.[0]}
+                            size={80}
+                          />
+                          <Text variant="titleMedium">
+                            {like.user2.name}, {like.user2.age}
+                          </Text>
+                        </View>
+                      </Button>
+                    </View>
+
+                    {bothAccepted ? (
+                      <Chip icon="check-circle" style={styles.matchedChip}>
+                        It's a Match! Check your messages
+                      </Chip>
+                    ) : youAccepted ? (
+                      <Chip icon="clock" style={styles.waitingChip}>
+                        Waiting for your partner to accept...
+                      </Chip>
+                    ) : (
+                      <View style={styles.actionButtons}>
+                        <Button
+                          mode="outlined"
+                          icon="close"
+                          onPress={() => handleDecline(like.id, like.fromDuoId)}
+                          style={styles.actionButton}
+                        >
+                          Pass
+                        </Button>
+                        <Button
+                          mode="contained"
+                          icon="heart"
+                          onPress={() => handleAccept(like.id, like.fromDuoId)}
+                          style={styles.actionButton}
+                        >
+                          Accept
+                        </Button>
+                      </View>
+                    )}
+                  </Card.Content>
+                </Card>
+              );
+            })}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// Chat List Component
+function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
+  const theme = useTheme();
   const currentUserId = getUserID();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  console.log('📱 Current User ID:', currentUserId);
-
   useEffect(() => {
-    console.log('🔍 Setting up Firestore listener for chats...');
-    
-    // Listen to all chats
     const chatsRef = collection(db, "chats");
-    const unsubscribe = onSnapshot(chatsRef, (snapshot) => {
-      console.log('✅ Firestore response received');
-      console.log('📊 Total chats in database:', snapshot.docs.length);
-      
-      const chatsList = [];
-      
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        console.log('💬 Checking chat:', docSnap.id, 'Participants:', data.participants);
-        
-        // Only include chats where current user is a participant
-        if (data.participants && data.participants.includes(currentUserId)) {
-          console.log('✔ User is in this chat!');
-          chatsList.push({
-            id: docSnap.id,
-            ...data,
-          });
-        }
-      });
+    const unsubscribe = onSnapshot(
+      chatsRef,
+      (snapshot) => {
+        const chatsList = [];
 
-      console.log(`Found ${chatsList.length} chats for user ${currentUserId}`);
-      
-      // Sort by last message time
-      chatsList.sort((a, b) => {
-        const timeA = a.lastMessageTime?.toDate() || new Date(0);
-        const timeB = b.lastMessageTime?.toDate() || new Date(0);
-        return timeB - timeA;
-      });
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.participants && data.participants.includes(currentUserId)) {
+            chatsList.push({
+              id: docSnap.id,
+              ...data,
+            });
+          }
+        });
 
-      setChats(chatsList);
-      setLoading(false);
-    });
+        chatsList.sort((a, b) => {
+          const aTime = a.lastMessageTime?.seconds || 0;
+          const bTime = b.lastMessageTime?.seconds || 0;
+          return bTime - aTime;
+        });
+
+        setChats(chatsList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error loading chats:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [currentUserId]);
 
   const formatTimeStamp = (timestamp) => {
-    if (!timestamp) return '';
-    
-    const now = new Date();
-    const messageDate = timestamp.toDate();
-    const diffMs = now - messageDate;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    if (!timestamp) return "";
 
-    if (diffMins < 1) return 'now';
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return messageDate.toLocaleDateString();
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInMins = Math.floor(diffInMs / 60000);
+    const diffInHours = Math.floor(diffInMins / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInMins < 1) return "Just now";
+    if (diffInMins < 60) return `${diffInMins}m ago`;
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+
+    return date.toLocaleDateString();
   };
 
-  const handleDeleteChat = (chatId, chatName) => {
+  const congratsMessages = [
+    "Congrats on the successful double date!",
+    "That's awesome! Glad you all hit it off!",
+    "Woohoo! Nothing beats a great double date!",
+  ];
+
+  const handleEveryoneMet = (chatId) => {
+    const randomMessage =
+      congratsMessages[Math.floor(Math.random() * congratsMessages.length)];
+
+    Alert.alert("Everyone Met!", randomMessage, [
+      {
+        text: "Thanks!",
+        onPress: async () => {
+          const success = await deleteChat(chatId);
+          if (!success) Alert.alert("Error", "Failed to close chat");
+        },
+      },
+    ]);
+  };
+
+  const handleUnmatchDuo = (chatId, chatName) => {
     Alert.alert(
-      "Delete Chat",
-      `Are you sure you want to delete "${chatName}"? This will permanently delete all messages.`,
+      "Unmatch Duo",
+      `Are you sure you want to unmatch with "${chatName}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Unmatch",
           style: "destructive",
           onPress: async () => {
             const success = await deleteChat(chatId);
             if (success) {
-              Alert.alert("Deleted", "Chat has been removed");
+              Alert.alert("Unmatched", "You have been unmatched");
             } else {
-              Alert.alert("Error", "Failed to delete chat");
+              Alert.alert("Error", "Failed to unmatch");
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
+  const handleReport = (chatId, chatName) => {
+    Alert.alert(
+      "Report Chat",
+      `Report "${chatName}"? This will flag it for moderation.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Report",
+          style: "destructive",
+          onPress: async () => {
+            const success = await reportChat(chatId, currentUserId);
+            if (success) {
+              Alert.alert(
+                "Reported",
+                "Thank you. Our team will review this chat."
+              );
+            } else {
+              Alert.alert("Error", "Failed to report chat");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const showChatOptions = (chatId, chatName) => {
+    Alert.alert("Chat Options", null, [
+      { text: "Everyone Met", onPress: () => handleEveryoneMet(chatId) },
+      {
+        text: "Unmatch Duo",
+        onPress: () => handleUnmatchDuo(chatId, chatName),
+        style: "destructive",
+      },
+      {
+        text: "Report",
+        onPress: () => handleReport(chatId, chatName),
+        style: "destructive",
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const renderItem = ({ item }) => {
     const unreadCount = item.unreadCount?.[currentUserId] || 0;
-    const isUnread = unreadCount > 0;
     const isGroup = item.isGroupChat || false;
 
     return (
-      <View style={styles.chatItemContainer}>
-        <TouchableOpacity
-          style={styles.chatItem}
-          onPress={() => onChatSelect(item)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.avatarContainer}>
-            {isGroup ? (
-              <View style={styles.groupAvatar}>
-                <Text style={styles.groupAvatarText}>👥</Text>
-              </View>
-            ) : (
-              <Image 
-                source={{ uri: 'https://i.pravatar.cc/150' }} 
-                style={styles.avatar} 
-              />
+      <List.Item
+        title={item.groupName || "Chat"}
+        description={item.lastMessageText || "No messages yet"}
+        descriptionNumberOfLines={1}
+        left={() =>
+          isGroup ? (
+            <Avatar.Icon size={48} icon="account-group" />
+          ) : (
+            <Avatar.Image
+              size={48}
+              source={{ uri: "https://i.pravatar.cc/150" }}
+            />
+          )
+        }
+        right={() => (
+          <View style={styles.chatRight}>
+            <Text variant="bodySmall">
+              {formatTimeStamp(item.lastMessageTime)}
+            </Text>
+            {unreadCount > 0 && (
+              <Badge style={styles.badge}>{unreadCount}</Badge>
             )}
+            <IconButton
+              icon="dots-vertical"
+              size={20}
+              onPress={() => showChatOptions(item.id, item.groupName || "Chat")}
+            />
           </View>
-          
-          <View style={styles.chatContent}>
-            <View style={styles.chatHeader}>
-              <Text style={styles.chatName}>
-                {item.groupName || 'Chat'}
-                {isGroup && ' (Group)'}
-              </Text>
-              <Text style={styles.timestamp}>
-                {formatTimeStamp(item.lastMessageTime)}
-              </Text>
-            </View>
-            
-            <View style={styles.messageRow}>
-              <Text
-                style={[
-                  styles.lastMessage,
-                  isUnread && styles.unreadMessage,
-                ]}
-                numberOfLines={1}
-              >
-                {item.lastMessageText || 'No messages yet'}
-              </Text>
-              
-              {isUnread && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadText}>{unreadCount}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </TouchableOpacity>
-        
-        {/* Delete Button */}
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDeleteChat(item.id, item.groupName || 'Chat')}
-        >
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
+        )}
+        onPress={() => onChatSelect(item)}
+        style={[styles.chatItem, unreadCount > 0 && styles.unreadChatItem]}
+      />
     );
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#0095f6" />
-        <Text style={{ marginTop: 10 }}>Loading chats...</Text>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <Surface style={styles.header} elevation={2}>
+          <Text variant="headlineMedium">💬 Messages</Text>
+          <Button mode="contained" onPress={onRequestsPress} icon="mail">
+            Requests {requestCount > 0 && `(${requestCount})`}
+          </Button>
+        </Surface>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" />
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-      </View>
-      
-      <FlatList
-        data={chats}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptyText}>
-              When you match with other duos, a group chat will automatically appear here! 💬
-            </Text>
-          </View>
-        }
-      />
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <Surface style={styles.header} elevation={2}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Icon source="message" size={28} color={theme.colors.primary} />
+          <Text variant="headlineMedium">Messages</Text>
+        </View>
+        <Button mode="contained" onPress={onRequestsPress} icon="mail">
+          Requests {requestCount > 0 && `(${requestCount})`}
+        </Button>
+      </Surface>
+
+      {chats.length === 0 ? (
+        <EmptyState
+          icon="message"
+          title="No Messages Yet"
+          message="When you match with duos, you'll be able to message them here!"
+        />
+      ) : (
+        <FlatList
+          data={chats}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          ItemSeparatorComponent={() => <Divider />}
+        />
+      )}
     </View>
   );
 }
 
 // Individual Chat Screen Component
 function IndividualChatScreen({ chat, onBack }) {
+  const theme = useTheme();
   const currentUserId = getUserID();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [userProfiles, setUserProfiles] = useState({});
 
   useEffect(() => {
     if (!chat?.id) return;
-    
-    console.log('💬 Opening chat:', chat.id);
-    
-    // Listen to messages in this chat
+
+    const markAsRead = async () => {
+      try {
+        const chatRef = doc(db, "chats", chat.id);
+        await updateDoc(chatRef, {
+          [`unreadCount.${currentUserId}`]: 0,
+        });
+      } catch (error) {
+        console.error("Error marking as read:", error);
+      }
+    };
+
+    markAsRead();
+
     const messagesRef = collection(db, "chats", chat.id, "messages");
-    const q = query(messagesRef, orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        _id: doc.id,
-        text: doc.data().text,
-        createdAt: doc.data().createdAt?.toDate(),
-        user: doc.data().user,
-      }));
-      setMessages(msgs);
-      
-      // Mark messages as read
-      markAsRead();
+    const messagesQuery = query(messagesRef, orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      const messagesList = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          _id: doc.id,
+          text: data.text,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          user: {
+            _id: data.user._id,
+            name: data.user.name,
+          },
+        };
+      });
+
+      setMessages(messagesList);
     });
 
-    return unsubscribe;
-  }, [chat?.id]);
+    return () => unsubscribe();
+  }, [chat]);
 
-  const markAsRead = async () => {
-    try {
-      const chatRef = doc(db, "chats", chat.id);
-      const chatDoc = await getDoc(chatRef);
-      
-      if (chatDoc.exists()) {
-        const data = chatDoc.data();
-        const unreadCount = data.unreadCount || {};
-        unreadCount[currentUserId] = 0;
-        
-        await updateDoc(chatRef, {
-          unreadCount: unreadCount,
-        });
+  useEffect(() => {
+    const loadOtherUsers = async () => {
+      if (!chat.participants) return;
+
+      const allProfiles = {};
+      for (const userId of chat.participants) {
+        const profile = await getUserProfile(userId);
+        if (profile) {
+          allProfiles[userId] = { id: userId, ...profile };
+        }
       }
-    } catch (error) {
-      console.error("Error marking as read:", error);
-    }
-  };
 
-  const onSend = useCallback(async (messages = []) => {
-    const { _id, createdAt, text, user } = messages[0];
-    
+      setUserProfiles(allProfiles);
+    };
+
+    loadOtherUsers();
+  }, [chat]);
+
+  const onSend = useCallback(async () => {
+    if (!chat?.id || !inputText.trim()) return;
+
     try {
-      // Add message to subcollection
-      await addDoc(collection(db, "chats", chat.id, "messages"), {
-        _id,
-        text,
+      const messagesRef = collection(db, "chats", chat.id, "messages");
+      await addDoc(messagesRef, {
+        text: inputText.trim(),
         createdAt: serverTimestamp(),
         user: {
           _id: currentUserId,
@@ -282,319 +673,307 @@ function IndividualChatScreen({ chat, onBack }) {
         },
       });
 
-      // Update chat document with last message info
       const chatRef = doc(db, "chats", chat.id);
-      const chatDoc = await getDoc(chatRef);
-      
-      if (chatDoc.exists()) {
-        const data = chatDoc.data();
-        const participants = data.participants || [];
-        const unreadCount = data.unreadCount || {};
-        
-        // Increment unread count for all participants except sender
-        participants.forEach(participantId => {
-          if (participantId !== currentUserId) {
-            unreadCount[participantId] = (unreadCount[participantId] || 0) + 1;
-          }
-        });
+      const unreadUpdate = {};
 
-        await updateDoc(chatRef, {
-          lastMessageText: text,
-          lastMessageTime: serverTimestamp(),
-          unreadCount: unreadCount,
-        });
-      }
+      chat.participants.forEach((participantId) => {
+        if (participantId !== currentUserId) {
+          unreadUpdate[`unreadCount.${participantId}`] =
+            (chat.unreadCount?.[participantId] || 0) + 1;
+        }
+      });
+
+      await updateDoc(chatRef, {
+        lastMessageText: inputText.trim(),
+        lastMessageTime: serverTimestamp(),
+        ...unreadUpdate,
+      });
 
       setInputText("");
     } catch (error) {
       console.error("Error sending message:", error);
+      Alert.alert("Error", "Failed to send message");
     }
-  }, [chat.id, currentUserId]);
+  }, [chat, currentUserId, inputText]);
 
-  const renderBubble = (props) => {
-    return (
-      <Bubble
-        {...props}
-        wrapperStyle={{
-          right: {
-            backgroundColor: '#000000',
-          },
-          left: {
-            backgroundColor: '#E5E5EA',
-          },
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+    >
+      <Surface style={styles.chatHeader} elevation={2}>
+        <IconButton icon="arrow-left" onPress={onBack} />
+        <Text variant="titleLarge">{chat.groupName || "Chat"}</Text>
+        <View style={styles.headerSpacer} />
+      </Surface>
+
+      <FlatList
+        data={messages}
+        renderItem={({ item }) => {
+          const isMyMessage = item.user._id === currentUserId;
+          const senderProfile = userProfiles[item.user._id];
+
+          return (
+            <View
+              style={[styles.messageRow, isMyMessage && styles.myMessageRow]}
+            >
+              {!isMyMessage && (
+                <ProfilePhoto
+                  uri={senderProfile?.photos?.[0]}
+                  size={32}
+                  style={styles.messageAvatar}
+                />
+              )}
+
+              <Surface
+                style={[
+                  styles.messageBubble,
+                  isMyMessage ? styles.myMessage : styles.theirMessage,
+                ]}
+                elevation={1}
+              >
+                {!isMyMessage && chat.isGroupChat && senderProfile && (
+                  <Text variant="labelSmall" style={styles.senderName}>
+                    {senderProfile.name}
+                  </Text>
+                )}
+
+                <Text
+                  variant="bodyMedium"
+                  style={isMyMessage && styles.myMessageText}
+                >
+                  {item.text}
+                </Text>
+
+                <Text variant="labelSmall" style={styles.messageTime}>
+                  {item.createdAt?.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              </Surface>
+
+              {isMyMessage && userProfiles[currentUserId] && (
+                <ProfilePhoto
+                  uri={userProfiles[currentUserId].photos?.[0]}
+                  size={32}
+                  style={styles.messageAvatar}
+                />
+              )}
+            </View>
+          );
         }}
+        keyExtractor={(item) => item._id}
+        inverted
+        contentContainerStyle={styles.messagesList}
       />
-    );
-  };
 
-  const renderComposer = (props) => {
-    return (
-      <View style={styles.composerContainer}>
+      <Surface style={styles.composerContainer} elevation={4}>
         <TextInput
-          style={styles.textInput}
+          mode="outlined"
           value={inputText}
           onChangeText={setInputText}
           placeholder="Type a message..."
           multiline
-          returnKeyType="default"
+          maxLength={1000}
+          style={styles.textInput}
+          dense
         />
-        <TouchableOpacity
-          style={styles.sendButton}
-          onPress={handleSend}
-        >
-          <Text style={styles.sendButtonText}>Send</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const handleSend = () => {
-    if (inputText.trim()) {
-      const newMessage = {
-        _id: Math.random().toString(),
-        text: inputText.trim(),
-        createdAt: new Date(),
-        user: { _id: currentUserId, name: "You" }
-      };
-      onSend([newMessage]);
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={styles.chatHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.chatHeaderContent}>
-          <Text style={styles.chatHeaderText}>{chat.groupName || "Chat"}</Text>
-          {chat.isGroupChat && (
-            <Text style={styles.chatHeaderSubtext}>
-              {chat.participants?.length || 0} participants
-            </Text>
-          )}
-        </View>
-      </View>
-      <GiftedChat
-        messages={messages}
-        onSend={(msgs) => onSend(msgs)}
-        user={{
-          _id: currentUserId,
-          name: "You",
-        }}
-        renderBubble={renderBubble}
-        renderComposer={renderComposer}
-        text={inputText}
-        onInputTextChanged={setInputText}
-        scrollToBottom
-      />
-    </View>
+        <IconButton
+          icon="send"
+          mode="contained"
+          onPress={onSend}
+          disabled={!inputText.trim()}
+        />
+      </Surface>
+    </KeyboardAvoidingView>
   );
 }
 
-// Main ChatScreen - now primarily shows the chat list
 export default function ChatScreen() {
   const [selectedChat, setSelectedChat] = useState(null);
+  const [showRequests, setShowRequests] = useState(false);
+  const [requestCount, setRequestCount] = useState(0);
+
+  useEffect(() => {
+    const loadRequestCount = async () => {
+      try {
+        const currentUserId = CURRENT_USER_ID;
+        const duo = await getCurrentDuoPartner(currentUserId);
+
+        if (!duo) {
+          setRequestCount(0);
+          return;
+        }
+
+        const likesQuery = query(
+          collection(db, "duoLikes"),
+          where("toDuoId", "==", duo.duoId),
+          where("status", "==", "pending")
+        );
+
+        const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
+          setRequestCount(snapshot.docs.length);
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error loading request count:", error);
+      }
+    };
+
+    loadRequestCount();
+  }, []);
 
   if (selectedChat) {
     return (
-      <IndividualChatScreen 
-        chat={selectedChat} 
-        onBack={() => setSelectedChat(null)} 
+      <IndividualChatScreen
+        chat={selectedChat}
+        onBack={() => setSelectedChat(null)}
       />
     );
   }
 
-  return <ChatListScreen onChatSelect={setSelectedChat} />;
+  return (
+    <>
+      <ChatListScreen
+        onChatSelect={setSelectedChat}
+        onRequestsPress={() => setShowRequests(true)}
+        requestCount={requestCount}
+      />
+      <RequestsModal
+        visible={showRequests}
+        onClose={() => setShowRequests(false)}
+      />
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  marginTop: {
+    marginTop: 16,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#fff',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  listContent: {
-    paddingVertical: 8,
-  },
-  chatItemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
   },
   chatItem: {
-    flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  unreadChatItem: {
+    backgroundColor: "rgba(33, 150, 243, 0.1)",
+  },
+  chatRight: {
+    flexDirection: "column",
+    alignItems: "flex-end",
+  },
+  badge: {
+    marginTop: 4,
+  },
+  modalContainer: {
     flex: 1,
   },
-  avatarContainer: {
-    marginRight: 12,
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#e0e0e0',
+  requestsList: {
+    flex: 1,
+    padding: 8,
   },
-  groupAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
+  requestCard: {
+    marginBottom: 12,
   },
-  groupAvatarText: {
-    fontSize: 28,
+  duoContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    marginBottom: 16,
   },
-  chatContent: {
+  userCard: {
+    alignItems: "center",
+  },
+  matchedChip: {
+    backgroundColor: "#4CAF50",
+    color: "white",
+  },
+  waitingChip: {
+    backgroundColor: "#FF9800",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
     flex: 1,
   },
   chatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 8,
   },
-  chatName: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
+  headerSpacer: {
+    width: 48,
   },
-  timestamp: {
-    fontSize: 12,
-    color: '#8e8e8e',
+  messagesList: {
+    padding: 8,
   },
   messageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    marginBottom: 8,
+    maxWidth: "80%",
   },
-  lastMessage: {
-    fontSize: 14,
-    color: '#8e8e8e',
-    flex: 1,
+  myMessageRow: {
+    alignSelf: "flex-end",
   },
-  unreadMessage: {
-    color: '#000',
-    fontWeight: '500',
+  messageAvatar: {
+    marginHorizontal: 4,
   },
-  unreadBadge: {
-    backgroundColor: '#0095f6',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    marginLeft: 8,
+  messageBubble: {
+    padding: 12,
+    borderRadius: 16,
+    maxWidth: "100%",
   },
-  unreadText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+  myMessage: {
+    backgroundColor: "#2196F3",
+    borderBottomRightRadius: 4,
   },
-  deleteButton: {
-    padding: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  theirMessage: {
+    backgroundColor: "#E0E0E0",
+    borderBottomLeftRadius: 4,
   },
-  deleteButtonText: {
-    fontSize: 24,
+  senderName: {
+    marginBottom: 4,
+    fontWeight: "600",
   },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
+  myMessageText: {
+    color: "white",
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8e8e8e',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  chatHeader: {
-    backgroundColor: '#1E90FF',
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  backButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  chatHeaderContent: {
-    flex: 1,
-  },
-  chatHeaderText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  chatHeaderSubtext: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+  messageTime: {
+    marginTop: 4,
+    opacity: 0.7,
+    alignSelf: "flex-end",
   },
   composerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    flexDirection: "row",
+    alignItems: "flex-end",
+    padding: 8,
+    gap: 8,
   },
   textInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-    maxHeight: 100,
-    marginRight: 10,
-  },
-  sendButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
