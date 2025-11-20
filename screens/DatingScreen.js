@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated, Alert } from "react-native";
-import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe } from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+import { getAllDuoPairs, saveRating, getCurrentDuoPartner, saveDuoLike, deleteDuoLikeBetween, saveDuoSwipe } from "../services/profileService.js";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 
 export default function DatingScreen() {
   const [duoPairs, setDuoPairs] = useState([]);

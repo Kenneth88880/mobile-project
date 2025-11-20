@@ -9,7 +9,7 @@ export default function CheckoutScreen() {
   const initializePaymentSheet = async () => {
     try {
       // Replace with your computer's IP address
-     const response = await fetch('http://172.19.128.20:3000/create-payment-intent', {
+     const response = await fetch('https://avis-nonexpanded-ashton.ngrok-free.dev/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: 1099 }),

@@ -3,7 +3,7 @@ import { StyleSheet, Text, TextInput, Button, View, TouchableOpacity, ScrollView
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, doc, getDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { CURRENT_USER_ID } from "../UserConfig";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 
 const getUserID = () => {
   return CURRENT_USER_ID;
