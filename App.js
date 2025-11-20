@@ -18,7 +18,7 @@ import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import CheckoutScreen from "./screens/PaymentScreen";
-import { STRIPE_PUBLISHABLE_KEY} from "./stripeConfig";
+import { STRIPE_PUBLISHABLE_KEY} from "./services/stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
