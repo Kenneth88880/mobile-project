@@ -42,3 +42,8 @@ yarn-error.*
 
 # firebase api key (DO NOT KEEP)
 firebaseConfig.js
+GoogleService-Info.plist
+google-services.json
+
+# stripe api keys (DO NOT KEEP)
+stripeConfig.js
