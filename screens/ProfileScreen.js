@@ -26,8 +26,8 @@ import {
   leaveDuo,
   searchUserById,
   deleteAllDuoLikes
-} from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+} from "../services/profileService.js";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 
 export default function ProfileScreen() {
   const { userData, setUserData } = useContext(UserContext);

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, RefreshControl } from "react-native";
 import { db } from "../firebaseConfig";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { acceptDuoLike, getCurrentDuoPartner, deleteDuoLike, getUserProfile, saveDuoSwipe } from "../profileService";
-import { CURRENT_USER_ID } from "../UserConfig";
+import { acceptDuoLike, getCurrentDuoPartner, deleteDuoLike, getUserProfile, saveDuoSwipe } from "../services/profileService.js";
+import { CURRENT_USER_ID } from "../services/UserConfig";
 
 export default function RequestsScreen() {
   const [duoLikes, setDuoLikes] = useState([]);
