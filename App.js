@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, ScrollView } from "react-native";
 import { UserProvider } from "./context/UserContext";
 import { StatusBar } from "expo-status-bar";
+import { StripeProvider } from '@stripe/stripe-react-native';
 
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreen from "./screens/ExploreScreen";
@@ -9,57 +10,62 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import RequestsScreen from "./screens/RequestsScreen";
-
+import CheckoutScreen from "./screens/payment";
+import pkKey from "./stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
 
   return (
-    <UserProvider>
-      <SafeAreaView style={styles.container}>
-        {/* IMPORTANT: Messages tab gets full flex, others get normal layout */}
-        {activeTab === "messages" ? (
-          <View style={styles.fullScreenContainer}>
-            <ChatScreen />
-          </View>
-        ) : (
-          <View style={styles.contentContainer}>
-            {activeTab === "dating" && <DatingScreen />}
-            {activeTab === "explore" && <ExploreScreen />}
-            {activeTab === "requests" && <RequestsScreen />}
-            {activeTab === "profile" && <ProfileScreen />}
-            {activeTab === "premium" && <PremiumScreen />}
-          </View>
-        )}
+    <StripeProvider pkKey>
+      <UserProvider>
+        <SafeAreaView style={styles.container}>
+          {/* IMPORTANT: Messages tab gets full flex, others get normal layout */}
+                  {activeTab === "payment" ? (
+                    <View style={styles.fullScreenContainer}>
+                      <CheckoutScreen />
+                    </View>
+                  ) : (            <View style={styles.contentContainer}>
+              {activeTab === "dating" && <DatingScreen />}
+              {activeTab === "explore" && <ExploreScreen />}
+              {activeTab === "requests" && <RequestsScreen />}
+              {activeTab === "messages" && <ChatScreen />}
+              {activeTab === "profile" && <ProfileScreen />}
+              {activeTab === "premium" && <PremiumScreen />}
+              {activeTab === "payment" && <CheckoutScreen />}
+            </View>
+          )}
 
-        <View style={styles.navBar}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.navScrollContent}
-          >
-            {["dating", "explore", "requests", "messages", "premium", "profile"].map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.navButton, activeTab === tab && styles.activeButton]}
-                onPress={() => setActiveTab(tab)}
-              >
-                <Text style={styles.navText}>
-                  {tab === "dating" ? "💘 Dating" :
-                   tab === "explore" ? "🧭 Explore" :
-                   tab === "requests" ? "💌 Requests" :
-                   tab === "messages" ? "💬 Messages" :
-                   tab === "premium" ? "⭐ Premium" :
-                   "👤 Profile"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+          <View style={styles.navBar}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.navScrollContent}
+            >
+              {["dating", "explore", "requests", "messages", "premium", "payment", "profile"].map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.navButton, activeTab === tab && styles.activeButton]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text style={styles.navText}>
+                    {tab === "dating" ? "💘 Dating" :
+                     tab === "explore" ? "🧭 Explore" :
+                     tab === "requests" ? "💌 Requests" :
+                     tab === "messages" ? "💬 Messages" :
+                     tab === "premium" ? "⭐ Premium" :
+                     tab === "payment" ? "💳 Payment" :
+                     "👤 Profile"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-        <StatusBar style="auto" />
-      </SafeAreaView>
-    </UserProvider>
+          <StatusBar style="auto" />
+        </SafeAreaView>
+      </UserProvider>
+    </StripeProvider>
   );
 }
 
