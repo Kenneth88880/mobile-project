@@ -1,50 +1,92 @@
 import React from "react";
-import { View, Text, Image, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text, Card, Chip, useTheme } from "react-native-paper";
+import { EmptyState } from "../components/CommonComponents";
 
 export default function DatingCard({ user }) {
-  if (!user.name && user.photos.length === 0) {
+  const theme = useTheme();
+
+  if (!user.name && (!user.photos || user.photos.length === 0)) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>Your profile info will appear here 💘</Text>
-      </View>
+      <EmptyState
+        icon="heart"
+        title="Complete Your Profile"
+        message="Your profile info will appear here"
+      />
     );
   }
 
   return (
-    <View style={styles.card}>
-      <ScrollView horizontal>
-        {user.photos.map((uri, i) => (
-          <Image key={i} source={{ uri }} style={styles.image} />
-        ))}
-      </ScrollView>
-      <Text style={styles.name}>{user.name}, {user.age}</Text>
-      <Text style={styles.description}>{user.description}</Text>
-      <Text style={styles.tags}>{user.tags}</Text>
-    </View>
+    <Card style={styles.card}>
+      {user.photos && user.photos.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.photoScroll}
+        >
+          {user.photos.map((uri, i) => (
+            <Card.Cover key={i} source={{ uri }} style={styles.photo} />
+          ))}
+        </ScrollView>
+      )}
+
+      <Card.Content>
+        <Text variant="headlineMedium" style={styles.name}>
+          {user.name}
+          {user.age ? `, ${user.age}` : ""}
+        </Text>
+
+        {user.description && (
+          <Text variant="bodyLarge" style={styles.description}>
+            {user.description}
+          </Text>
+        )}
+
+        {user.tags && (
+          <View style={styles.tagsContainer}>
+            {user.tags
+              .split(" ")
+              .filter((tag) => tag.trim())
+              .map((tag, index) => (
+                <Chip key={index} style={styles.tag} compact>
+                  {tag}
+                </Chip>
+              ))}
+          </View>
+        )}
+      </Card.Content>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    margin: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    margin: 16,
   },
-  image: {
+  photoScroll: {
+    maxHeight: 300,
+  },
+  photo: {
     width: 250,
-    height: 250,
-    borderRadius: 10,
-    marginRight: 10,
+    height: 300,
+    marginRight: 8,
   },
-  name: { fontSize: 22, fontWeight: "bold", marginTop: 10 },
-  description: { fontSize: 16, marginTop: 8, textAlign: "center" },
-  tags: { fontSize: 14, color: "#666", marginTop: 6 },
-  empty: { flex: 1, justifyContent: "center", alignItems: "center", marginTop: 200 },
-  emptyText: { color: "#999", fontSize: 16 },
+  name: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  description: {
+    marginTop: 8,
+    lineHeight: 24,
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 12,
+    gap: 8,
+  },
+  tag: {
+    marginRight: 4,
+    marginBottom: 4,
+  },
 });
