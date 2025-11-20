@@ -1,20 +1,43 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet } from "react-native";
+import {
+  Card,
+  Title,
+  Paragraph,
+  Button,
+  Surface,
+  Subheading,
+} from "react-native-paper";
 
 export default function PremiumScreen() {
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>✨ Premium VIP Pass ✨</Text>
-        
-        <Text style={styles.description}>
-          Join the VIP pass to get access to unlimited matching, glow up advice, no ad's, free games, and more for just $9.99.
-        </Text>
+      <Surface style={styles.surface} elevation={4}>
+        <Card style={styles.card}>
+          <Card.Content>
+            <Title style={styles.title}>Premium</Title>
 
-        <TouchableOpacity style={styles.joinButton}>
-          <Text style={styles.buttonText}>Join Now</Text>
-        </TouchableOpacity>
-      </View>
+            <Subheading style={styles.subtitle}>Coming Soon</Subheading>
+
+            <Paragraph style={styles.description}>
+              We are currently working on premium to give you access to no ads,
+              glow up advice, free games, and more!
+            </Paragraph>
+          </Card.Content>
+
+          <Card.Actions style={styles.actions}>
+            <Button
+              mode="contained"
+              onPress={() => console.log("Join Now pressed")}
+              style={styles.signUpButton}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+            >
+              Notify Me
+            </Button>
+          </Card.Actions>
+        </Card>
+      </Surface>
     </View>
   );
 
@@ -28,44 +51,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
+    backgroundColor: "#f5f5f5",
+  },
+  surface: {
+    width: "95%",
+    borderRadius: 20,
   },
   card: {
-    backgroundColor: "white",
     borderRadius: 20,
-    padding: 30,
-    width: "95%",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
     textAlign: "center",
-    color: "#333",
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    fontWeight: "600",
+    marginBottom: 15,
+    fontStyle: "italic",
   },
   description: {
     fontSize: 18,
     textAlign: "center",
-    color: "#555",
     lineHeight: 26,
-    marginBottom: 30,
+    marginVertical: 20,
   },
-  joinButton: {
-    backgroundColor: "#1E90FF",
-    paddingVertical: 15,
-    paddingHorizontal: 50,
+  actions: {
+    justifyContent: "center",
+    paddingBottom: 20,
+  },
+  signUpButton: {
     borderRadius: 25,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  buttonText: {
-    color: "white",
+  buttonContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  buttonLabel: {
     fontSize: 18,
     fontWeight: "bold",
   },
