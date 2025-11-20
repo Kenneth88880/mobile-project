@@ -10,14 +10,14 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import RequestsScreen from "./screens/RequestsScreen";
-import CheckoutScreen from "./screens/payment";
-import pkKey from "./stripeConfig";
+import CheckoutScreen from "./screens/PaymentScreen";
+import { STRIPE_PUBLISHABLE_KEY} from "./stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
 
   return (
-    <StripeProvider pkKey>
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
       <UserProvider>
         <SafeAreaView style={styles.container}>
           {/* IMPORTANT: Messages tab gets full flex, others get normal layout */}
