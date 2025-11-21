@@ -9,7 +9,8 @@ import {
 } from "react-native-paper";
 import { UserProvider } from "./context/UserContext";
 import { StatusBar } from "expo-status-bar";
-import { StripeProvider } from '@stripe/stripe-react-native';
+// STRIPE FEATURES COMMENTED OUT FOR UI DEVELOPMENT
+// import { StripeProvider } from '@stripe/stripe-react-native';
 
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreen from "./screens/ExploreScreen";
@@ -17,8 +18,8 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import RequestsScreen from "./screens/RequestsScreen";
-import CheckoutScreen from "./screens/PaymentScreen";
-import { STRIPE_PUBLISHABLE_KEY} from "./services/stripeConfig";
+// import CheckoutScreen from "./screens/PaymentScreen";
+// import { STRIPE_PUBLISHABLE_KEY} from "./services/stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
@@ -54,11 +55,12 @@ export default function App() {
       focusedIcon: "star",
       unfocusedIcon: "star-outline",
     },
-    {
-      key: "payment",
-      focusedIcon: "credit-card",
-      unfocusedIcon: "credit-card-outline",
-    },
+    // COMMENTED OUT - Payment feature disabled until Stripe is configured
+    // {
+    //   key: "payment",
+    //   focusedIcon: "credit-card",
+    //   unfocusedIcon: "credit-card-outline",
+    // },
     {
       key: "profile",
       focusedIcon: "account",
@@ -71,7 +73,7 @@ export default function App() {
     explore: () => <ExploreScreen />,
     messages: () => <ChatScreen />,
     premium: () => <PremiumScreen />,
-    payment: () => <CheckoutScreen />,
+    // payment: () => <CheckoutScreen />,  // COMMENTED OUT - Payment disabled
     profile: () => (
       <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
     ),
@@ -79,28 +81,29 @@ export default function App() {
 
   return (
     <PaperProvider theme={theme}>
-      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-        <UserProvider>
-          <SafeAreaView
-            style={[
-              styles.container,
-              { backgroundColor: theme.colors.background },
-            ]}
-          >
-            <StatusBar style={isDarkMode ? "light" : "dark"} />
+      {/* COMMENTED OUT - StripeProvider disabled until API keys are configured */}
+      {/* <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}> */}
+      <UserProvider>
+        <SafeAreaView
+          style={[
+            styles.container,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <StatusBar style={isDarkMode ? "light" : "dark"} />
 
-            <BottomNavigation
-              navigationState={{
-                index: routes.findIndex((r) => r.key === activeTab),
-                routes,
-              }}
-              onIndexChange={(index) => setActiveTab(routes[index].key)}
-              renderScene={renderScene}
-              barStyle={{ backgroundColor: theme.colors.surface }}
-            />
-          </SafeAreaView>
-        </UserProvider>
-      </StripeProvider>
+          <BottomNavigation
+            navigationState={{
+              index: routes.findIndex((r) => r.key === activeTab),
+              routes,
+            }}
+            onIndexChange={(index) => setActiveTab(routes[index].key)}
+            renderScene={renderScene}
+            barStyle={{ backgroundColor: theme.colors.surface }}
+          />
+        </SafeAreaView>
+      </UserProvider>
+      {/* </StripeProvider> */}
     </PaperProvider>
   );
 }
