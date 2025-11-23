@@ -12,6 +12,8 @@ import { Text, IconButton, Surface, useTheme } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
 
 export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
+  const theme = useTheme(); // ✅ FIXED: Added this line
+  
   const pickImage = async () => {
     // Hide status bar before opening picker
     StatusBar.setHidden(true);
