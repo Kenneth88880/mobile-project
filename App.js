@@ -7,7 +7,6 @@ import {
   BottomNavigation,
   configureFonts,
 } from "react-native-paper";
-import { UserProvider } from "./context/UserContext";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from '@stripe/stripe-react-native';
 
@@ -22,93 +21,95 @@ import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
 import SigninScreen from "./screens/SigninScreen";
 
 export default function App() {
-  // const [activeTab, setActiveTab] = useState("dating");
-  // const [isDarkMode, setIsDarkMode] = useState(false);
+  const [activeTab, setActiveTab] = useState("dating");
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // const theme = useMemo(
-  //   () => (isDarkMode ? darkTheme : lightTheme),
-  //   [isDarkMode]
-  // );
-
-  // const toggleTheme = () => {
-  //   setIsDarkMode(!isDarkMode);
-  // };
-
-  // const routes = [
-  //   {
-  //     key: "dating",
-  //     focusedIcon: "heart",
-  //     unfocusedIcon: "heart-outline",
-  //   },
-  //   {
-  //     key: "explore",
-  //     focusedIcon: "compass",
-  //     unfocusedIcon: "compass-outline",
-  //   },
-  //   {
-  //     key: "messages",
-  //     focusedIcon: "message",
-  //     unfocusedIcon: "message-outline",
-  //   },
-  //   {
-  //     key: "premium",
-  //     focusedIcon: "star",
-  //     unfocusedIcon: "star-outline",
-  //   },
-  //   {
-  //     key: "payment",
-  //     focusedIcon: "credit-card",
-  //     unfocusedIcon: "credit-card-outline",
-  //   },
-  //   {
-  //     key: "profile",
-  //     focusedIcon: "account",
-  //     unfocusedIcon: "account-outline",
-  //   },
-  // ];
-
-  // const renderScene = BottomNavigation.SceneMap({
-  //   dating: () => <DatingScreen />,
-  //   explore: () => <ExploreScreen />,
-  //   messages: () => <ChatScreen />,
-  //   premium: () => <PremiumScreen />,
-  //   payment: () => <CheckoutScreen />,
-  //   profile: () => (
-  //     <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
-  //   ),
-  // });
-
-  // return (
-  //   <PaperProvider theme={theme}>
-  //     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-  //       <UserProvider>
-  //         <SafeAreaView
-  //           style={[
-  //             styles.container,
-  //             { backgroundColor: theme.colors.background },
-  //           ]}
-  //         >
-  //           <StatusBar style={isDarkMode ? "light" : "dark"} />
-
-  //           <BottomNavigation
-  //             navigationState={{
-  //               index: routes.findIndex((r) => r.key === activeTab),
-  //               routes,
-  //             }}
-  //             onIndexChange={(index) => setActiveTab(routes[index].key)}
-  //             renderScene={renderScene}
-  //             barStyle={{ backgroundColor: theme.colors.surface }}
-  //           />
-  //         </SafeAreaView>
-  //       </UserProvider>
-  //     </StripeProvider>
-  //   </PaperProvider>
-  // );
-
-  return (
-    <SigninScreen >
-    </ SigninScreen> 
+  const theme = useMemo(
+    () => (isDarkMode ? darkTheme : lightTheme),
+    [isDarkMode]
   );
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  const routes = [
+    {
+      key: "dating",
+      focusedIcon: "heart",
+      unfocusedIcon: "heart-outline",
+    },
+    {
+      key: "explore",
+      focusedIcon: "compass",
+      unfocusedIcon: "compass-outline",
+    },
+    {
+      key: "messages",
+      focusedIcon: "message",
+      unfocusedIcon: "message-outline",
+    },
+    {
+      key: "premium",
+      focusedIcon: "star",
+      unfocusedIcon: "star-outline",
+    },
+    {
+      key: "payment",
+      focusedIcon: "credit-card",
+      unfocusedIcon: "credit-card-outline",
+    },
+    {
+      key: "profile",
+      focusedIcon: "account",
+      unfocusedIcon: "account-outline",
+    },
+  ];
+
+  const renderScene = BottomNavigation.SceneMap({
+    dating: () => <DatingScreen />,
+    explore: () => <ExploreScreen />,
+    messages: () => <ChatScreen />,
+    premium: () => <PremiumScreen />,
+    payment: () => <CheckoutScreen />,
+    profile: () => (
+      <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+    ),
+  });
+
+    // return (
+    //   <PaperProvider theme={theme}>
+    //     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+    //       <UserProvider>
+    //         <SafeAreaView
+    //           style={[
+    //             styles.container,
+    //             { backgroundColor: theme.colors.background },
+    //           ]}
+    //         >
+    //           <StatusBar style={isDarkMode ? "light" : "dark"} />
+
+    //           <BottomNavigation
+    //             navigationState={{
+    //               index: routes.findIndex((r) => r.key === activeTab),
+    //               routes,
+    //             }}
+    //             onIndexChange={(index) => setActiveTab(routes[index].key)}
+    //             renderScene={renderScene}
+    //             barStyle={{ backgroundColor: theme.colors.surface }}
+    //           />
+    //         </SafeAreaView>
+    //       </UserProvider>
+    //     </StripeProvider>
+    //   </PaperProvider>
+    // );
+
+
+    return (
+      <SigninScreen >
+      </ SigninScreen> 
+    );
+  
 }
 
 const styles = StyleSheet.create({

@@ -1,35 +1,12 @@
 import { StyleSheet, Text, View, KeyboardAvoidingView, TouchableOpacity, TextInput } from 'react-native'
-import React, {useEffect, useState} from 'react'
+import React, {useEffect} from 'react'
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, validatePassword, signOut  } from 'firebase/auth';
+const auth = getAuth();
 
 const SigninScreen = () => {
 
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
-    
-    const auth = getAuth();
-
-    // checks if user is logged in or not
-    useEffect(() => {
-        
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-            // User is signed in, see docs for a list of available properties
-            // https://firebase.google.com/docs/reference/js/auth.user
-            
-            console.log('here');
-            const uid = user.uid;
-            console.log(uid);
-
-            // ...
-        } else {
-            // User is signed out
-            // ...
-        }
-
-        return unsubscribe;
-        });
-    });
 
     // handles sign up 
     const handleSignUp = () => {
@@ -57,6 +34,8 @@ const SigninScreen = () => {
         .then((userCredential) => {
             // Signed in 
             console.log('trying');
+            //isLoggedIn = true;
+            //console.log(isLoggedIn);
             const user = userCredential.user;
             console.log('Logged in with:', user.email);
             // ...
@@ -72,8 +51,9 @@ const SigninScreen = () => {
     }
 
   
-  const signOutButton = () => {  // sign out button for testing 
+    const signOutButton = () => {  // sign out button for testing 
         signOut(auth).then(() => {
+
             console.log('signed out')
         }).catch((error) => {
             console.log('nope dumbass');
@@ -128,7 +108,7 @@ const SigninScreen = () => {
 
                 <TouchableOpacity
 
-                    onPress={signOutButton}
+                    onPress={signOutButton}  
                     style={[styles.button, styles.buttonOutline]}>
 
                     <Text style={styles.button}>
@@ -140,9 +120,22 @@ const SigninScreen = () => {
             </View>
         </KeyboardAvoidingView>
     )
+
 }
 
 export default SigninScreen
+
+export const UID = onAuthStateChanged(auth, (user) => {
+    if (user) {
+        const uid = user.uid;
+        console.log('UID from SigninScreen: ' + uid);
+        return uid;
+    } else {
+        return null;
+    }
+});
+
+
 
 const styles = StyleSheet.create({
     container: {
