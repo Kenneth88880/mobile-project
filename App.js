@@ -18,90 +18,96 @@ import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import CheckoutScreen from "./screens/PaymentScreen";
-import { STRIPE_PUBLISHABLE_KEY} from "./services/stripeConfig";
+import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
+import SigninScreen from "./screens/SigninScreen";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("dating");
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // const [activeTab, setActiveTab] = useState("dating");
+  // const [isDarkMode, setIsDarkMode] = useState(false);
 
-  const theme = useMemo(
-    () => (isDarkMode ? darkTheme : lightTheme),
-    [isDarkMode]
-  );
+  // const theme = useMemo(
+  //   () => (isDarkMode ? darkTheme : lightTheme),
+  //   [isDarkMode]
+  // );
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-  };
+  // const toggleTheme = () => {
+  //   setIsDarkMode(!isDarkMode);
+  // };
 
-  const routes = [
-    {
-      key: "dating",
-      focusedIcon: "heart",
-      unfocusedIcon: "heart-outline",
-    },
-    {
-      key: "explore",
-      focusedIcon: "compass",
-      unfocusedIcon: "compass-outline",
-    },
-    {
-      key: "messages",
-      focusedIcon: "message",
-      unfocusedIcon: "message-outline",
-    },
-    {
-      key: "premium",
-      focusedIcon: "star",
-      unfocusedIcon: "star-outline",
-    },
-    {
-      key: "payment",
-      focusedIcon: "credit-card",
-      unfocusedIcon: "credit-card-outline",
-    },
-    {
-      key: "profile",
-      focusedIcon: "account",
-      unfocusedIcon: "account-outline",
-    },
-  ];
+  // const routes = [
+  //   {
+  //     key: "dating",
+  //     focusedIcon: "heart",
+  //     unfocusedIcon: "heart-outline",
+  //   },
+  //   {
+  //     key: "explore",
+  //     focusedIcon: "compass",
+  //     unfocusedIcon: "compass-outline",
+  //   },
+  //   {
+  //     key: "messages",
+  //     focusedIcon: "message",
+  //     unfocusedIcon: "message-outline",
+  //   },
+  //   {
+  //     key: "premium",
+  //     focusedIcon: "star",
+  //     unfocusedIcon: "star-outline",
+  //   },
+  //   {
+  //     key: "payment",
+  //     focusedIcon: "credit-card",
+  //     unfocusedIcon: "credit-card-outline",
+  //   },
+  //   {
+  //     key: "profile",
+  //     focusedIcon: "account",
+  //     unfocusedIcon: "account-outline",
+  //   },
+  // ];
 
-  const renderScene = BottomNavigation.SceneMap({
-    dating: () => <DatingScreen />,
-    explore: () => <ExploreScreen />,
-    messages: () => <ChatScreen />,
-    premium: () => <PremiumScreen />,
-    payment: () => <CheckoutScreen />,
-    profile: () => (
-      <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
-    ),
-  });
+  // const renderScene = BottomNavigation.SceneMap({
+  //   dating: () => <DatingScreen />,
+  //   explore: () => <ExploreScreen />,
+  //   messages: () => <ChatScreen />,
+  //   premium: () => <PremiumScreen />,
+  //   payment: () => <CheckoutScreen />,
+  //   profile: () => (
+  //     <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+  //   ),
+  // });
+
+  // return (
+  //   <PaperProvider theme={theme}>
+  //     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+  //       <UserProvider>
+  //         <SafeAreaView
+  //           style={[
+  //             styles.container,
+  //             { backgroundColor: theme.colors.background },
+  //           ]}
+  //         >
+  //           <StatusBar style={isDarkMode ? "light" : "dark"} />
+
+  //           <BottomNavigation
+  //             navigationState={{
+  //               index: routes.findIndex((r) => r.key === activeTab),
+  //               routes,
+  //             }}
+  //             onIndexChange={(index) => setActiveTab(routes[index].key)}
+  //             renderScene={renderScene}
+  //             barStyle={{ backgroundColor: theme.colors.surface }}
+  //           />
+  //         </SafeAreaView>
+  //       </UserProvider>
+  //     </StripeProvider>
+  //   </PaperProvider>
+  // );
 
   return (
-    <PaperProvider theme={theme}>
-      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-        <UserProvider>
-          <SafeAreaView
-            style={[
-              styles.container,
-              { backgroundColor: theme.colors.background },
-            ]}
-          >
-            <StatusBar style={isDarkMode ? "light" : "dark"} />
-
-            <BottomNavigation
-              navigationState={{
-                index: routes.findIndex((r) => r.key === activeTab),
-                routes,
-              }}
-              onIndexChange={(index) => setActiveTab(routes[index].key)}
-              renderScene={renderScene}
-              barStyle={{ backgroundColor: theme.colors.surface }}
-            />
-          </SafeAreaView>
-        </UserProvider>
-      </StripeProvider>
-    </PaperProvider>
+    <SigninScreen >
+    </ SigninScreen> 
   );
 }
 
