@@ -123,19 +123,8 @@ const SigninScreen = () => {
 
 }
 
+// the login/signup screen 
 export default SigninScreen
-
-export const UID = onAuthStateChanged(auth, (user) => {
-    if (user) {
-        const uid = user.uid;
-        console.log('UID from SigninScreen: ' + uid);
-        return uid;
-    } else {
-        return null;
-    }
-});
-
-
 
 const styles = StyleSheet.create({
     container: {
