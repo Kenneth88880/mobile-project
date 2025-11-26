@@ -14,7 +14,3 @@
 - Explore system
 - Add report system
 - Make it so that different phones can see images
-
-add as installs later
-npm install @react-native-async-storage/async-storage
-npm install firebase
