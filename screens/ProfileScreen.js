@@ -45,8 +45,11 @@ import {
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
+import { getAuth, signOut } from "firebase/auth";
 import { db } from "../services/firebaseConfig";
 import { formatLastActive } from "../utils/locationTracker";
+
+const auth = getAuth();
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -591,15 +594,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
             }
           },
         },
-      ]
-    );
-  };
-
-  const handleReportBug = () => {
-    Alert.alert("Report a Bug", "Bug reporting feature coming soon!", [
-      { text: "OK" },
-    ]);
-  };
+          ]);
+        };
+      
+        const handleSignOut = () => {
+          signOut(auth).catch((error) => {
+            console.error("Sign out error", error);
+            Alert.alert("Error", "Failed to sign out.");
+          });
+        };
+      
+        const handleReportBug = () => {
+          Alert.alert("Report a Bug", "Bug reporting feature coming soon!", [
+            { text: "OK" },
+          ]);
+        };
 
   // Settings Modal
   const SettingsDialog = () => (
@@ -904,6 +913,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
             >
               Deletes all likes and swipes so profiles reappear
             </Text>
+            <Button
+              mode="outlined"
+              icon="logout"
+              onPress={handleSignOut}
+              style={[styles.fullWidthButton, { marginTop: 16 }]}
+            >
+              Sign Out
+            </Button>
           </Card.Content>
         </Card>
 

@@ -123,7 +123,9 @@ export default function App() {
 
   } else {
       return (
-        <SigninScreen />
+        <PaperProvider theme={theme}>
+          <SigninScreen />
+        </PaperProvider>
       );
   }
 }

@@ -50,16 +50,6 @@ const SigninScreen = () => {
         });
     }
 
-  
-    const signOutButton = () => {  // sign out button for testing 
-        signOut(auth).then(() => {
-
-            console.log('signed out')
-        }).catch((error) => {
-            console.log('nope dumbass');
-        });
-    }
-
     return (
         <KeyboardAvoidingView
         style={styles.container}
@@ -106,17 +96,6 @@ const SigninScreen = () => {
 
                 </TouchableOpacity>
 
-                <TouchableOpacity
-
-                    onPress={signOutButton}  
-                    style={[styles.button, styles.buttonOutline]}>
-
-                    <Text style={styles.button}>
-                        Sign Out
-                    </Text>
-
-                </TouchableOpacity>
-
             </View>
         </KeyboardAvoidingView>
     )
@@ -125,6 +104,21 @@ const SigninScreen = () => {
 
 // the login/signup screen 
 export default SigninScreen
+
+// exports the UID once the user is logged in 
+export const UID = onAuthStateChanged(auth, (user) => {
+    if (user) {
+        const uid = user.uid;
+        console.log('UID from SigninScreen: ' + uid);
+        return uid;
+    } else {
+       // const uid = user.uid;
+        console.log('No user is signed in');
+        return null;
+    }
+});
+
+
 
 const styles = StyleSheet.create({
     container: {
