@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { SafeAreaView, StyleSheet, View } from "react-native";
 import {
   PaperProvider,
@@ -9,7 +9,9 @@ import {
 } from "react-native-paper";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
+import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreen from "./screens/ExploreScreen";
 import ProfileScreen from "./screens/ProfileScreen";
@@ -20,9 +22,25 @@ import CheckoutScreen from "./screens/PaymentScreen";
 import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
 import SigninScreen from "./screens/SigninScreen";
 
+const auth = getAuth();
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      if (user) {
+        setCurrentUserId(user.uid);
+      } else {
+        setCurrentUserId(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   const theme = useMemo(
     () => (isDarkMode ? darkTheme : lightTheme),
@@ -77,39 +95,37 @@ export default function App() {
     ),
   });
 
-    // return (
-    //   <PaperProvider theme={theme}>
-    //     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-    //       <UserProvider>
-    //         <SafeAreaView
-    //           style={[
-    //             styles.container,
-    //             { backgroundColor: theme.colors.background },
-    //           ]}
-    //         >
-    //           <StatusBar style={isDarkMode ? "light" : "dark"} />
-
-    //           <BottomNavigation
-    //             navigationState={{
-    //               index: routes.findIndex((r) => r.key === activeTab),
-    //               routes,
-    //             }}
-    //             onIndexChange={(index) => setActiveTab(routes[index].key)}
-    //             renderScene={renderScene}
-    //             barStyle={{ backgroundColor: theme.colors.surface }}
-    //           />
-    //         </SafeAreaView>
-    //       </UserProvider>
-    //     </StripeProvider>
-    //   </PaperProvider>
-    // );
-
-
+  if (user) {
     return (
-      <SigninScreen >
-      </ SigninScreen> 
+      <PaperProvider theme={theme}>
+        <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+          <SafeAreaView
+            style={[
+              styles.container,
+              { backgroundColor: theme.colors.background },
+            ]}
+          >
+            <StatusBar style={isDarkMode ? "light" : "dark"} />
+
+            <BottomNavigation
+              navigationState={{
+                index: routes.findIndex((r) => r.key === activeTab),
+                routes,
+              }}
+              onIndexChange={(index) => setActiveTab(routes[index].key)}
+              renderScene={renderScene}
+              barStyle={{ backgroundColor: theme.colors.surface }}
+            />
+          </SafeAreaView>
+        </StripeProvider>
+      </PaperProvider>
     );
-  
+
+  } else {
+      return (
+        <SigninScreen />
+      );
+  }
 }
 
 const styles = StyleSheet.create({
