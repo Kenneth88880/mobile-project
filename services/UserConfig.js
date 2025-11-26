@@ -1,8 +1,9 @@
 // UserConfig.js
-// Change this value to switch between different user accounts for testing
-// Examples: "user123", "user456", "user789", etc.
-import {UID} from '../screens/SigninScreen';
+// This file will hold the UID of the currently logged-in user.
 
+export let CURRENT_USER_ID = null;
 
-export const CURRENT_USER_ID = UID;
+export const setCurrentUserId = (uid) => {
+  CURRENT_USER_ID = uid;
+};
 
