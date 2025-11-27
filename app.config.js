@@ -1,7 +1,7 @@
 module.exports = {
   expo: {
-    name: "mobileproject",
-    slug: "mobileproject",
+    name: "mobile-project",
+    slug: "mobile-project",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -29,6 +29,19 @@ module.exports = {
     web: {
       favicon: "./assets/favicon.png"
     },
+    plugins: [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
+    ],
     extra: {
       router: {},
       eas: {
