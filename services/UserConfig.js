@@ -17,3 +17,7 @@ export const setCurrentUserId = (uid) => {
 // - "user123" - Your main test account
 // - "user456" - Second test account
 // - "user789" - Third test account
+
+// Login users accounts for testing
+// - abc123@tester.ca | PW: 123abc
+// - matt@gmail.ca | Pw: 1234567 

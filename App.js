@@ -17,7 +17,6 @@ import ExploreScreen from "./screens/ExploreScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import RequestsScreen from "./screens/RequestsScreen";
 import CheckoutScreen from "./screens/PaymentScreen";
 import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
 import SigninScreen from "./screens/SigninScreen";
