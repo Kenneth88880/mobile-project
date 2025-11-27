@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { SafeAreaView, StyleSheet, View } from "react-native";
 import {
   PaperProvider,
@@ -7,22 +7,39 @@ import {
   BottomNavigation,
   configureFonts,
 } from "react-native-paper";
-import { UserProvider } from "./context/UserContext";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
+import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreen from "./screens/ExploreScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import RequestsScreen from "./screens/RequestsScreen";
 import CheckoutScreen from "./screens/PaymentScreen";
-import { STRIPE_PUBLISHABLE_KEY} from "./services/stripeConfig";
+import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
+import SigninScreen from "./screens/SigninScreen";
+
+const auth = getAuth();
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      if (user) {
+        setCurrentUserId(user.uid);
+      } else {
+        setCurrentUserId(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   const theme = useMemo(
     () => (isDarkMode ? darkTheme : lightTheme),
@@ -77,10 +94,10 @@ export default function App() {
     ),
   });
 
-  return (
-    <PaperProvider theme={theme}>
-      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-        <UserProvider>
+  if (user) {
+    return (
+      <PaperProvider theme={theme}>
+        <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
           <SafeAreaView
             style={[
               styles.container,
@@ -99,10 +116,17 @@ export default function App() {
               barStyle={{ backgroundColor: theme.colors.surface }}
             />
           </SafeAreaView>
-        </UserProvider>
-      </StripeProvider>
-    </PaperProvider>
-  );
+        </StripeProvider>
+      </PaperProvider>
+    );
+
+  } else {
+      return (
+        <PaperProvider theme={theme}>
+          <SigninScreen />
+        </PaperProvider>
+      );
+  }
 }
 
 const styles = StyleSheet.create({
