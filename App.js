@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { SafeAreaView, StyleSheet, View } from "react-native";
+import { StyleSheet, View, Platform } from "react-native";
 import {
   PaperProvider,
   MD3LightTheme,
   MD3DarkTheme,
   BottomNavigation,
-  configureFonts,
+  Surface,
 } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
@@ -108,10 +109,8 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
           <SafeAreaView
-            style={[
-              styles.container,
-              { backgroundColor: theme.colors.background },
-            ]}
+            style={[styles.safeArea, { backgroundColor: theme.colors.elevation.level2 }]}
+            edges={['top', 'left', 'right']}
           >
             <StatusBar style={isDarkMode ? "light" : "dark"} />
 
@@ -122,9 +121,13 @@ export default function App() {
               }}
               onIndexChange={(index) => setActiveTab(routes[index].key)}
               renderScene={renderScene}
-              barStyle={{ backgroundColor: theme.colors.elevation.level2 }}
+              barStyle={{
+                backgroundColor: theme.colors.elevation.level2,
+                height: 60,
+              }}
               activeColor={theme.colors.primary}
               inactiveColor={theme.colors.onSurfaceVariant}
+              safeAreaInsets={{ bottom: 0 }}
             />
           </SafeAreaView>
         </StripeProvider>
@@ -141,6 +144,9 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
 });
