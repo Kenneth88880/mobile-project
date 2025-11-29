@@ -109,8 +109,11 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
           <SafeAreaView
-            style={[styles.safeArea, { backgroundColor: theme.colors.elevation.level2 }]}
-            edges={['top', 'left', 'right']}
+            style={[
+              styles.safeArea,
+              { backgroundColor: theme.colors.elevation.level2 },
+            ]}
+            edges={["top", "left", "right"]}
           >
             <StatusBar style={isDarkMode ? "light" : "dark"} />
 
