@@ -44,6 +44,7 @@ export default function ExploreScreen() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [pins, setPins] = useState([]);
   const [places, setPlaces] = useState([]);
+  const [recommendedPlaces, setRecommendedPlaces] = useState([]);
   const [visibleCount, setVisibleCount] = useState(3);
   const [searchText, setSearchText] = useState("");
   const [previousSearches, setPreviousSearches] = useState([]);
@@ -95,12 +96,21 @@ export default function ExploreScreen() {
 
       const loc = await Promise.race([locationPromise, timeoutPromise]);
 
-      setRegion({
+      const userRegion = {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
         latitudeDelta: 0.1,
         longitudeDelta: 0.1,
-      });
+      };
+
+      setRegion(userRegion);
+
+      // Generate recommended places on initial load
+      const recommended = generateRecommendedPlaces(userRegion);
+      setRecommendedPlaces(recommended);
+      setPins(recommended);
+      setPlaces(recommended);
+
       setIsLoading(false);
     } catch (error) {
       console.error("Location fetch error:", error);
@@ -141,6 +151,32 @@ export default function ExploreScreen() {
     }
   };
 
+  const generateRecommendedPlaces = (userRegion) => {
+    if (!userRegion) return [];
+
+    const recommendedCategories = ["Restaurants", "Cafes", "Parks", "Museums"];
+    const places = [];
+
+    recommendedCategories.forEach((category, categoryIndex) => {
+      // Generate 3-5 places per category
+      const count = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        places.push({
+          id: `recommended-${category}-${i}`,
+          name: `${category.slice(0, -1)} ${String.fromCharCode(
+            65 + categoryIndex * 5 + i
+          )}`,
+          category: category,
+          latitude: userRegion.latitude + (Math.random() - 0.5) * 0.08,
+          longitude: userRegion.longitude + (Math.random() - 0.5) * 0.08,
+          distance: (Math.random() * 5).toFixed(1),
+        });
+      }
+    });
+
+    return places.sort((a, b) => a.distance - b.distance);
+  };
+
   const generateMockPlaces = (category) => {
     if (!region) return [];
     const newPlaces = Array.from({ length: 40 }).map((_, i) => ({
@@ -156,8 +192,9 @@ export default function ExploreScreen() {
   const handleCategorySelect = (category) => {
     if (selectedCategory === category) {
       setSelectedCategory(null);
-      setPins([]);
-      setPlaces([]);
+      setPins(recommendedPlaces);
+      setPlaces(recommendedPlaces);
+      setVisibleCount(3);
     } else {
       setSelectedCategory(category);
       const generated = generateMockPlaces(category);
@@ -226,7 +263,11 @@ export default function ExploreScreen() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <Icon source="map-marker-radius" size={48} color={theme.colors.primary} />
+        <Icon
+          source="map-marker-radius"
+          size={48}
+          color={theme.colors.primary}
+        />
         <Text variant="titleMedium" style={{ marginTop: 16 }}>
           Fetching location...
         </Text>
@@ -252,7 +293,10 @@ export default function ExploreScreen() {
             />
             <Text
               variant="headlineSmall"
-              style={[styles.permissionTitle, { color: theme.colors.onSurface }]}
+              style={[
+                styles.permissionTitle,
+                { color: theme.colors.onSurface },
+              ]}
             >
               Location Access Required
             </Text>
@@ -287,7 +331,9 @@ export default function ExploreScreen() {
       <Surface style={styles.header} elevation={2}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Icon source="compass" size={28} color={theme.colors.primary} />
-          <Text variant="headlineMedium">Explore Nearby</Text>
+          <Text variant="headlineMedium">
+            {selectedCategory ? selectedCategory : "Recommended for You"}
+          </Text>
         </View>
       </Surface>
 
@@ -333,44 +379,68 @@ export default function ExploreScreen() {
         ))}
       </ScrollView>
 
-      <View style={styles.mapContainer}>
-        <MapView style={styles.map} region={region}>
-          <Marker coordinate={region} title="You are here" pinColor="blue" />
-          {pins.map((p) => (
-            <Marker
-              key={p.id}
-              coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-              title={p.name}
-              description={`${p.distance} km away`}
-              onPress={() => handleSelectPlace(p)}
-            />
+      <ScrollView style={styles.scrollContent}>
+        <View style={styles.mapContainer}>
+          <MapView
+            style={styles.map}
+            initialRegion={region}
+            scrollEnabled={true}
+            zoomEnabled={true}
+            rotateEnabled={true}
+            pitchEnabled={true}
+          >
+            <Marker coordinate={region} title="You are here" pinColor="blue" />
+            {pins.map((p) => (
+              <Marker
+                key={p.id}
+                coordinate={{ latitude: p.latitude, longitude: p.longitude }}
+                title={p.name}
+                description={`${p.distance} km away`}
+                onPress={() => handleSelectPlace(p)}
+              />
+            ))}
+          </MapView>
+        </View>
+
+        <View style={styles.placesList}>
+          {places.slice(0, visibleCount).map((item) => (
+            <Card
+              key={item.id}
+              style={styles.placeCard}
+              onPress={() => handleSelectPlace(item)}
+            >
+              <Card.Content>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text variant="titleMedium">{item.name}</Text>
+                    <Text variant="bodySmall">{item.distance} km away</Text>
+                  </View>
+                  {item.category && !selectedCategory && (
+                    <Chip compact style={styles.categoryBadge}>
+                      {item.category}
+                    </Chip>
+                  )}
+                </View>
+              </Card.Content>
+            </Card>
           ))}
-        </MapView>
-      </View>
 
-      <ScrollView style={styles.placesList}>
-        {places.slice(0, visibleCount).map((item) => (
-          <Card
-            key={item.id}
-            style={styles.placeCard}
-            onPress={() => handleSelectPlace(item)}
-          >
-            <Card.Content>
-              <Text variant="titleMedium">{item.name}</Text>
-              <Text variant="bodySmall">{item.distance} km away</Text>
-            </Card.Content>
-          </Card>
-        ))}
-
-        {visibleCount < places.length && (
-          <Button
-            mode="contained"
-            onPress={handleShowMore}
-            style={styles.showMoreButton}
-          >
-            Show More
-          </Button>
-        )}
+          {visibleCount < places.length && (
+            <Button
+              mode="contained"
+              onPress={handleShowMore}
+              style={styles.showMoreButton}
+            >
+              Show More
+            </Button>
+          )}
+        </View>
       </ScrollView>
 
       <Portal>
@@ -383,11 +453,25 @@ export default function ExploreScreen() {
             <ScrollView>
               {placeDetails && (
                 <>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginBottom: 8,
+                    }}
+                  >
                     <Icon source="map-marker" size={16} />
                     <Text variant="bodyMedium">{placeDetails.address}</Text>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginBottom: 8,
+                    }}
+                  >
                     <Icon source="star" size={16} color="#FFD700" />
                     <Text variant="bodyMedium">
                       {placeDetails.rating} ({placeDetails.totalReviews}{" "}
@@ -402,7 +486,14 @@ export default function ExploreScreen() {
                       <Card.Content>
                         <Text variant="labelLarge">{r.user}</Text>
                         <Text variant="bodySmall">{r.comment}</Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                            marginTop: 4,
+                          }}
+                        >
                           <Icon source="star" size={14} color="#FFD700" />
                           <Text variant="bodySmall">{r.rating}</Text>
                         </View>
@@ -463,15 +554,16 @@ const styles = StyleSheet.create({
     margin: 8,
   },
   categoryScroll: {
-    maxHeight: 60,
+    flexGrow: 0,
+    flexShrink: 0,
     paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   categoryChip: {
     marginRight: 8,
-    marginVertical: 8,
   },
   mapContainer: {
-    height: height * 0.35,
+    height: height * 0.3,
     margin: 8,
     borderRadius: 10,
     overflow: "hidden",
@@ -479,8 +571,10 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  placesList: {
+  scrollContent: {
     flex: 1,
+  },
+  placesList: {
     padding: 8,
   },
   placeCard: {
@@ -495,5 +589,8 @@ const styles = StyleSheet.create({
   },
   reviewCard: {
     marginBottom: 8,
+  },
+  categoryBadge: {
+    marginLeft: 8,
   },
 });
