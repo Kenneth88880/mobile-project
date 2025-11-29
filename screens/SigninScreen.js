@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View, KeyboardAvoidingView, TouchableOpacity, TextInput } from 'react-native'
-import React, {useEffect} from 'react'
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, validatePassword, signOut  } from 'firebase/auth';
+import { StyleSheet, View, KeyboardAvoidingView } from 'react-native'
+import React from 'react'
+import { TextInput, Button, useTheme } from 'react-native-paper'
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 const auth = getAuth();
 
 const SigninScreen = () => {
-
+    const theme = useTheme();
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
 
@@ -52,49 +53,45 @@ const SigninScreen = () => {
 
     return (
         <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         behavior="padding">
 
             <View style={styles.inputContainer}>
 
                 <TextInput
-                    placeholder="Email"
+                    label="Email"
                     value={email}
                     onChangeText={text => setEmail(text)}
+                    mode="outlined"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
                     style={styles.input}
                 />
                 <TextInput
-                    placeholder="Password"
+                    label="Password"
                     value={password}
                     onChangeText={text => setPassword(text)}
-                    style={styles.input}
+                    mode="outlined"
                     secureTextEntry
+                    style={styles.input}
                 />
 
             </View>
 
             <View style={styles.buttonContainer}>
-                <TouchableOpacity
-
+                <Button
+                    mode="contained"
                     onPress={handleSignIn}
                     style={styles.button}>
+                    Login
+                </Button>
 
-                    <Text style={styles.button}>
-                        Login
-                    </Text>
-
-                </TouchableOpacity>
-
-                <TouchableOpacity
-
+                <Button
+                    mode="outlined"
                     onPress={handleSignUp}
-                    style={[styles.button, styles.buttonOutline]}>
-
-                    <Text style={styles.button}>
-                        Register
-                    </Text>
-
-                </TouchableOpacity>
+                    style={styles.button}>
+                    Register
+                </Button>
 
             </View>
         </KeyboardAvoidingView>
@@ -125,58 +122,18 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    }, 
+    },
     inputContainer: {
-        width: '80%'
+        width: '80%',
     },
     input: {
-
-        backgroundColor: 'white',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 10,
-        marginTop: 5,
-
+        marginBottom: 10,
     },
     buttonContainer: {
-
-        width: '60%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 40,
-
+        width: '80%',
+        marginTop: 20,
     },
     button: {
-        
-        backgroundColor: '#0782F9',
-        width: '100%',
-        padding: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-
+        marginVertical: 5,
     },
-    buttonOutline: {
-
-        backgroundColor: 'white',
-        marginTop: 5,
-        borderColor: '#0782F9',
-        borderWidth: 2,
-
-    },
-    buttonText: {
-
-        color: 'white',
-        fontWeight: '700',
-        fontSize: 16,
-
-
-    },
-    buttonOutlineText: {
-
-        color: '#0782F9',
-        fontWeight: '700',
-        fontSize: 16,
-
-    },
-
 })
