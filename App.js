@@ -126,7 +126,7 @@ export default function App() {
               renderScene={renderScene}
               barStyle={{
                 backgroundColor: theme.colors.elevation.level2,
-                height: 60,
+                height: 70,
               }}
               activeColor={theme.colors.primary}
               inactiveColor={theme.colors.onSurfaceVariant}

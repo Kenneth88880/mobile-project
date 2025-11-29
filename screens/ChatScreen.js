@@ -2,25 +2,19 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   FlatList,
-  Image,
   Alert,
-  Modal,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  ScrollView,
 } from "react-native";
 import {
   Text,
-  Card,
-  Button,
   TextInput,
   Avatar,
   List,
   Badge,
   IconButton,
-  Chip,
   Surface,
   ActivityIndicator,
   useTheme,
@@ -45,10 +39,6 @@ import {
 import {
   getUserProfile,
   saveRating,
-  getCurrentDuoPartner,
-  acceptDuoLike,
-  deleteDuoLike,
-  saveDuoSwipe,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
@@ -109,258 +99,8 @@ const reportChat = async (chatId, reportingUserId) => {
   }
 };
 
-// Requests Modal Component
-function RequestsModal({ visible, onClose }) {
-  const theme = useTheme();
-  const [duoLikes, setDuoLikes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [currentDuo, setCurrentDuo] = useState(null);
-  const [selectedProfile, setSelectedProfile] = useState(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
-  const currentUserId = CURRENT_USER_ID;
-
-  useEffect(() => {
-    if (visible) {
-      loadDuoPartner();
-    }
-  }, [visible]);
-
-  const loadDuoPartner = async () => {
-    setLoading(true);
-    try {
-      const duo = await getCurrentDuoPartner(currentUserId);
-      setCurrentDuo(duo);
-      if (!duo) setLoading(false);
-    } catch (error) {
-      console.error("Error loading duo partner:", error);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!currentDuo || !visible) return;
-
-    const likesQuery = query(
-      collection(db, "duoLikes"),
-      where("toDuoId", "==", currentDuo.duoId),
-      where("status", "==", "pending")
-    );
-
-    const unsubscribe = onSnapshot(likesQuery, async (snapshot) => {
-      const likes = [];
-      for (const doc of snapshot.docs) {
-        const likeData = doc.data();
-        const user1Profile = await getUserProfile(likeData.fromUser1);
-        const user2Profile = await getUserProfile(likeData.fromUser2);
-
-        if (user1Profile && user2Profile) {
-          likes.push({
-            id: doc.id,
-            fromDuoId: likeData.fromDuoId,
-            toDuoId: likeData.toDuoId,
-            user1: user1Profile,
-            user2: user2Profile,
-            acceptedBy: likeData.acceptedBy || [],
-            timestamp: likeData.timestamp,
-            status: likeData.status,
-          });
-        }
-      }
-
-      setDuoLikes(likes);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentDuo, visible]);
-
-  const handleAccept = async (likeId, fromDuoId) => {
-    if (!currentDuo) {
-      Alert.alert("Error", "You need to be in a duo to accept requests");
-      return;
-    }
-
-    const success = await acceptDuoLike(
-      likeId,
-      currentUserId,
-      currentDuo.duoId,
-      fromDuoId
-    );
-    if (success) {
-      Alert.alert("Accepted!", "You've accepted this duo request");
-    } else {
-      Alert.alert("Error", "Failed to accept request");
-    }
-  };
-
-  const handleDecline = async (likeId, fromDuoId) => {
-    if (!currentDuo) return;
-
-    Alert.alert(
-      "Decline Request",
-      "Are you sure you want to decline this duo like?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Decline",
-          style: "destructive",
-          onPress: async () => {
-            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
-            const success = await deleteDuoLike(likeId);
-            if (success) {
-              Alert.alert("Declined", "Request has been removed");
-            } else {
-              Alert.alert("Error", "Failed to decline request");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleProfileClick = (profile) => {
-    setSelectedProfile(profile);
-    setCurrentImageIndex(0);
-  };
-
-  const handleNextPhoto = () => {
-    if (
-      selectedProfile?.photos &&
-      currentImageIndex < selectedProfile.photos.length - 1
-    ) {
-      setCurrentImageIndex(currentImageIndex + 1);
-    }
-  };
-
-  const handlePreviousPhoto = () => {
-    if (currentImageIndex > 0) {
-      setCurrentImageIndex(currentImageIndex - 1);
-    }
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView
-        style={[
-          styles.modalContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        <Surface style={styles.modalHeader} elevation={2}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="email-heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Requests</Text>
-          </View>
-          <IconButton icon="close" onPress={onClose} />
-        </Surface>
-
-        {loading ? (
-          <View style={styles.centerContent}>
-            <ActivityIndicator size="large" />
-            <Text variant="bodyLarge" style={styles.marginTop}>
-              Loading requests...
-            </Text>
-          </View>
-        ) : !currentDuo ? (
-          <EmptyState
-            icon="account-multiple"
-            title="No Duo Partner"
-            message="You need to set up a duo partner in your profile to receive duo requests."
-          />
-        ) : duoLikes.length === 0 ? (
-          <EmptyState
-            icon="email-heart"
-            title="No Requests"
-            message="When duos like you, they'll appear here!"
-          />
-        ) : (
-          <ScrollView style={styles.requestsList}>
-            {duoLikes.map((like) => {
-              const youAccepted = like.acceptedBy.includes(currentUserId);
-              const partnerAccepted = currentDuo
-                ? like.acceptedBy.includes(currentDuo.partnerId)
-                : false;
-              const bothAccepted = youAccepted && partnerAccepted;
-
-              return (
-                <Card key={like.id} style={styles.requestCard}>
-                  <Card.Content>
-                    <View style={styles.duoContainer}>
-                      <Button
-                        mode="text"
-                        onPress={() => handleProfileClick(like.user1)}
-                      >
-                        <View style={styles.userCard}>
-                          <ProfilePhoto
-                            uri={like.user1.photos?.[0]}
-                            size={80}
-                          />
-                          <Text variant="titleMedium">
-                            {like.user1.name}, {like.user1.age}
-                          </Text>
-                        </View>
-                      </Button>
-
-                      <Text variant="displaySmall">+</Text>
-
-                      <Button
-                        mode="text"
-                        onPress={() => handleProfileClick(like.user2)}
-                      >
-                        <View style={styles.userCard}>
-                          <ProfilePhoto
-                            uri={like.user2.photos?.[0]}
-                            size={80}
-                          />
-                          <Text variant="titleMedium">
-                            {like.user2.name}, {like.user2.age}
-                          </Text>
-                        </View>
-                      </Button>
-                    </View>
-
-                    {bothAccepted ? (
-                      <Chip icon="check-circle" style={styles.matchedChip}>
-                        It's a Match! Check your messages
-                      </Chip>
-                    ) : youAccepted ? (
-                      <Chip icon="clock" style={styles.waitingChip}>
-                        Waiting for your partner to accept...
-                      </Chip>
-                    ) : (
-                      <View style={styles.actionButtons}>
-                        <Button
-                          mode="outlined"
-                          icon="close"
-                          onPress={() => handleDecline(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Pass
-                        </Button>
-                        <Button
-                          mode="contained"
-                          icon="heart"
-                          onPress={() => handleAccept(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Accept
-                        </Button>
-                      </View>
-                    )}
-                  </Card.Content>
-                </Card>
-              );
-            })}
-          </ScrollView>
-        )}
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
 // Chat List Component
-function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
+function ChatListScreen({ onChatSelect }) {
   const theme = useTheme();
   const currentUserId = getUserID();
   const [chats, setChats] = useState([]);
@@ -539,7 +279,10 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
           </View>
         )}
         onPress={() => onChatSelect(item)}
-        style={[styles.chatItem, unreadCount > 0 && styles.unreadChatItem]}
+        style={[
+          styles.chatItem,
+          unreadCount > 0 && { backgroundColor: `${theme.colors.primary}15` }
+        ]}
       />
     );
   };
@@ -550,10 +293,10 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Surface style={styles.header} elevation={2}>
-          <Text variant="headlineMedium">💬 Messages</Text>
-          <Button mode="contained" onPress={onRequestsPress} icon="mail">
-            Requests {requestCount > 0 && `(${requestCount})`}
-          </Button>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="message" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Messages</Text>
+          </View>
         </Surface>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" />
@@ -571,9 +314,6 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
           <Icon source="message" size={28} color={theme.colors.primary} />
           <Text variant="headlineMedium">Messages</Text>
         </View>
-        <Button mode="contained" onPress={onRequestsPress} icon="mail">
-          Requests {requestCount > 0 && `(${requestCount})`}
-        </Button>
       </Surface>
 
       {chats.length === 0 ? (
@@ -729,7 +469,13 @@ function IndividualChatScreen({ chat, onBack }) {
               <Surface
                 style={[
                   styles.messageBubble,
-                  isMyMessage ? styles.myMessage : styles.theirMessage,
+                  {
+                    backgroundColor: isMyMessage
+                      ? theme.colors.primaryContainer
+                      : theme.colors.surfaceVariant,
+                    borderBottomRightRadius: isMyMessage ? 4 : 16,
+                    borderBottomLeftRadius: isMyMessage ? 16 : 4,
+                  },
                 ]}
                 elevation={1}
               >
@@ -741,12 +487,26 @@ function IndividualChatScreen({ chat, onBack }) {
 
                 <Text
                   variant="bodyMedium"
-                  style={isMyMessage && styles.myMessageText}
+                  style={{
+                    color: isMyMessage
+                      ? theme.colors.onPrimaryContainer
+                      : theme.colors.onSurfaceVariant,
+                  }}
                 >
                   {item.text}
                 </Text>
 
-                <Text variant="labelSmall" style={styles.messageTime}>
+                <Text
+                  variant="labelSmall"
+                  style={[
+                    styles.messageTime,
+                    {
+                      color: isMyMessage
+                        ? theme.colors.onPrimaryContainer
+                        : theme.colors.onSurfaceVariant,
+                    },
+                  ]}
+                >
                   {item.createdAt?.toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -793,38 +553,6 @@ function IndividualChatScreen({ chat, onBack }) {
 
 export default function ChatScreen() {
   const [selectedChat, setSelectedChat] = useState(null);
-  const [showRequests, setShowRequests] = useState(false);
-  const [requestCount, setRequestCount] = useState(0);
-
-  useEffect(() => {
-    const loadRequestCount = async () => {
-      try {
-        const currentUserId = CURRENT_USER_ID;
-        const duo = await getCurrentDuoPartner(currentUserId);
-
-        if (!duo) {
-          setRequestCount(0);
-          return;
-        }
-
-        const likesQuery = query(
-          collection(db, "duoLikes"),
-          where("toDuoId", "==", duo.duoId),
-          where("status", "==", "pending")
-        );
-
-        const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
-          setRequestCount(snapshot.docs.length);
-        });
-
-        return () => unsubscribe();
-      } catch (error) {
-        console.error("Error loading request count:", error);
-      }
-    };
-
-    loadRequestCount();
-  }, []);
 
   if (selectedChat) {
     return (
@@ -835,19 +563,7 @@ export default function ChatScreen() {
     );
   }
 
-  return (
-    <>
-      <ChatListScreen
-        onChatSelect={setSelectedChat}
-        onRequestsPress={() => setShowRequests(true)}
-        requestCount={requestCount}
-      />
-      <RequestsModal
-        visible={showRequests}
-        onClose={() => setShowRequests(false)}
-      />
-    </>
-  );
+  return <ChatListScreen onChatSelect={setSelectedChat} />;
 }
 
 const styles = StyleSheet.create({
@@ -871,54 +587,12 @@ const styles = StyleSheet.create({
   chatItem: {
     paddingVertical: 8,
   },
-  unreadChatItem: {
-    backgroundColor: "rgba(33, 150, 243, 0.1)",
-  },
   chatRight: {
     flexDirection: "column",
     alignItems: "flex-end",
   },
   badge: {
     marginTop: 4,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-  },
-  requestsList: {
-    flex: 1,
-    padding: 8,
-  },
-  requestCard: {
-    marginBottom: 12,
-  },
-  duoContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  userCard: {
-    alignItems: "center",
-  },
-  matchedChip: {
-    backgroundColor: "#4CAF50",
-    color: "white",
-  },
-  waitingChip: {
-    backgroundColor: "#FF9800",
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
   },
   chatHeader: {
     flexDirection: "row",
@@ -947,20 +621,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     maxWidth: "100%",
   },
-  myMessage: {
-    backgroundColor: "#2196F3",
-    borderBottomRightRadius: 4,
-  },
-  theirMessage: {
-    backgroundColor: "#E0E0E0",
-    borderBottomLeftRadius: 4,
-  },
   senderName: {
     marginBottom: 4,
     fontWeight: "600",
-  },
-  myMessageText: {
-    color: "white",
   },
   messageTime: {
     marginTop: 4,
