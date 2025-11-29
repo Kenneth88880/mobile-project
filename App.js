@@ -59,14 +59,14 @@ export default function App() {
       unfocusedIcon: "home-outline",
     },
     {
-      key: "explore",
-      focusedIcon: "compass",
-      unfocusedIcon: "compass-outline",
-    },
-    {
       key: "likes",
       focusedIcon: "heart",
       unfocusedIcon: "heart-outline",
+    },
+    {
+      key: "explore",
+      focusedIcon: "compass",
+      unfocusedIcon: "compass-outline",
     },
     {
       key: "messages",
