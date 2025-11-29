@@ -21,6 +21,7 @@ const SigninScreen = () => {
         .catch((error) => {
             const errorCode = error.code;
             const errorMessage = error.message;
+            alert(errorCode + errorMessage);
             console.log(errorCode + errorMessage);
             console.log('nope dumbass');
             // ..
@@ -88,7 +89,7 @@ const SigninScreen = () => {
                 <TouchableOpacity
 
                     onPress={handleSignUp}
-                    style={[styles.button, styles.buttonOutline]}>
+                    style={styles.button}>
 
                     <Text style={styles.button}>
                         Register
@@ -127,6 +128,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     }, 
     inputContainer: {
+        
         width: '80%'
     },
     input: {
@@ -150,7 +152,8 @@ const styles = StyleSheet.create({
         
         backgroundColor: '#0782F9',
         width: '100%',
-        padding: 15,
+        padding: 10,
+        marginTop: 5,
         borderRadius: 10,
         alignItems: 'center',
 
