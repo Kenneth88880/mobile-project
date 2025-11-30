@@ -21,6 +21,7 @@ const SigninScreen = () => {
         // Signed up
         const user = userCredential.user;
         console.log("Registered with:", user.email);
+        alert("Please Click the gear icon to set up your profile!");
         // ...
       })
       .catch((error) => {
