@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Image,
@@ -7,13 +7,65 @@ import {
   StyleSheet,
   Alert,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { Text, IconButton, Surface, useTheme } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
+import storage from '@react-native-firebase/storage';
+import { CURRENT_USER_ID } from "../services/UserConfig";
 
 export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
-  const theme = useTheme(); // ✅ FIXED: Added this line
+  const theme = useTheme();
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
+  const uploadImageToStorage = async (uri) => {
+    try {
+      // Validate URI
+      if (!uri || uri.trim() === '') {
+        throw new Error('Invalid image URI');
+      }
+
+      const filename = `${CURRENT_USER_ID}_${Date.now()}.jpg`;
+      const reference = storage().ref(`profile_photos/${filename}`);
+      
+      console.log('Uploading from:', uri);
+      console.log('Uploading to:', reference.fullPath);
+      
+      // Upload file
+      const task = reference.putFile(uri);
+      
+      // Monitor upload progress
+      task.on('state_changed', (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(Math.round(progress));
+        console.log('Upload progress:', Math.round(progress) + '%');
+      });
+      
+      // Wait for upload to complete
+      await task;
+      
+      // Get download URL
+      const downloadURL = await reference.getDownloadURL();
+      console.log('Upload complete! URL:', downloadURL);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 'storage/unauthorized') {
+        throw new Error('Permission denied. Check Firebase Storage rules.');
+      } else if (error.code === 'storage/canceled') {
+        throw new Error('Upload canceled.');
+      } else if (error.code === 'storage/unknown') {
+        throw new Error('Upload failed. Check your internet connection.');
+      } else {
+        throw new Error(error.message || 'Upload failed. Please try again.');
+      }
+    }
+  };
+
   const pickImage = async () => {
     // Hide status bar before opening picker
     StatusBar.setHidden(true);
@@ -51,9 +103,31 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
     StatusBar.setHidden(false);
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newImageUri = result.assets[0].uri;
-      const updatedPhotos = [...photos, newImageUri];
-      onPhotosChange(updatedPhotos);
+      const localUri = result.assets[0].uri;
+      
+      // Show uploading state
+      setUploading(true);
+      setUploadProgress(0);
+      
+      try {
+        // Upload to Firebase Storage
+        const downloadURL = await uploadImageToStorage(localUri);
+        
+        // Add the Firebase Storage URL to photos
+        const updatedPhotos = [...photos, downloadURL];
+        onPhotosChange(updatedPhotos);
+        
+        Alert.alert("Success", "Photo uploaded successfully!");
+      } catch (error) {
+        console.error('Upload error:', error);
+        Alert.alert(
+          "Upload Failed",
+          "Failed to upload photo. Please try again."
+        );
+      } finally {
+        setUploading(false);
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -63,7 +137,25 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
       {
         text: "Remove",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
+          const photoToRemove = photos[indexToRemove];
+          
+          // Try to delete from Firebase Storage (only if it's a Firebase URL)
+          try {
+            // Check if it's a Firebase Storage URL
+            if (photoToRemove && photoToRemove.includes('firebasestorage.googleapis.com')) {
+              const fileRef = storage().refFromURL(photoToRemove);
+              await fileRef.delete();
+              console.log('Deleted from Firebase Storage:', photoToRemove);
+            } else {
+              console.log('Skipping Firebase delete - not a Firebase URL:', photoToRemove);
+            }
+          } catch (error) {
+            console.log('Could not delete from storage (this is OK for local files):', error.message);
+            // Continue anyway - remove from array even if Firebase delete fails
+          }
+          
+          // Remove from photos array
           const updatedPhotos = photos.filter(
             (_, index) => index !== indexToRemove
           );
@@ -101,21 +193,33 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
             ]}
             elevation={1}
           >
-            <IconButton
-              icon="plus"
-              size={40}
-              iconColor={theme.colors.primary}
-              onPress={pickImage}
-            />
-            <Text variant="bodySmall" style={{ color: theme.colors.primary }}>
-              Add Photo
-            </Text>
+            {uploading ? (
+              <View style={styles.uploadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text variant="bodySmall" style={{ marginTop: 8, color: theme.colors.primary }}>
+                  {uploadProgress}%
+                </Text>
+              </View>
+            ) : (
+              <>
+                <IconButton
+                  icon="plus"
+                  size={40}
+                  iconColor={theme.colors.primary}
+                  onPress={pickImage}
+                />
+                <Text variant="bodySmall" style={{ color: theme.colors.primary }}>
+                  Add Photo
+                </Text>
+              </>
+            )}
           </Surface>
         )}
       </ScrollView>
 
       <Text variant="bodySmall" style={styles.photoCount}>
         {photos.length} / {maxPhotos} photos
+        {uploading && " (Uploading...)"}
       </Text>
     </View>
   );
@@ -158,6 +262,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "transparent",
+  },
+  uploadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   photoCount: {
     textAlign: "center",
