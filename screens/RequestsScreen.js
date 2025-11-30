@@ -494,7 +494,8 @@ export default function RequestsScreen() {
                     Their duo: {sendingDuoAcceptances}/2 accepted
                   </Text>
                   <Text variant="bodyMedium" style={styles.statusText}>
-                    Your duo: {currentUserAccepted ? "You (accepted)" : "You (pending)"} •{" "}
+                    Your duo:{" "}
+                    {currentUserAccepted ? "You (accepted)" : "You (pending)"} •{" "}
                     {partnerAccepted
                       ? `${currentDuo.partnerName} (accepted)`
                       : `${currentDuo.partnerName} (pending)`}
