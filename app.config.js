@@ -40,7 +40,7 @@ module.exports = {
         }
       ],
       "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      "@react-native-firebase/auth",
     ],
     extra: {
       router: {},

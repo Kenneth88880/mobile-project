@@ -1,84 +1,90 @@
 import { useStripe } from '@stripe/stripe-react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+//import { Screen } from './Screen';
+import { Button } from "react-native-paper";
 
 export default function CheckoutScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
-  const initializePaymentSheet = async () => {
+  const fetchPaymentSheetParams = async () => {
     try {
-      // Replace with your computer's IP address
-     const response = await fetch('https://avis-nonexpanded-ashton.ngrok-free.dev/create-payment-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: 1099 }),
-    });
+      const response = await fetch(`${'https://api.stripe.com'}/payment-sheet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch payment intent');
+        throw new Error('Failed to fetch payment sheet params');
       }
       
-      const { clientSecret } = await response.json();
+      const { paymentIntent, ephemeralKey, customer } = await response.json();
 
-      const { error } = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Doubly',
-      });
-
-      if (error) {
-        console.error('Init error:', error);
-        Alert.alert('Error', error.message);
-        return false;
-      }
-      
-      return true;
+      return {
+        paymentIntent,
+        ephemeralKey,
+        customer,
+      };
     } catch (error) {
-      console.error('Payment initialization error:', error);
-      Alert.alert('Error', error.message);
-      return false;
+      console.error('Error fetching payment params:', error);
+      Alert.alert('Error', 'Failed to initialize payment');
+      throw error;
+    }
+  };
+
+  const initializePaymentSheet = async () => {
+    const {
+      paymentIntent,
+      ephemeralKey,
+      customer,
+    } = await fetchPaymentSheetParams();
+
+    const { error } = await initPaymentSheet({
+      merchantDisplayName: "Doubly",
+      customerId: customer,
+      customerEphemeralKeySecret: ephemeralKey,
+      paymentIntentClientSecret: paymentIntent,
+      // Set `allowsDelayedPaymentMethods` to true if your business can handle payment
+      //methods that complete payment after a delay, like SEPA Debit and Sofort.
+      allowsDelayedPaymentMethods: true,
+      defaultBillingDetails: {
+        name: 'Jane Doe',
+      }
+    });
+    if (!error) {
+      setLoading(true);
     }
   };
 
   const openPaymentSheet = async () => {
-    setLoading(true);
-    
-    try {
-      const initialized = await initializePaymentSheet();
-      
-      if (!initialized) {
-        setLoading(false);
-        return;
-      }
-      
-      const { error } = await presentPaymentSheet();
+    const { error } = await presentPaymentSheet();
 
-      if (error) {
-        Alert.alert('Payment Failed', error.message);
-      } else {
-        Alert.alert('Success', 'Your payment was successful!');
-      }
-    } catch (error) {
-      console.error('Payment error:', error);
-      Alert.alert('Error', 'Something went wrong');
-    } finally {
-      setLoading(false);
+    if (error) {
+      Alert.alert(`Error code: ${error.code}`, error.message);
+    } else {
+      Alert.alert('Success', 'Your order is confirmed!');
     }
   };
 
+  useEffect(() => {
+    initializePaymentSheet();
+  }, []);
+
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={openPaymentSheet}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? 'Processing...' : 'Checkout'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+  <View style={styles.container}>
+    <Button
+      mode="contained" // react-native-paper uses 'mode' not 'variant'
+      disabled={!loading}  // Disabled until payment sheet is ready
+      onPress={openPaymentSheet}
+      loading={!loading} 
+    >
+      Checkout
+    </Button>
+  </View>
+);
 }
 
 const styles = StyleSheet.create({
