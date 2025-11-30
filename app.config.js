@@ -30,11 +30,11 @@ module.exports = {
       favicon: "./assets/favicon.png"
     },
     extra: {
-      router: {},
-      eas: {
-        projectId: "35c956ae-8518-4368-8ad0-3e56e25edc99"
-      }
-    },
-    owner: "preston.j.wong"
+  router: {},
+  eas: {
+    projectId: "dfbf77be-2a46-4218-bf66-c8c8f00a4956"
+  }
+},
+    owner: "k0k0"
   }
 };
