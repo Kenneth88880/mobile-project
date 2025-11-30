@@ -1,6 +1,9 @@
 // UserConfig.js
-// Change this value to switch between different user accounts for testing
-// Examples: "user123", "user456", "user789", etc.
+// This file will hold the UID of the currently logged-in user.
 
-export const CURRENT_USER_ID = "usermike";
+export let CURRENT_USER_ID = null;
+
+export const setCurrentUserId = (uid) => {
+  CURRENT_USER_ID = uid;
+};
 
