@@ -26,22 +26,11 @@ import {
   useTheme,
   Divider,
   Icon,
+  Menu,
+  Portal,
 } from "react-native-paper";
-import { db } from "../services/firebaseConfig";
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  serverTimestamp,
-  updateDoc,
-  doc,
-  getDoc,
-  deleteDoc,
-  getDocs,
-} from "firebase/firestore";
+// ✅ FIXED: Using React Native Firebase instead of web SDK
+import firestore from '@react-native-firebase/firestore';
 import {
   getUserProfile,
   saveRating,
@@ -58,14 +47,23 @@ const getUserID = () => CURRENT_USER_ID;
 // Delete a specific chat
 const deleteChat = async (chatId) => {
   try {
-    const messagesSnapshot = await getDocs(
-      collection(db, "chats", chatId, "messages")
-    );
+    // ✅ FIXED: React Native Firebase syntax
+    const messagesSnapshot = await firestore()
+      .collection('chats')
+      .doc(chatId)
+      .collection('messages')
+      .get();
+    
     const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
-      deleteDoc(msgDoc.ref)
+      msgDoc.ref.delete()
     );
     await Promise.all(deleteMessagesPromises);
-    await deleteDoc(doc(db, "chats", chatId));
+    
+    await firestore()
+      .collection('chats')
+      .doc(chatId)
+      .delete();
+    
     return true;
   } catch (error) {
     console.error("Error deleting chat:", error);
@@ -76,15 +74,16 @@ const deleteChat = async (chatId) => {
 // Report a chat
 const reportChat = async (chatId, reportingUserId) => {
   try {
-    const chatRef = doc(db, "chats", chatId);
-    const chatDoc = await getDoc(chatRef);
+    // ✅ FIXED: React Native Firebase syntax
+    const chatRef = firestore().collection('chats').doc(chatId);
+    const chatDoc = await chatRef.get();
 
-    if (chatDoc.exists()) {
+    if (chatDoc.exists) {
       const data = chatDoc.data();
       const reports = data.reports || [];
       reports.push({
         reportedBy: reportingUserId,
-        reportedAt: serverTimestamp(),
+        reportedAt: firestore.FieldValue.serverTimestamp(),
         reason: "User reported inappropriate content",
       });
 
@@ -93,11 +92,11 @@ const reportChat = async (chatId, reportingUserId) => {
         (id) => id !== reportingUserId
       );
 
-      await updateDoc(chatRef, {
+      await chatRef.update({
         reports: reports,
         participants: updatedParticipants,
         flaggedForModeration: true,
-        lastReportedAt: serverTimestamp(),
+        lastReportedAt: firestore.FieldValue.serverTimestamp(),
       });
 
       return true;
@@ -141,36 +140,35 @@ function RequestsModal({ visible, onClose }) {
   useEffect(() => {
     if (!currentDuo || !visible) return;
 
-    const likesQuery = query(
-      collection(db, "duoLikes"),
-      where("toDuoId", "==", currentDuo.duoId),
-      where("status", "==", "pending")
-    );
+    // ✅ FIXED: React Native Firebase syntax
+    const unsubscribe = firestore()
+      .collection('duoLikes')
+      .where('toDuoId', '==', currentDuo.duoId)
+      .where('status', '==', 'pending')
+      .onSnapshot(async (snapshot) => {
+        const likes = [];
+        for (const doc of snapshot.docs) {
+          const likeData = doc.data();
+          const user1Profile = await getUserProfile(likeData.fromUser1);
+          const user2Profile = await getUserProfile(likeData.fromUser2);
 
-    const unsubscribe = onSnapshot(likesQuery, async (snapshot) => {
-      const likes = [];
-      for (const doc of snapshot.docs) {
-        const likeData = doc.data();
-        const user1Profile = await getUserProfile(likeData.fromUser1);
-        const user2Profile = await getUserProfile(likeData.fromUser2);
-
-        if (user1Profile && user2Profile) {
-          likes.push({
-            id: doc.id,
-            fromDuoId: likeData.fromDuoId,
-            toDuoId: likeData.toDuoId,
-            user1: user1Profile,
-            user2: user2Profile,
-            acceptedBy: likeData.acceptedBy || [],
-            timestamp: likeData.timestamp,
-            status: likeData.status,
-          });
+          if (user1Profile && user2Profile) {
+            likes.push({
+              id: doc.id,
+              fromDuoId: likeData.fromDuoId,
+              toDuoId: likeData.toDuoId,
+              user1: user1Profile,
+              user2: user2Profile,
+              acceptedBy: likeData.acceptedBy || [],
+              timestamp: likeData.timestamp,
+              status: likeData.status,
+            });
+          }
         }
-      }
 
-      setDuoLikes(likes);
-      setLoading(false);
-    });
+        setDuoLikes(likes);
+        setLoading(false);
+      });
 
     return () => unsubscribe();
   }, [currentDuo, visible]);
@@ -321,109 +319,165 @@ function RequestsModal({ visible, onClose }) {
                     </View>
 
                     {bothAccepted ? (
-                      <Chip icon="check-circle" style={styles.matchedChip}>
-                        It's a Match! Check your messages
+                      <Chip style={styles.matchedChip} textStyle={{ color: 'white' }}>
+                        ✨ Matched! Start chatting
                       </Chip>
                     ) : youAccepted ? (
-                      <Chip icon="clock" style={styles.waitingChip}>
-                        Waiting for your partner to accept...
+                      <Chip style={styles.waitingChip}>
+                        ⏳ Waiting for your partner's approval
                       </Chip>
-                    ) : (
-                      <View style={styles.actionButtons}>
-                        <Button
-                          mode="outlined"
-                          icon="close"
-                          onPress={() => handleDecline(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Pass
-                        </Button>
-                        <Button
-                          mode="contained"
-                          icon="heart"
-                          onPress={() => handleAccept(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Accept
-                        </Button>
-                      </View>
-                    )}
+                    ) : partnerAccepted ? (
+                      <Chip style={styles.waitingChip}>
+                        ⏳ Your partner approved! Your turn
+                      </Chip>
+                    ) : null}
+
+                    <View style={styles.actionButtons}>
+                      <Button
+                        mode="outlined"
+                        onPress={() => handleDecline(like.id, like.fromDuoId)}
+                        style={styles.actionButton}
+                        disabled={bothAccepted}
+                      >
+                        Decline
+                      </Button>
+                      <Button
+                        mode="contained"
+                        onPress={() => handleAccept(like.id, like.fromDuoId)}
+                        style={styles.actionButton}
+                        disabled={youAccepted || bothAccepted}
+                      >
+                        {youAccepted ? "Accepted" : "Accept"}
+                      </Button>
+                    </View>
                   </Card.Content>
                 </Card>
               );
             })}
           </ScrollView>
         )}
+
+        {selectedProfile && (
+          <Modal
+            visible={!!selectedProfile}
+            animationType="fade"
+            onRequestClose={() => setSelectedProfile(null)}
+          >
+            <SafeAreaView
+              style={[
+                styles.profileModalContainer,
+                { backgroundColor: theme.colors.background },
+              ]}
+            >
+              <IconButton
+                icon="close"
+                size={30}
+                onPress={() => setSelectedProfile(null)}
+                style={styles.closeButton}
+              />
+
+              <ScrollView>
+                {selectedProfile.photos &&
+                  selectedProfile.photos.length > 0 && (
+                    <View style={styles.imageContainer}>
+                      <Image
+                        source={{ uri: selectedProfile.photos[currentImageIndex] }}
+                        style={styles.fullImage}
+                        resizeMode="cover"
+                      />
+                      {selectedProfile.photos.length > 1 && (
+                        <View style={styles.imageNavButtons}>
+                          <IconButton
+                            icon="chevron-left"
+                            size={30}
+                            onPress={handlePreviousPhoto}
+                            disabled={currentImageIndex === 0}
+                          />
+                          <Text>
+                            {currentImageIndex + 1} / {selectedProfile.photos.length}
+                          </Text>
+                          <IconButton
+                            icon="chevron-right"
+                            size={30}
+                            onPress={handleNextPhoto}
+                            disabled={
+                              currentImageIndex === selectedProfile.photos.length - 1
+                            }
+                          />
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                <Card style={styles.profileInfoCard}>
+                  <Card.Content>
+                    <Text variant="headlineMedium">
+                      {selectedProfile.name}, {selectedProfile.age}
+                    </Text>
+                    {selectedProfile.description && (
+                      <Text variant="bodyLarge" style={styles.profileDescription}>
+                        {selectedProfile.description}
+                      </Text>
+                    )}
+                    {selectedProfile.tags && selectedProfile.tags.length > 0 && (
+                      <View style={styles.tagsContainer}>
+                        <Text variant="titleSmall">Interests:</Text>
+                        <View style={styles.tags}>
+                          {selectedProfile.tags.map((tag, idx) => (
+                            <Chip key={idx} compact>
+                              {tag}
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </Card.Content>
+                </Card>
+              </ScrollView>
+            </SafeAreaView>
+          </Modal>
+        )}
       </SafeAreaView>
     </Modal>
   );
 }
 
-// Chat List Component
+// Chat List Screen Component
 function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
   const theme = useTheme();
-  const currentUserId = getUserID();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const chatsRef = collection(db, "chats");
-    const unsubscribe = onSnapshot(
-      chatsRef,
-      (snapshot) => {
-        const chatsList = [];
-
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.participants && data.participants.includes(currentUserId)) {
-            chatsList.push({
-              id: docSnap.id,
-              ...data,
-            });
-          }
-        });
-
-        chatsList.sort((a, b) => {
-          const aTime = a.lastMessageTime?.seconds || 0;
-          const bTime = b.lastMessageTime?.seconds || 0;
-          return bTime - aTime;
-        });
-
-        setChats(chatsList);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error loading chats:", error);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [currentUserId]);
-
-  const formatTimeStamp = (timestamp) => {
-    if (!timestamp) return "";
-
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
-    const diffInMs = now - date;
-    const diffInMins = Math.floor(diffInMs / 60000);
-    const diffInHours = Math.floor(diffInMins / 60);
-    const diffInDays = Math.floor(diffInHours / 24);
-
-    if (diffInMins < 1) return "Just now";
-    if (diffInMins < 60) return `${diffInMins}m ago`;
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-
-    return date.toLocaleDateString();
-  };
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [selectedChatName, setSelectedChatName] = useState("");
+  const currentUserId = getUserID();
 
   const congratsMessages = [
     "Congrats on the successful double date!",
     "That's awesome! Glad you all hit it off!",
     "Woohoo! Nothing beats a great double date!",
   ];
+
+  const formatTimeStamp = (timestamp) => {
+    if (!timestamp) return "";
+    
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString();
+    } catch (error) {
+      return "";
+    }
+  };
 
   const handleEveryoneMet = (chatId) => {
     const randomMessage =
@@ -462,7 +516,7 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
     );
   };
 
-  const handleReport = (chatId, chatName) => {
+  const handleReportFromList = (chatId, chatName) => {
     Alert.alert(
       "Report Chat",
       `Report "${chatName}"? This will flag it for moderation.`,
@@ -488,76 +542,90 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
   };
 
   const showChatOptions = (chatId, chatName) => {
-    Alert.alert("Chat Options", null, [
-      { text: "Everyone Met", onPress: () => handleEveryoneMet(chatId) },
-      {
-        text: "Unmatch Duo",
-        onPress: () => handleUnmatchDuo(chatId, chatName),
-        style: "destructive",
-      },
-      {
-        text: "Report",
-        onPress: () => handleReport(chatId, chatName),
-        style: "destructive",
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setSelectedChatId(chatId);
+    setSelectedChatName(chatName);
+    setShowOptionsModal(true);
   };
 
-  const renderItem = ({ item }) => {
-    const unreadCount = item.unreadCount?.[currentUserId] || 0;
-    const isGroup = item.isGroupChat || false;
+  const handleOptionSelect = (option) => {
+    setShowOptionsModal(false);
+    
+    // Small delay to let modal close smoothly
+    setTimeout(() => {
+      switch (option) {
+        case 'everyoneMet':
+          handleEveryoneMet(selectedChatId);
+          break;
+        case 'unmatch':
+          handleUnmatchDuo(selectedChatId, selectedChatName);
+          break;
+        case 'report':
+          handleReportFromList(selectedChatId, selectedChatName);
+          break;
+      }
+    }, 100);
+  };
 
-    return (
-      <List.Item
-        title={item.groupName || "Chat"}
-        description={item.lastMessageText || "No messages yet"}
-        descriptionNumberOfLines={1}
-        left={() =>
-          isGroup ? (
-            <Avatar.Icon size={48} icon="account-group" />
-          ) : (
-            <Avatar.Image
-              size={48}
-              source={{ uri: "https://i.pravatar.cc/150" }}
-            />
-          )
+  useEffect(() => {
+    // ✅ FIXED: React Native Firebase syntax
+    const unsubscribe = firestore()
+      .collection('chats')
+      .where('participants', 'array-contains', currentUserId)
+      .onSnapshot(async (snapshot) => {
+        const chatList = [];
+        for (const docSnap of snapshot.docs) {
+          const chatData = docSnap.data();
+          chatList.push({
+            id: docSnap.id,
+            ...chatData,
+          });
         }
-        right={() => (
-          <View style={styles.chatRight}>
-            <Text variant="bodySmall">
-              {formatTimeStamp(item.lastMessageTime)}
-            </Text>
-            {unreadCount > 0 && (
-              <Badge style={styles.badge}>{unreadCount}</Badge>
-            )}
-            <IconButton
-              icon="dots-vertical"
-              size={20}
-              onPress={() => showChatOptions(item.id, item.groupName || "Chat")}
-            />
-          </View>
-        )}
-        onPress={() => onChatSelect(item)}
-        style={[styles.chatItem, unreadCount > 0 && styles.unreadChatItem]}
-      />
-    );
+
+        chatList.sort((a, b) => {
+          const aTime = a.lastMessageTime?.toMillis() || 0;
+          const bTime = b.lastMessageTime?.toMillis() || 0;
+          return bTime - aTime;
+        });
+
+        setChats(chatList);
+        setLoading(false);
+      });
+
+    return () => unsubscribe();
+  }, [currentUserId]);
+
+  const markAsRead = async (chatId) => {
+    try {
+      // ✅ FIXED: React Native Firebase syntax
+      await firestore()
+        .collection('chats')
+        .doc(chatId)
+        .update({
+          [`unreadCount.${currentUserId}`]: 0,
+        });
+    } catch (error) {
+      console.error("Error marking as read:", error);
+    }
+  };
+
+  const handleChatPress = (chat) => {
+    markAsRead(chat.id);
+    onChatSelect(chat);
   };
 
   if (loading) {
     return (
       <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.colors.background },
+        ]}
       >
-        <Surface style={styles.header} elevation={2}>
-          <Text variant="headlineMedium">💬 Messages</Text>
-          <Button mode="contained" onPress={onRequestsPress} icon="mail">
-            Requests {requestCount > 0 && `(${requestCount})`}
-          </Button>
-        </Surface>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" />
-        </View>
+        <ActivityIndicator size="large" />
+        <Text variant="bodyLarge" style={styles.marginTop}>
+          Loading chats...
+        </Text>
       </View>
     );
   }
@@ -571,25 +639,149 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
           <Icon source="message" size={28} color={theme.colors.primary} />
           <Text variant="headlineMedium">Messages</Text>
         </View>
-        <Button mode="contained" onPress={onRequestsPress} icon="mail">
-          Requests {requestCount > 0 && `(${requestCount})`}
-        </Button>
+        <IconButton
+          icon="email-heart"
+          size={28}
+          onPress={onRequestsPress}
+        />
       </Surface>
+
+      {requestCount > 0 && (
+        <Card style={{ margin: 8 }} onPress={onRequestsPress}>
+          <Card.Content>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Icon source="email-heart" size={24} color={theme.colors.primary} />
+                <Text variant="titleMedium">
+                  {requestCount} New Request{requestCount !== 1 ? "s" : ""}
+                </Text>
+              </View>
+              <Icon source="chevron-right" size={24} />
+            </View>
+          </Card.Content>
+        </Card>
+      )}
 
       {chats.length === 0 ? (
         <EmptyState
-          icon="message"
+          icon="message-text"
           title="No Messages Yet"
-          message="When you match with duos, you'll be able to message them here!"
+          message="When you match with duos, your chats will appear here!"
         />
       ) : (
         <FlatList
           data={chats}
-          renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          ItemSeparatorComponent={() => <Divider />}
+          renderItem={({ item }) => {
+            const unreadCount = item.unreadCount?.[currentUserId] || 0;
+            const isGroup = item.isGroupChat || false;
+
+            return (
+              <List.Item
+                title={item.groupName || "Chat"}
+                description={item.lastMessageText || "No messages yet"}
+                descriptionNumberOfLines={1}
+                left={(props) => 
+                  isGroup ? (
+                    <Avatar.Icon {...props} icon="account-group" />
+                  ) : (
+                    <Avatar.Icon {...props} icon="account" />
+                  )
+                }
+                right={(props) => (
+                  <View style={styles.chatRight}>
+                    <Text variant="bodySmall">
+                      {formatTimeStamp(item.lastMessageTime)}
+                    </Text>
+                    {unreadCount > 0 && (
+                      <Badge style={styles.badge}>{unreadCount}</Badge>
+                    )}
+                    <IconButton
+                      icon="dots-vertical"
+                      size={20}
+                      onPress={() => showChatOptions(item.id, item.groupName || "Chat")}
+                    />
+                  </View>
+                )}
+                onPress={() => handleChatPress(item)}
+                style={[
+                  styles.chatItem,
+                  unreadCount > 0 && styles.unreadChatItem,
+                ]}
+              />
+            );
+          }}
         />
       )}
+
+      {/* Custom Chat Options Modal */}
+      <Portal>
+        <Modal
+          visible={showOptionsModal}
+          onDismiss={() => setShowOptionsModal(false)}
+          contentContainerStyle={[
+            styles.optionsModal,
+            { backgroundColor: theme.colors.surface }
+          ]}
+        >
+          <View style={styles.modalHeader}>
+            <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
+              Chat Options
+            </Text>
+            <IconButton
+              icon="close"
+              size={24}
+              onPress={() => setShowOptionsModal(false)}
+            />
+          </View>
+          
+          <Divider />
+
+          <List.Item
+            title="Everyone Met"
+            description="Celebrate and close this chat"
+            left={(props) => <List.Icon {...props} icon="party-popper" color="#4CAF50" />}
+            onPress={() => handleOptionSelect('everyoneMet')}
+            style={styles.optionItem}
+          />
+          
+          <Divider />
+
+          <List.Item
+            title="Unmatch Duo"
+            description="End this match"
+            left={(props) => <List.Icon {...props} icon="account-remove" color="#FF9800" />}
+            onPress={() => handleOptionSelect('unmatch')}
+            style={styles.optionItem}
+          />
+          
+          <Divider />
+
+          <List.Item
+            title="Report"
+            description="Flag for moderation"
+            left={(props) => <List.Icon {...props} icon="flag" color="#F44336" />}
+            onPress={() => handleOptionSelect('report')}
+            style={styles.optionItem}
+          />
+          
+          <Divider />
+
+          <Button
+            mode="outlined"
+            onPress={() => setShowOptionsModal(false)}
+            style={styles.cancelButton}
+          >
+            Cancel
+          </Button>
+        </Modal>
+      </Portal>
     </View>
   );
 }
@@ -597,83 +789,68 @@ function ChatListScreen({ onChatSelect, onRequestsPress, requestCount }) {
 // Individual Chat Screen Component
 function IndividualChatScreen({ chat, onBack }) {
   const theme = useTheme();
-  const currentUserId = getUserID();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [userProfiles, setUserProfiles] = useState({});
+  const [showMenu, setShowMenu] = useState(false);
+  const currentUserId = getUserID();
 
   useEffect(() => {
-    if (!chat?.id) return;
-
-    const markAsRead = async () => {
-      try {
-        const chatRef = doc(db, "chats", chat.id);
-        await updateDoc(chatRef, {
-          [`unreadCount.${currentUserId}`]: 0,
+    // ✅ FIXED: React Native Firebase syntax
+    const unsubscribe = firestore()
+      .collection('chats')
+      .doc(chat.id)
+      .collection('messages')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot((snapshot) => {
+        const msgs = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            _id: doc.id,
+            text: data.text,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            user: data.user,
+          };
         });
-      } catch (error) {
-        console.error("Error marking as read:", error);
-      }
-    };
-
-    markAsRead();
-
-    const messagesRef = collection(db, "chats", chat.id, "messages");
-    const messagesQuery = query(messagesRef, orderBy("createdAt", "desc"));
-
-    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-      const messagesList = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          _id: doc.id,
-          text: data.text,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          user: {
-            _id: data.user._id,
-            name: data.user.name,
-          },
-        };
+        setMessages(msgs);
       });
-
-      setMessages(messagesList);
-    });
 
     return () => unsubscribe();
-  }, [chat]);
+  }, [chat.id]);
 
   useEffect(() => {
-    const loadOtherUsers = async () => {
-      if (!chat.participants) return;
-
-      const allProfiles = {};
-      for (const userId of chat.participants) {
-        const profile = await getUserProfile(userId);
-        if (profile) {
-          allProfiles[userId] = { id: userId, ...profile };
+    const loadProfiles = async () => {
+      const profiles = {};
+      for (const userId of chat.participants || []) {
+        if (!profiles[userId]) {
+          const profile = await getUserProfile(userId);
+          if (profile) profiles[userId] = profile;
         }
       }
-
-      setUserProfiles(allProfiles);
+      setUserProfiles(profiles);
     };
 
-    loadOtherUsers();
-  }, [chat]);
+    loadProfiles();
+  }, [chat.participants]);
 
   const onSend = useCallback(async () => {
-    if (!chat?.id || !inputText.trim()) return;
+    if (!inputText.trim()) return;
 
     try {
-      const messagesRef = collection(db, "chats", chat.id, "messages");
-      await addDoc(messagesRef, {
-        text: inputText.trim(),
-        createdAt: serverTimestamp(),
-        user: {
-          _id: currentUserId,
-          name: "You",
-        },
-      });
+      // ✅ FIXED: React Native Firebase syntax
+      await firestore()
+        .collection('chats')
+        .doc(chat.id)
+        .collection('messages')
+        .add({
+          text: inputText.trim(),
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          user: {
+            _id: currentUserId,
+            name: "You",
+          },
+        });
 
-      const chatRef = doc(db, "chats", chat.id);
       const unreadUpdate = {};
 
       chat.participants.forEach((participantId) => {
@@ -683,11 +860,14 @@ function IndividualChatScreen({ chat, onBack }) {
         }
       });
 
-      await updateDoc(chatRef, {
-        lastMessageText: inputText.trim(),
-        lastMessageTime: serverTimestamp(),
-        ...unreadUpdate,
-      });
+      await firestore()
+        .collection('chats')
+        .doc(chat.id)
+        .update({
+          lastMessageText: inputText.trim(),
+          lastMessageTime: firestore.FieldValue.serverTimestamp(),
+          ...unreadUpdate,
+        });
 
       setInputText("");
     } catch (error) {
@@ -695,6 +875,64 @@ function IndividualChatScreen({ chat, onBack }) {
       Alert.alert("Error", "Failed to send message");
     }
   }, [chat, currentUserId, inputText]);
+
+  const handleDeleteChat = () => {
+    Alert.alert(
+      "Delete Chat",
+      "Are you sure you want to delete this chat? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const success = await deleteChat(chat.id);
+            if (success) {
+              Alert.alert("Success", "Chat deleted");
+              onBack(); // Go back to chat list
+            } else {
+              Alert.alert("Error", "Failed to delete chat");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReportChat = () => {
+    Alert.alert(
+      "Report Chat",
+      "Are you sure you want to report this chat? This will remove you from the conversation and flag it for review.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Report",
+          style: "destructive",
+          onPress: async () => {
+            const success = await reportChat(chat.id, currentUserId);
+            if (success) {
+              Alert.alert(
+                "Reported",
+                "This chat has been reported and you've been removed."
+              );
+              onBack(); // Go back to chat list
+            } else {
+              Alert.alert("Error", "Failed to report chat");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMenuOption = (option) => {
+    setShowMenu(false);
+    if (option === 'delete') {
+      handleDeleteChat();
+    } else if (option === 'report') {
+      handleReportChat();
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -705,7 +943,28 @@ function IndividualChatScreen({ chat, onBack }) {
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
         <Text variant="titleLarge">{chat.groupName || "Chat"}</Text>
-        <View style={styles.headerSpacer} />
+        <Menu
+          visible={showMenu}
+          onDismiss={() => setShowMenu(false)}
+          anchor={
+            <IconButton
+              icon="dots-vertical"
+              onPress={() => setShowMenu(true)}
+            />
+          }
+        >
+          <Menu.Item
+            onPress={() => handleMenuOption('delete')}
+            title="Delete Chat"
+            leadingIcon="delete"
+          />
+          <Divider />
+          <Menu.Item
+            onPress={() => handleMenuOption('report')}
+            title="Report Chat"
+            leadingIcon="flag"
+          />
+        </Menu>
       </Surface>
 
       <FlatList
@@ -807,15 +1066,14 @@ export default function ChatScreen() {
           return;
         }
 
-        const likesQuery = query(
-          collection(db, "duoLikes"),
-          where("toDuoId", "==", duo.duoId),
-          where("status", "==", "pending")
-        );
-
-        const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
-          setRequestCount(snapshot.docs.length);
-        });
+        // ✅ FIXED: React Native Firebase syntax
+        const unsubscribe = firestore()
+          .collection('duoLikes')
+          .where('toDuoId', '==', duo.duoId)
+          .where('status', '==', 'pending')
+          .onSnapshot((snapshot) => {
+            setRequestCount(snapshot.docs.length);
+          });
 
         return () => unsubscribe();
       } catch (error) {
@@ -908,10 +1166,13 @@ const styles = StyleSheet.create({
   },
   matchedChip: {
     backgroundColor: "#4CAF50",
-    color: "white",
+    alignSelf: "center",
+    marginBottom: 12,
   },
   waitingChip: {
     backgroundColor: "#FF9800",
+    alignSelf: "center",
+    marginBottom: 12,
   },
   actionButtons: {
     flexDirection: "row",
@@ -919,6 +1180,44 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  profileModalContainer: {
+    flex: 1,
+  },
+  closeButton: {
+    position: "absolute",
+    top: 40,
+    right: 16,
+    zIndex: 10,
+  },
+  imageContainer: {
+    position: "relative",
+  },
+  fullImage: {
+    width: "100%",
+    height: 500,
+  },
+  imageNavButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  profileInfoCard: {
+    margin: 16,
+  },
+  profileDescription: {
+    marginTop: 12,
+    lineHeight: 24,
+  },
+  tagsContainer: {
+    marginTop: 16,
+  },
+  tags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
   },
   chatHeader: {
     flexDirection: "row",
@@ -975,5 +1274,26 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+  },
+  optionsModal: {
+    marginHorizontal: 20,
+    marginVertical: 'auto',
+    borderRadius: 12,
+    maxWidth: 400,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  optionItem: {
+    paddingVertical: 8,
+  },
+  cancelButton: {
+    margin: 16,
   },
 });

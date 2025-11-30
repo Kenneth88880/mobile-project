@@ -23,6 +23,7 @@ import {
   Dialog,
   Divider,
   List,
+  Surface,
   useTheme,
 } from "react-native-paper";
 import { CURRENT_USER_ID } from "../services/UserConfig";
@@ -33,19 +34,7 @@ import {
   resetAllDuoData,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
-import { db } from "../services/firebaseConfig";
+import firestore from '@react-native-firebase/firestore';
 import { formatLastActive } from "../utils/locationTracker";
 
 // Pre-defined tags users can choose from
@@ -98,16 +87,37 @@ const AVAILABLE_TAGS = [
   "🐱 Cat Lover",
   "🐾 Pet Lover",
   "👨‍👩‍👧‍👦 Family Oriented",
+  "🎓 Student Life",
   "💼 Career Focused",
-  "🎓 Student",
-  "🧠 Intellectual",
-  "😂 Funny",
+  "🏠 Homeowner",
+  "🌆 City Life",
+  "🏞️ Country Life",
+  "🚗 Road Trips",
+  "🏊 Swimming",
+  "🛹 Skateboarding",
+  "🎿 Snowshoeing",
+  "🏌️ Golf",
+  "🧩 Puzzles",
+  "🎲 Board Games",
+  "🪁 Kite Flying",
+  "⛵ Sailing",
+  "🏄 Surfing",
+  "🤿 Scuba Diving",
+  "🚣 Kayaking",
+  "🎪 Festivals",
+  "🎢 Theme Parks",
+  "🎠 Carnivals",
+  "🌌 Stargazing",
+  "🔭 Astronomy",
+  "🌋 Hiking",
+  "🗻 Mountain Climbing",
+  "🏖️ Sunbathing",
+  "🍹 Beach Bars",
+  "🌊 Ocean Views",
 ];
 
 export default function ProfileScreen({ isDarkMode, toggleTheme }) {
   const theme = useTheme();
-  const [isEditing, setIsEditing] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [profile, setProfile] = useState({
     name: "",
     age: "",
@@ -120,45 +130,38 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
     longitude: null,
     showOnlineStatus: true,
   });
+  const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
+  const [rating, setRating] = useState({ average: "0.0", count: 0 });
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showPartnerSearch, setShowPartnerSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
-  const [rating, setRating] = useState({ average: 0, count: 0 });
-  const [loadingRating, setLoadingRating] = useState(true);
 
   useEffect(() => {
     loadProfile();
-    loadPendingRequests();
     loadRating();
+    loadPendingRequests();
   }, []);
 
   const loadRating = async () => {
-    setLoadingRating(true);
-    try {
-      const ratingData = await getAverageRating(CURRENT_USER_ID);
-      setRating(ratingData);
-    } catch (error) {
-      console.error("Error loading rating:", error);
-    } finally {
-      setLoadingRating(false);
-    }
+    const ratingData = await getAverageRating(CURRENT_USER_ID);
+    setRating(ratingData);
   };
 
   const loadPendingRequests = async () => {
     try {
-      const requestsRef = collection(db, "duoRequests");
-      const q = query(
-        requestsRef,
-        where("toUserId", "==", CURRENT_USER_ID),
-        where("status", "==", "pending")
-      );
-      const querySnapshot = await getDocs(q);
+      // ✅ React Native Firebase syntax
+      const querySnapshot = await firestore()
+        .collection("duoRequests")
+        .where("toUserId", "==", CURRENT_USER_ID)
+        .where("status", "==", "pending")
+        .get();
 
       const requests = [];
       for (const docSnap of querySnapshot.docs) {
@@ -186,12 +189,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
   const loadDuo = async () => {
     try {
-      const duosRef = collection(db, "duos");
-      const q = query(
-        duosRef,
-        where("users", "array-contains", CURRENT_USER_ID)
-      );
-      const querySnapshot = await getDocs(q);
+      // ✅ React Native Firebase syntax
+      const querySnapshot = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .get();
 
       if (!querySnapshot.empty) {
         const duoDoc = querySnapshot.docs[0];
@@ -224,27 +226,70 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
   const loadProfile = async () => {
     try {
-      const userProfile = await getUserProfile(CURRENT_USER_ID);
+      let userProfile = await getUserProfile(CURRENT_USER_ID);
 
-      if (userProfile) {
-        const cleanedProfile = {
-          name: userProfile.name || "",
-          age: userProfile.age || "",
-          description: userProfile.description || "",
-          photos: Array.isArray(userProfile.photos) ? userProfile.photos : [],
-          tags: Array.isArray(userProfile.tags) ? userProfile.tags : [],
-          duoPartnerId: null,
-          city: userProfile.city || "",
-          latitude: userProfile.latitude || null,
-          longitude: userProfile.longitude || null,
-          showOnlineStatus: userProfile.showOnlineStatus !== false,
+      // ✨ NEW: Auto-create empty profile for new users!
+      if (!userProfile) {
+        console.log("No profile found - creating empty profile for new user");
+        
+        const emptyProfile = {
+          name: "",
+          age: "",
+          description: "",
+          photos: [],
+          tags: [],
+          city: "",
+          latitude: null,
+          longitude: null,
+          showOnlineStatus: true,
         };
-
-        setProfile(cleanedProfile);
-        await loadDuo();
+        
+        // Save to Firestore
+        await saveUserProfile(CURRENT_USER_ID, emptyProfile);
+        
+        // Set in state
+        setProfile(emptyProfile);
+        
+        // Auto-switch to edit mode so user can fill it in
+        setIsEditing(true);
+        return;
       }
+
+      // Profile exists - load it normally
+      const cleanedProfile = {
+        name: userProfile.name || "",
+        age: userProfile.age || "",
+        description: userProfile.description || "",
+        photos: Array.isArray(userProfile.photos) ? userProfile.photos : [],
+        tags: Array.isArray(userProfile.tags) ? userProfile.tags : [],
+        duoPartnerId: null,
+        city: userProfile.city || "",
+        latitude: userProfile.latitude || null,
+        longitude: userProfile.longitude || null,
+        showOnlineStatus: userProfile.showOnlineStatus !== false,
+      };
+
+      setProfile(cleanedProfile);
+      await loadDuo();
     } catch (error) {
       console.error("Error loading profile:", error);
+      
+      // Even if error, provide empty profile so app doesn't crash
+      setProfile({
+        name: "",
+        age: "",
+        description: "",
+        photos: [],
+        tags: [],
+        duoPartnerId: null,
+        city: "",
+        latitude: null,
+        longitude: null,
+        showOnlineStatus: true,
+      });
+      
+      // Auto-switch to edit mode
+      setIsEditing(true);
     }
   };
 
@@ -283,8 +328,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
     setSearching(true);
 
     try {
-      const profilesRef = collection(db, "profiles");
-      const querySnapshot = await getDocs(profilesRef);
+      // ✅ React Native Firebase syntax
+      const querySnapshot = await firestore()
+        .collection("profiles")
+        .get();
 
       const searchLower = searchText.trim().toLowerCase();
       const results = [];
@@ -358,13 +405,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           text: "Send Request",
           onPress: async () => {
             try {
-              const requestsRef = collection(db, "duoRequests");
-              const existingQuery = query(
-                requestsRef,
-                where("fromUserId", "==", CURRENT_USER_ID),
-                where("toUserId", "==", partner.id)
-              );
-              const existingSnapshot = await getDocs(existingQuery);
+              // ✅ React Native Firebase syntax - check existing
+              const existingSnapshot = await firestore()
+                .collection("duoRequests")
+                .where("fromUserId", "==", CURRENT_USER_ID)
+                .where("toUserId", "==", partner.id)
+                .get();
 
               if (!existingSnapshot.empty) {
                 Alert.alert(
@@ -374,12 +420,15 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
                 return;
               }
 
-              await addDoc(collection(db, "duoRequests"), {
-                fromUserId: CURRENT_USER_ID,
-                toUserId: partner.id,
-                status: "pending",
-                createdAt: serverTimestamp(),
-              });
+              // ✅ React Native Firebase syntax - add document
+              await firestore()
+                .collection("duoRequests")
+                .add({
+                  fromUserId: CURRENT_USER_ID,
+                  toUserId: partner.id,
+                  status: "pending",
+                  createdAt: firestore.FieldValue.serverTimestamp(),
+                });
 
               setShowPartnerSearch(false);
               setSearchQuery("");
@@ -409,28 +458,38 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           text: "Accept",
           onPress: async () => {
             try {
-              await updateDoc(doc(db, "duoRequests", request.id), {
-                status: "accepted",
-                acceptedAt: serverTimestamp(),
-              });
+              // ✅ React Native Firebase syntax - update document
+              await firestore()
+                .collection("duoRequests")
+                .doc(request.id)
+                .update({
+                  status: "accepted",
+                  acceptedAt: firestore.FieldValue.serverTimestamp(),
+                });
 
-              const duosRef = collection(db, "duos");
-              const existingDuoQuery = query(
-                duosRef,
-                where("users", "array-contains", CURRENT_USER_ID)
-              );
-              const existingDuoSnapshot = await getDocs(existingDuoQuery);
+              // Check if duo already exists
+              const existingDuoSnapshot = await firestore()
+                .collection("duos")
+                .where("users", "array-contains", CURRENT_USER_ID)
+                .get();
 
               if (!existingDuoSnapshot.empty) {
+                // Update existing duo
                 const duoDoc = existingDuoSnapshot.docs[0];
-                await updateDoc(doc(db, "duos", duoDoc.id), {
-                  users: [CURRENT_USER_ID, request.fromUserId],
-                });
+                await firestore()
+                  .collection("duos")
+                  .doc(duoDoc.id)
+                  .update({
+                    users: [CURRENT_USER_ID, request.fromUserId],
+                  });
               } else {
-                await addDoc(collection(db, "duos"), {
-                  users: [CURRENT_USER_ID, request.fromUserId],
-                  createdAt: serverTimestamp(),
-                });
+                // Create new duo
+                await firestore()
+                  .collection("duos")
+                  .add({
+                    users: [CURRENT_USER_ID, request.fromUserId],
+                    createdAt: firestore.FieldValue.serverTimestamp(),
+                  });
               }
 
               await loadProfile();
@@ -462,7 +521,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, "duoRequests", request.id));
+              // ✅ React Native Firebase syntax - delete document
+              await firestore()
+                .collection("duoRequests")
+                .doc(request.id)
+                .delete();
+                
               await loadPendingRequests();
               Alert.alert(
                 "Request Declined",
@@ -489,16 +553,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           style: "destructive",
           onPress: async () => {
             try {
-              const duosRef = collection(db, "duos");
-              const q = query(
-                duosRef,
-                where("users", "array-contains", CURRENT_USER_ID)
-              );
-              const querySnapshot = await getDocs(q);
+              // ✅ React Native Firebase syntax
+              const querySnapshot = await firestore()
+                .collection("duos")
+                .where("users", "array-contains", CURRENT_USER_ID)
+                .get();
 
               if (!querySnapshot.empty) {
                 const duoDoc = querySnapshot.docs[0];
-                await deleteDoc(doc(db, "duos", duoDoc.id));
+                await firestore()
+                  .collection("duos")
+                  .doc(duoDoc.id)
+                  .delete();
               }
 
               setProfile({ ...profile, duoPartnerId: null });
@@ -697,6 +763,257 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
     );
   }, [showTagPicker, profile.tags, theme]);
 
+  // Partner Search Modal
+  const PartnerSearchModal = () => (
+    <Modal
+      visible={showPartnerSearch}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => {
+        setShowPartnerSearch(false);
+        setSearchQuery("");
+        setSearchResults([]);
+      }}
+    >
+      <View
+        style={[
+          styles.modalContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <View
+          style={[
+            styles.modalHeader,
+            { backgroundColor: theme.colors.primary },
+          ]}
+        >
+          <Text
+            variant="headlineMedium"
+            style={{ color: theme.colors.onPrimary }}
+          >
+            Find Duo Partner
+          </Text>
+        </View>
+
+        <View style={styles.modalContent}>
+          <TextInput
+            label="Search by name"
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              debouncedSearch(text);
+            }}
+            mode="outlined"
+            style={styles.searchInput}
+            left={<TextInput.Icon icon="magnify" />}
+            right={
+              searchQuery ? (
+                <TextInput.Icon
+                  icon="close"
+                  onPress={() => {
+                    setSearchQuery("");
+                    setSearchResults([]);
+                  }}
+                />
+              ) : null
+            }
+          />
+
+          {searching && <ActivityIndicator style={{ marginTop: 20 }} />}
+
+          {!searching && searchResults.length === 0 && searchQuery.length >= 2 && (
+            <View style={styles.emptyState}>
+              <Text variant="bodyLarge">No users found</Text>
+            </View>
+          )}
+
+          {!searching && searchQuery.length < 2 && (
+            <View style={styles.emptyState}>
+              <Text variant="bodyLarge">
+                Type at least 2 characters to search
+              </Text>
+            </View>
+          )}
+
+          <FlatList
+            data={searchResults}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Card style={styles.searchResultCard}>
+                <Card.Content>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {item.photos && item.photos.length > 0 ? (
+                      <Avatar.Image size={50} source={{ uri: item.photos[0] }} />
+                    ) : (
+                      <Avatar.Icon size={50} icon="account" />
+                    )}
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text variant="titleMedium">
+                        {item.name}, {item.age}
+                      </Text>
+                      {item.description && (
+                        <Text
+                          variant="bodySmall"
+                          numberOfLines={1}
+                          style={{ color: theme.colors.onSurfaceVariant }}
+                        >
+                          {item.description}
+                        </Text>
+                      )}
+                    </View>
+                    <Button
+                      mode="contained"
+                      onPress={() => handleSendDuoRequest(item)}
+                      compact
+                    >
+                      Request
+                    </Button>
+                  </View>
+                </Card.Content>
+              </Card>
+            )}
+          />
+        </View>
+
+        <View style={styles.modalFooter}>
+          <Button
+            mode="outlined"
+            onPress={() => {
+              setShowPartnerSearch(false);
+              setSearchQuery("");
+              setSearchResults([]);
+            }}
+            style={styles.fullWidthButton}
+          >
+            Close
+          </Button>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Pending Requests Modal
+  const PendingRequestsModal = () => (
+    <Modal
+      visible={showPendingRequests}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setShowPendingRequests(false)}
+    >
+      <View
+        style={[
+          styles.modalContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <View
+          style={[
+            styles.modalHeader,
+            { backgroundColor: theme.colors.primary },
+          ]}
+        >
+          <Text
+            variant="headlineMedium"
+            style={{ color: theme.colors.onPrimary }}
+          >
+            Duo Requests
+          </Text>
+          <Text
+            variant="bodyMedium"
+            style={{ color: theme.colors.onPrimary, opacity: 0.9 }}
+          >
+            {pendingRequests.length} pending request
+            {pendingRequests.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {pendingRequests.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text variant="bodyLarge">No pending requests</Text>
+            </View>
+          ) : (
+            pendingRequests.map((request) => (
+              <Card key={request.id} style={styles.requestCard}>
+                <Card.Content>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {request.requesterProfile.photos &&
+                    request.requesterProfile.photos.length > 0 ? (
+                      <Avatar.Image
+                        size={60}
+                        source={{ uri: request.requesterProfile.photos[0] }}
+                      />
+                    ) : (
+                      <Avatar.Icon size={60} icon="account" />
+                    )}
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text variant="titleMedium">
+                        {request.requesterProfile.name},{" "}
+                        {request.requesterProfile.age}
+                      </Text>
+                      {request.requesterProfile.description && (
+                        <Text
+                          variant="bodySmall"
+                          numberOfLines={2}
+                          style={{ color: theme.colors.onSurfaceVariant }}
+                        >
+                          {request.requesterProfile.description}
+                        </Text>
+                      )}
+                      {request.requesterProfile.tags &&
+                        request.requesterProfile.tags.length > 0 && (
+                          <View style={styles.tagsDisplay}>
+                            {request.requesterProfile.tags
+                              .slice(0, 3)
+                              .map((tag, index) => (
+                                <Chip key={index} compact style={{ marginRight: 4 }}>
+                                  {tag}
+                                </Chip>
+                              ))}
+                          </View>
+                        )}
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "flex-end",
+                      marginTop: 12,
+                      gap: 8,
+                    }}
+                  >
+                    <Button
+                      mode="outlined"
+                      onPress={() => handleDeclineRequest(request)}
+                    >
+                      Decline
+                    </Button>
+                    <Button
+                      mode="contained"
+                      onPress={() => handleAcceptRequest(request)}
+                    >
+                      Accept
+                    </Button>
+                  </View>
+                </Card.Content>
+              </Card>
+            ))
+          )}
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <Button
+            mode="outlined"
+            onPress={() => setShowPendingRequests(false)}
+            style={styles.fullWidthButton}
+          >
+            Close
+          </Button>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (!isEditing) {
     return (
       <ScrollView
@@ -835,6 +1152,15 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           <Card.Title
             title="Your Duo Partner"
             left={(props) => <IconButton icon="account-multiple" {...props} />}
+            right={(props) =>
+              pendingRequests.length > 0 ? (
+                <IconButton
+                  {...props}
+                  icon="bell"
+                  onPress={() => setShowPendingRequests(true)}
+                />
+              ) : null
+            }
           />
           <Card.Content>
             {duoPartnerProfile ? (
@@ -877,11 +1203,41 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
                       ))}
                     </View>
                   )}
+                <Button
+                  mode="outlined"
+                  icon="account-remove"
+                  onPress={handleRemovePartner}
+                  style={{ marginTop: 12 }}
+                  buttonColor={theme.colors.errorContainer}
+                >
+                  Remove Partner
+                </Button>
               </>
             ) : (
-              <Text variant="bodyLarge">
-                No duo partner yet. Tap Edit to find one!
-              </Text>
+              <>
+                <Text variant="bodyLarge">
+                  No duo partner yet. Find someone to team up with!
+                </Text>
+                <Button
+                  mode="contained"
+                  icon="account-search"
+                  onPress={() => setShowPartnerSearch(true)}
+                  style={{ marginTop: 12 }}
+                >
+                  Find Duo Partner
+                </Button>
+                {pendingRequests.length > 0 && (
+                  <Button
+                    mode="outlined"
+                    icon="bell"
+                    onPress={() => setShowPendingRequests(true)}
+                    style={{ marginTop: 8 }}
+                  >
+                    View {pendingRequests.length} Pending Request
+                    {pendingRequests.length !== 1 ? "s" : ""}
+                  </Button>
+                )}
+              </>
             )}
           </Card.Content>
         </Card>
@@ -909,15 +1265,19 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
         <SettingsDialog />
         {TagPickerModal}
+        <PartnerSearchModal />
+        <PendingRequestsModal />
       </ScrollView>
     );
   }
 
-  // Edit Mode - I'll continue in next artifact
+  // Edit Mode
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 80 }}
+      >
       <View style={styles.header}>
         <Text variant="headlineLarge">Edit Profile</Text>
         <View style={styles.headerButtons}>
@@ -1014,9 +1374,84 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
         </Card.Content>
       </Card>
 
+      {/* Duo Partner Section in Edit Mode */}
+      <Card style={styles.card}>
+        <Card.Title
+          title="Your Duo Partner"
+          left={(props) => <IconButton icon="account-multiple" {...props} />}
+        />
+        <Card.Content>
+          {duoPartnerProfile ? (
+            <>
+              <Text variant="bodyLarge">
+                Current partner: {duoPartnerProfile.name}
+              </Text>
+              <Button
+                mode="outlined"
+                icon="account-remove"
+                onPress={handleRemovePartner}
+                style={{ marginTop: 12 }}
+                buttonColor={theme.colors.errorContainer}
+              >
+                Remove Partner
+              </Button>
+            </>
+          ) : (
+            <>
+              <Text variant="bodyLarge">
+                No duo partner yet. Find someone to team up with!
+              </Text>
+              <Button
+                mode="contained"
+                icon="account-search"
+                onPress={() => setShowPartnerSearch(true)}
+                style={{ marginTop: 12 }}
+              >
+                Find Duo Partner
+              </Button>
+              {pendingRequests.length > 0 && (
+                <Button
+                  mode="outlined"
+                  icon="bell"
+                  onPress={() => setShowPendingRequests(true)}
+                  style={{ marginTop: 8 }}
+                >
+                  View {pendingRequests.length} Pending Request
+                  {pendingRequests.length !== 1 ? "s" : ""}
+                </Button>
+              )}
+            </>
+          )}
+        </Card.Content>
+      </Card>
+
       <SettingsDialog />
       {TagPickerModal}
+      <PartnerSearchModal />
+      <PendingRequestsModal />
     </ScrollView>
+
+    {/* Fixed Bottom Buttons - Always Visible */}
+    <Surface style={styles.bottomButtons} elevation={4}>
+      <Button
+        mode="outlined"
+        onPress={() => {
+          loadProfile();
+          setIsEditing(false);
+        }}
+        style={styles.bottomButton}
+      >
+        Cancel
+      </Button>
+      <Button
+        mode="contained"
+        onPress={handleSave}
+        style={styles.bottomButton}
+      >
+        Save
+      </Button>
+    </Surface>
+  </View>
   );
 }
 
@@ -1115,5 +1550,35 @@ const styles = StyleSheet.create({
   tagChip: {
     marginRight: 4,
     marginBottom: 4,
+  },
+  searchInput: {
+    marginBottom: 16,
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchResultCard: {
+    marginBottom: 8,
+  },
+  requestCard: {
+    marginBottom: 12,
+  },
+  bottomButtons: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  bottomButton: {
+    flex: 1,
+    marginHorizontal: 8,
   },
 });

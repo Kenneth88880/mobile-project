@@ -76,19 +76,22 @@ export default function DatingScreen() {
       setCurrentDuo(duo);
 
       const fetchedPairs = await getAllDuoPairs(currentUserId);
-      setDuoPairs(fetchedPairs);
+      setDuoPairs(fetchedPairs || []); // ✅ Safety: default to empty array
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);
-      Alert.alert("Error", "Failed to load duo pairs.");
+      // Don't alert on initial load - just show empty state
+      setDuoPairs([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleProfileClick = async (profile) => {
+    if (!profile) return; // ✅ Safety check
+    
     try {
-      const fullProfile = await getUserProfile(profile.userId);
+      const fullProfile = await getUserProfile(profile.userId || profile.id);
       if (fullProfile) {
         setSelectedProfile({
           ...profile,
@@ -115,6 +118,7 @@ export default function DatingScreen() {
   };
 
   const handleRateProfile = (profile) => {
+    if (!profile) return; // ✅ Safety check
     setRatingProfile(profile);
     setShowRatingModal(true);
   };
@@ -124,7 +128,7 @@ export default function DatingScreen() {
       await saveRating(currentUserId, ratingProfile.userId, rating);
       Alert.alert(
         "Success",
-        `You rated ${ratingProfile.name} ${rating} stars!`
+        `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
       );
       setShowRatingModal(false);
       setRatingProfile(null);
@@ -182,21 +186,21 @@ export default function DatingScreen() {
       }),
     ]).start(async () => {
       if (action === "like") {
-        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.duoId);
+        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
         await saveDuoLike(
           currentDuo.duoId,
-          currentDuoPair.duoId,
+          currentDuoPair.id,
           currentUserId,
           currentDuo.partnerId,
-          currentDuoPair.user1.userId,
-          currentDuoPair.user2.userId
+          currentDuoPair.users?.[0],
+          currentDuoPair.users?.[1]
         );
       } else {
-        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.duoId, "pass");
+        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
       }
 
       setDuoPairs((prevPairs) =>
-        prevPairs.filter((pair) => pair.duoId !== currentDuoPair.duoId)
+        prevPairs.filter((pair) => pair.id !== currentDuoPair.id)
       );
 
       pan.setValue({ x: 0, y: 0 });
@@ -220,15 +224,17 @@ export default function DatingScreen() {
     );
   }
 
-  if (currentPairIndex >= duoPairs.length) {
+  if (!duoPairs || duoPairs.length === 0 || currentPairIndex >= duoPairs.length) {
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <EmptyState
           icon="heart-multiple"
-          title="No More Duo Pairs"
-          message="Duo pairs are two people teaming up for double dating."
+          title="No Duo Pairs Available"
+          message={!currentDuo 
+            ? "You need a duo partner first! Go to Profile → Edit to find a partner."
+            : "No more duo pairs to show. Check back later or invite friends to join!"}
           actionLabel="Reload"
           onAction={loadData}
         />
@@ -237,8 +243,20 @@ export default function DatingScreen() {
   }
 
   const currentDuoPair = duoPairs[currentPairIndex];
-  const topProfile = currentDuoPair?.user1;
-  const bottomProfile = currentDuoPair?.user2;
+  
+  // ✅ SAFETY: Get profiles safely with fallbacks
+  const topProfile = currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
+  const bottomProfile = currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
+
+  // ✅ SAFETY: Get photo URLs safely
+  const topPhoto = topProfile?.photos?.[0] || 'https://via.placeholder.com/400x300?text=No+Photo';
+  const bottomPhoto = bottomProfile?.photos?.[0] || 'https://via.placeholder.com/400x300?text=No+Photo';
+
+  // ✅ SAFETY: Get names and ages safely
+  const topName = topProfile?.name || "Unknown";
+  const topAge = topProfile?.age || "?";
+  const bottomName = bottomProfile?.name || "Unknown";
+  const bottomAge = bottomProfile?.age || "?";
 
   // Rating Modal
   if (showRatingModal && ratingProfile) {
@@ -246,7 +264,7 @@ export default function DatingScreen() {
       <View style={styles.modalOverlay}>
         <Card style={styles.ratingCard}>
           <Card.Title
-            title={`Rate ${ratingProfile.name}`}
+            title={`Rate ${ratingProfile.name || 'User'}`}
             subtitle="How would you rate this profile?"
           />
           <Card.Content>
@@ -278,61 +296,76 @@ export default function DatingScreen() {
 
   // Single Profile View
   if (selectedProfile) {
+    // ✅ SAFETY: Safe access to profile data
+    const profilePhotos = selectedProfile?.photos || [];
+    const profileName = selectedProfile?.name || "Unknown";
+    const profileAge = selectedProfile?.age || "?";
+    const profileDescription = selectedProfile?.description || "No description available";
+    const profileTags = selectedProfile?.tags || [];
+    const profileCity = selectedProfile?.city;
+    const profileLastActive = selectedProfile?.lastActive;
+    const profileIsOnline = selectedProfile?.isOnline;
+    const profileShowOnlineStatus = selectedProfile?.showOnlineStatus !== false;
+
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.scrollContent}
       >
         <Button
-          mode="text"
+          mode="outlined"
           icon="arrow-left"
           onPress={handleBackToDouble}
           style={styles.backButton}
         >
-          Back to Double Dating
+          Back to Duo
         </Button>
 
-        <Card style={styles.imageCard}>
-          <Card.Cover
-            source={{ uri: selectedProfile.photos[currentImageIndex] }}
-            style={styles.cardCover}
-          />
-
-          {selectedProfile.photos.length > 1 && (
-            <View style={styles.imageNavigation}>
-              <IconButton icon="chevron-left" onPress={handlePrevImage} />
-              <View style={styles.dotsContainer}>
-                {selectedProfile.photos.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.dot,
-                      index === currentImageIndex && styles.activeDot,
-                    ]}
-                  />
-                ))}
+        {profilePhotos.length > 0 ? (
+          <Card style={styles.imageCard}>
+            <Card.Cover
+              source={{ uri: profilePhotos[currentImageIndex] }}
+              style={styles.cardCover}
+            />
+            {profilePhotos.length > 1 && (
+              <View style={styles.imageNavigation}>
+                <IconButton icon="chevron-left" onPress={handlePrevImage} />
+                <View style={styles.dotsContainer}>
+                  {profilePhotos.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.dot,
+                        index === currentImageIndex && styles.activeDot,
+                      ]}
+                    />
+                  ))}
+                </View>
+                <IconButton icon="chevron-right" onPress={handleNextImage} />
               </View>
-              <IconButton icon="chevron-right" onPress={handleNextImage} />
-            </View>
-          )}
-        </Card>
+            )}
+          </Card>
+        ) : (
+          <Card style={styles.imageCard}>
+            <Card.Cover
+              source={{ uri: 'https://via.placeholder.com/400x300?text=No+Photo' }}
+              style={styles.cardCover}
+            />
+          </Card>
+        )}
 
         <ProfileInfoCard
-          name={selectedProfile.name}
-          age={selectedProfile.age}
-          description={selectedProfile.description}
-          tags={selectedProfile.tags}
-          city={selectedProfile.city}
+          name={profileName}
+          age={profileAge}
+          description={profileDescription}
+          tags={profileTags}
+          city={profileCity}
           lastActive={
-            selectedProfile.showOnlineStatus !== false &&
-            selectedProfile.lastActive
-              ? formatLastActive(
-                  selectedProfile.lastActive,
-                  selectedProfile.isOnline
-                )
+            profileShowOnlineStatus && profileLastActive
+              ? formatLastActive(profileLastActive, profileIsOnline)
               : null
           }
-          showOnlineStatus={selectedProfile.showOnlineStatus !== false}
+          showOnlineStatus={profileShowOnlineStatus}
         />
 
         <Button
@@ -341,68 +374,62 @@ export default function DatingScreen() {
           onPress={() => handleRateProfile(selectedProfile)}
           style={styles.rateButton}
         >
-          Rate this profile
+          Rate Profile
         </Button>
       </ScrollView>
     );
   }
 
-  // Double Dating View
-  const cardTransform = {
-    transform: [
-      { translateX: pan.x },
-      { translateY: pan.y },
-      {
-        rotate: rotate.interpolate({
-          inputRange: [-20, 0, 20],
-          outputRange: ["-20deg", "0deg", "20deg"],
-        }),
-      },
-      { scale: scale },
-    ],
-    opacity: opacity,
-  };
-
+  // Main Duo Card View
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Surface style={styles.header} elevation={2}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <IconButton icon="heart-multiple" size={24} style={{ margin: 0 }} />
-          <Text variant="titleLarge">Double Dating</Text>
-        </View>
-        <IconButton
-          icon="refresh"
-          size={24}
-          onPress={loadData}
-          style={{ margin: 0 }}
-        />
-      </Surface>
+      <View style={styles.header}>
+        <Text variant="headlineMedium">Double Dating</Text>
+      </View>
 
       {currentDuo ? (
         <Chip icon="account-multiple" style={styles.duoChip}>
-          Your duo: You + {currentDuo.partnerName}
+          You & {currentDuo?.partnerProfile?.name || 'Partner'}
         </Chip>
       ) : (
         <Chip icon="alert" style={styles.warningChip}>
-          Find a duo partner in Profile to like duos!
+          No Duo Partner - Go to Profile
         </Chip>
       )}
 
-      <Animated.View style={[styles.cardsContainer, cardTransform]}>
-        <Card style={styles.duoCard} elevation={0}>
+      <Animated.View
+        style={[
+          styles.cardsContainer,
+          {
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y },
+              {
+                rotate: rotate.interpolate({
+                  inputRange: [-20, 20],
+                  outputRange: ["-20deg", "20deg"],
+                }),
+              },
+              { scale },
+            ],
+            opacity,
+          },
+        ]}
+      >
+        <Card style={styles.duoCard}>
           <Card
             style={styles.halfCard}
             onPress={() => handleProfileClick(topProfile)}
           >
-            <Card.Cover source={{ uri: topProfile.photos[0] }} />
+            <Card.Cover source={{ uri: topPhoto }} />
             <Card.Content style={styles.cardOverlay}>
               <Text variant="titleLarge" style={styles.overlayText}>
-                {topProfile.name}, {topProfile.age}
+                {topName}, {topAge}
               </Text>
-              {topProfile.showOnlineStatus !== false &&
-                topProfile.lastActive && (
+              {topProfile?.showOnlineStatus !== false &&
+                topProfile?.lastActive && (
                   <Text variant="bodySmall" style={styles.overlayText}>
                     {formatLastActive(
                       topProfile.lastActive,
@@ -411,8 +438,8 @@ export default function DatingScreen() {
                   </Text>
                 )}
               {currentUserLocation &&
-              topProfile.latitude &&
-              topProfile.longitude ? (
+              topProfile?.latitude &&
+              topProfile?.longitude ? (
                 <Text variant="bodySmall" style={styles.overlayText}>
                   {getDistanceToProfile(currentUserLocation, {
                     latitude: topProfile.latitude,
@@ -421,7 +448,7 @@ export default function DatingScreen() {
                   })}
                 </Text>
               ) : (
-                topProfile.city && (
+                topProfile?.city && (
                   <View
                     style={{
                       flexDirection: "row",
@@ -448,13 +475,13 @@ export default function DatingScreen() {
             style={styles.halfCard}
             onPress={() => handleProfileClick(bottomProfile)}
           >
-            <Card.Cover source={{ uri: bottomProfile.photos[0] }} />
+            <Card.Cover source={{ uri: bottomPhoto }} />
             <Card.Content style={styles.cardOverlay}>
               <Text variant="titleLarge" style={styles.overlayText}>
-                {bottomProfile.name}, {bottomProfile.age}
+                {bottomName}, {bottomAge}
               </Text>
-              {bottomProfile.showOnlineStatus !== false &&
-                bottomProfile.lastActive && (
+              {bottomProfile?.showOnlineStatus !== false &&
+                bottomProfile?.lastActive && (
                   <Text variant="bodySmall" style={styles.overlayText}>
                     {formatLastActive(
                       bottomProfile.lastActive,
@@ -463,8 +490,8 @@ export default function DatingScreen() {
                   </Text>
                 )}
               {currentUserLocation &&
-              bottomProfile.latitude &&
-              bottomProfile.longitude ? (
+              bottomProfile?.latitude &&
+              bottomProfile?.longitude ? (
                 <Text variant="bodySmall" style={styles.overlayText}>
                   {getDistanceToProfile(currentUserLocation, {
                     latitude: bottomProfile.latitude,
@@ -473,7 +500,7 @@ export default function DatingScreen() {
                   })}
                 </Text>
               ) : (
-                bottomProfile.city && (
+                bottomProfile?.city && (
                   <View
                     style={{
                       flexDirection: "row",
