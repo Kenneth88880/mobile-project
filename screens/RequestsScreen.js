@@ -331,6 +331,12 @@ export default function RequestsScreen() {
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
+        <Surface style={styles.header} elevation={2}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Like Requests</Text>
+          </View>
+        </Surface>
         <EmptyState
           icon="account-multiple"
           title="No Duo Partner"
@@ -343,16 +349,20 @@ export default function RequestsScreen() {
   if (loading) {
     return (
       <View
-        style={[
-          styles.container,
-          styles.centerContent,
-          { backgroundColor: theme.colors.background },
-        ]}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <ActivityIndicator size="large" />
-        <Text variant="bodyLarge" style={styles.loadingText}>
-          Loading requests...
-        </Text>
+        <Surface style={styles.header} elevation={2}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon source="heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Like Requests</Text>
+          </View>
+        </Surface>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" />
+          <Text variant="bodyLarge" style={styles.loadingText}>
+            Loading requests...
+          </Text>
+        </View>
       </View>
     );
   }
@@ -367,8 +377,8 @@ export default function RequestsScreen() {
       >
         <Surface style={styles.header} elevation={2}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="email-heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Duo Requests</Text>
+            <Icon source="heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Like Requests</Text>
           </View>
           <Chip icon="account-multiple">
             Your duo with {currentDuo.partnerName}
@@ -393,8 +403,8 @@ export default function RequestsScreen() {
       <Surface style={styles.header} elevation={2}>
         <View style={styles.headerContent}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="email-heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Duo Requests</Text>
+            <Icon source="heart" size={28} color={theme.colors.primary} />
+            <Text variant="headlineMedium">Like Requests</Text>
           </View>
           <Chip icon="account-multiple" style={styles.duoChip}>
             Your duo with {currentDuo.partnerName}
