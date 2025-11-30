@@ -36,10 +36,7 @@ import {
   deleteDoc,
   getDocs,
 } from "firebase/firestore";
-import {
-  getUserProfile,
-  saveRating,
-} from "../services/profileService";
+import { getUserProfile, saveRating } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
@@ -281,7 +278,7 @@ function ChatListScreen({ onChatSelect }) {
         onPress={() => onChatSelect(item)}
         style={[
           styles.chatItem,
-          unreadCount > 0 && { backgroundColor: `${theme.colors.primary}15` }
+          unreadCount > 0 && { backgroundColor: `${theme.colors.primary}15` },
         ]}
       />
     );

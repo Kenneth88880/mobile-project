@@ -1,6 +1,6 @@
-import { useStripe } from '@stripe/stripe-react-native';
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useStripe } from "@stripe/stripe-react-native";
+import { useState, useEffect } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 //import { Screen } from './Screen';
 import { Button } from "react-native-paper";
 
@@ -10,17 +10,20 @@ export default function CheckoutScreen() {
 
   const fetchPaymentSheetParams = async () => {
     try {
-      const response = await fetch(`${'https://api.stripe.com'}/payment-sheet`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
+      const response = await fetch(
+        `${"https://api.stripe.com"}/payment-sheet`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
       if (!response.ok) {
-        throw new Error('Failed to fetch payment sheet params');
+        throw new Error("Failed to fetch payment sheet params");
       }
-      
+
       const { paymentIntent, ephemeralKey, customer } = await response.json();
 
       return {
@@ -29,18 +32,15 @@ export default function CheckoutScreen() {
         customer,
       };
     } catch (error) {
-      console.error('Error fetching payment params:', error);
-      Alert.alert('Error', 'Failed to initialize payment');
+      console.error("Error fetching payment params:", error);
+      Alert.alert("Error", "Failed to initialize payment");
       throw error;
     }
   };
 
   const initializePaymentSheet = async () => {
-    const {
-      paymentIntent,
-      ephemeralKey,
-      customer,
-    } = await fetchPaymentSheetParams();
+    const { paymentIntent, ephemeralKey, customer } =
+      await fetchPaymentSheetParams();
 
     const { error } = await initPaymentSheet({
       merchantDisplayName: "Doubly",
@@ -51,8 +51,8 @@ export default function CheckoutScreen() {
       //methods that complete payment after a delay, like SEPA Debit and Sofort.
       allowsDelayedPaymentMethods: true,
       defaultBillingDetails: {
-        name: 'Jane Doe',
-      }
+        name: "Jane Doe",
+      },
     });
     if (!error) {
       setLoading(true);
@@ -65,7 +65,7 @@ export default function CheckoutScreen() {
     if (error) {
       Alert.alert(`Error code: ${error.code}`, error.message);
     } else {
-      Alert.alert('Success', 'Your order is confirmed!');
+      Alert.alert("Success", "Your order is confirmed!");
     }
   };
 
@@ -74,38 +74,38 @@ export default function CheckoutScreen() {
   }, []);
 
   return (
-  <View style={styles.container}>
-    <Button
-      mode="contained" // react-native-paper uses 'mode' not 'variant'
-      disabled={!loading}  // Disabled until payment sheet is ready
-      onPress={openPaymentSheet}
-      loading={!loading} 
-    >
-      Checkout
-    </Button>
-  </View>
-);
+    <View style={styles.container}>
+      <Button
+        mode="contained" // react-native-paper uses 'mode' not 'variant'
+        disabled={!loading} // Disabled until payment sheet is ready
+        onPress={openPaymentSheet}
+        loading={!loading}
+      >
+        Checkout
+      </Button>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingHorizontal: 40,
     paddingVertical: 15,
     borderRadius: 10,
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: "#ccc",
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

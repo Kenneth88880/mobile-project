@@ -246,7 +246,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
       // ✨ NEW: Auto-create empty profile for new users!
       if (!userProfile) {
         console.log("No profile found - creating empty profile for new user");
-        
+
         const emptyProfile = {
           name: "",
           age: "",
@@ -258,13 +258,13 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
           longitude: null,
           showOnlineStatus: true,
         };
-        
+
         // Save to Firestore
         await saveUserProfile(CURRENT_USER_ID, emptyProfile);
-        
+
         // Set in state
         setProfile(emptyProfile);
-        
+
         // Auto-switch to edit mode so user can fill it in
         setIsEditing(true);
         return;
@@ -288,7 +288,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
       await loadDuo();
     } catch (error) {
       console.error("Error loading profile:", error);
-      
+
       // Even if error, provide empty profile so app doesn't crash
       setProfile({
         name: "",
@@ -302,7 +302,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
         longitude: null,
         showOnlineStatus: true,
       });
-      
+
       // Auto-switch to edit mode
       setIsEditing(true);
     }
@@ -344,9 +344,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
     try {
       // ✅ React Native Firebase syntax
-      const querySnapshot = await firestore()
-        .collection("profiles")
-        .get();
+      const querySnapshot = await firestore().collection("profiles").get();
 
       const searchLower = searchText.trim().toLowerCase();
       const results = [];
@@ -436,14 +434,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
               }
 
               // ✅ React Native Firebase syntax - add document
-              await firestore()
-                .collection("duoRequests")
-                .add({
-                  fromUserId: CURRENT_USER_ID,
-                  toUserId: partner.id,
-                  status: "pending",
-                  createdAt: firestore.FieldValue.serverTimestamp(),
-                });
+              await firestore().collection("duoRequests").add({
+                fromUserId: CURRENT_USER_ID,
+                toUserId: partner.id,
+                status: "pending",
+                createdAt: firestore.FieldValue.serverTimestamp(),
+              });
 
               setShowPartnerSearch(false);
               setSearchQuery("");
@@ -541,7 +537,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
                 .collection("duoRequests")
                 .doc(request.id)
                 .delete();
-                
+
               await loadPendingRequests();
               Alert.alert(
                 "Request Declined",
@@ -576,10 +572,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
               if (!querySnapshot.empty) {
                 const duoDoc = querySnapshot.docs[0];
-                await firestore()
-                  .collection("duos")
-                  .doc(duoDoc.id)
-                  .delete();
+                await firestore().collection("duos").doc(duoDoc.id).delete();
               }
 
               setProfile({ ...profile, duoPartnerId: null });
@@ -672,21 +665,22 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
             }
           },
         },
-          ]);
-        };
-      
-        const handleSignOut = () => {
-          signOut(auth).catch((error) => {
-            console.error("Sign out error", error);
-            Alert.alert("Error", "Failed to sign out.");
-          });
-        };
-      
-        const handleReportBug = () => {
-          Alert.alert("Report a Bug", "Bug reporting feature coming soon!", [
-            { text: "OK" },
-          ]);
-        };
+      ]
+    );
+  };
+
+  const handleSignOut = () => {
+    signOut(auth).catch((error) => {
+      console.error("Sign out error", error);
+      Alert.alert("Error", "Failed to sign out.");
+    });
+  };
+
+  const handleReportBug = () => {
+    Alert.alert("Report a Bug", "Bug reporting feature coming soon!", [
+      { text: "OK" },
+    ]);
+  };
 
   // Settings Modal
   const SettingsDialog = () => (
@@ -842,11 +836,13 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
 
           {searching && <ActivityIndicator style={{ marginTop: 20 }} />}
 
-          {!searching && searchResults.length === 0 && searchQuery.length >= 2 && (
-            <View style={styles.emptyState}>
-              <Text variant="bodyLarge">No users found</Text>
-            </View>
-          )}
+          {!searching &&
+            searchResults.length === 0 &&
+            searchQuery.length >= 2 && (
+              <View style={styles.emptyState}>
+                <Text variant="bodyLarge">No users found</Text>
+              </View>
+            )}
 
           {!searching && searchQuery.length < 2 && (
             <View style={styles.emptyState}>
@@ -864,7 +860,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
                 <Card.Content>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     {item.photos && item.photos.length > 0 ? (
-                      <Avatar.Image size={50} source={{ uri: item.photos[0] }} />
+                      <Avatar.Image
+                        size={50}
+                        source={{ uri: item.photos[0] }}
+                      />
                     ) : (
                       <Avatar.Icon size={50} icon="account" />
                     )}
@@ -987,7 +986,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
                             {request.requesterProfile.tags
                               .slice(0, 3)
                               .map((tag, index) => (
-                                <Chip key={index} compact style={{ marginRight: 4 }}>
+                                <Chip
+                                  key={index}
+                                  compact
+                                  style={{ marginRight: 4 }}
+                                >
                                   {tag}
                                 </Chip>
                               ))}
@@ -1103,8 +1106,19 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
             {/* Location */}
             {profile.city && (
               <>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 }}>
-                  <IconButton icon="map-marker" size={20} style={{ margin: 0, padding: 0 }} />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    marginTop: 8,
+                  }}
+                >
+                  <IconButton
+                    icon="map-marker"
+                    size={20}
+                    style={{ margin: 0, padding: 0 }}
+                  />
                   <Text variant="bodyLarge">{profile.city}</Text>
                 </View>
                 <Text
@@ -1307,180 +1321,180 @@ export default function ProfileScreen({ isDarkMode, toggleTheme }) {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 80 }}
       >
-      <View style={styles.header}>
-        <Text variant="headlineLarge">Edit Profile</Text>
-        <View style={styles.headerButtons}>
-          <Button
-            mode="outlined"
-            onPress={() => {
-              loadProfile();
-              setIsEditing(false);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            mode="contained"
-            onPress={handleSave}
-            style={{ marginLeft: 8 }}
-          >
-            Save
-          </Button>
+        <View style={styles.header}>
+          <Text variant="headlineLarge">Edit Profile</Text>
+          <View style={styles.headerButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                loadProfile();
+                setIsEditing(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSave}
+              style={{ marginLeft: 8 }}
+            >
+              Save
+            </Button>
+          </View>
         </View>
-      </View>
 
-      <Card style={styles.card}>
-        <Card.Title title="Photos" />
-        <Card.Content>
-          <PhotoPicker
-            photos={profile.photos || []}
-            onPhotosChange={handlePhotosChange}
-            maxPhotos={6}
-          />
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <TextInput
-            label="Name"
-            value={profile.name}
-            onChangeText={(text) => setProfile({ ...profile, name: text })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Age"
-            value={profile.age}
-            onChangeText={(text) => setProfile({ ...profile, age: text })}
-            keyboardType="numeric"
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="About Me"
-            value={profile.description}
-            onChangeText={(text) =>
-              setProfile({ ...profile, description: text })
-            }
-            multiline
-            numberOfLines={4}
-            mode="outlined"
-            style={styles.input}
-          />
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Title
-          title={`Tags (${
-            Array.isArray(profile.tags) ? profile.tags.length : 0
-          }/5)`}
-          right={(props) => (
-            <IconButton
-              {...props}
-              icon="pencil"
-              onPress={() => setShowTagPicker(true)}
+        <Card style={styles.card}>
+          <Card.Title title="Photos" />
+          <Card.Content>
+            <PhotoPicker
+              photos={profile.photos || []}
+              onPhotosChange={handlePhotosChange}
+              maxPhotos={6}
             />
-          )}
-        />
-        <Card.Content>
-          {Array.isArray(profile.tags) && profile.tags.length > 0 ? (
-            <View style={styles.tagsDisplay}>
-              {profile.tags.map((tag, index) => (
-                <Chip
-                  key={index}
-                  onClose={() => toggleTag(tag)}
-                  style={styles.tagDisplay}
-                >
-                  {tag}
-                </Chip>
-              ))}
-            </View>
-          ) : (
-            <Text>No tags selected. Tap the pencil to add tags.</Text>
-          )}
-        </Card.Content>
-      </Card>
+          </Card.Content>
+        </Card>
 
-      {/* Duo Partner Section in Edit Mode */}
-      <Card style={styles.card}>
-        <Card.Title
-          title="Your Duo Partner"
-          left={(props) => <IconButton icon="account-multiple" {...props} />}
-        />
-        <Card.Content>
-          {duoPartnerProfile ? (
-            <>
-              <Text variant="bodyLarge">
-                Current partner: {duoPartnerProfile.name}
-              </Text>
-              <Button
-                mode="outlined"
-                icon="account-remove"
-                onPress={handleRemovePartner}
-                style={{ marginTop: 12 }}
-                buttonColor={theme.colors.errorContainer}
-              >
-                Remove Partner
-              </Button>
-            </>
-          ) : (
-            <>
-              <Text variant="bodyLarge">
-                No duo partner yet. Find someone to team up with!
-              </Text>
-              <Button
-                mode="contained"
-                icon="account-search"
-                onPress={() => setShowPartnerSearch(true)}
-                style={{ marginTop: 12 }}
-              >
-                Find Duo Partner
-              </Button>
-              {pendingRequests.length > 0 && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <TextInput
+              label="Name"
+              value={profile.name}
+              onChangeText={(text) => setProfile({ ...profile, name: text })}
+              mode="outlined"
+              style={styles.input}
+            />
+            <TextInput
+              label="Age"
+              value={profile.age}
+              onChangeText={(text) => setProfile({ ...profile, age: text })}
+              keyboardType="numeric"
+              mode="outlined"
+              style={styles.input}
+            />
+            <TextInput
+              label="About Me"
+              value={profile.description}
+              onChangeText={(text) =>
+                setProfile({ ...profile, description: text })
+              }
+              multiline
+              numberOfLines={4}
+              mode="outlined"
+              style={styles.input}
+            />
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Title
+            title={`Tags (${
+              Array.isArray(profile.tags) ? profile.tags.length : 0
+            }/5)`}
+            right={(props) => (
+              <IconButton
+                {...props}
+                icon="pencil"
+                onPress={() => setShowTagPicker(true)}
+              />
+            )}
+          />
+          <Card.Content>
+            {Array.isArray(profile.tags) && profile.tags.length > 0 ? (
+              <View style={styles.tagsDisplay}>
+                {profile.tags.map((tag, index) => (
+                  <Chip
+                    key={index}
+                    onClose={() => toggleTag(tag)}
+                    style={styles.tagDisplay}
+                  >
+                    {tag}
+                  </Chip>
+                ))}
+              </View>
+            ) : (
+              <Text>No tags selected. Tap the pencil to add tags.</Text>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Duo Partner Section in Edit Mode */}
+        <Card style={styles.card}>
+          <Card.Title
+            title="Your Duo Partner"
+            left={(props) => <IconButton icon="account-multiple" {...props} />}
+          />
+          <Card.Content>
+            {duoPartnerProfile ? (
+              <>
+                <Text variant="bodyLarge">
+                  Current partner: {duoPartnerProfile.name}
+                </Text>
                 <Button
                   mode="outlined"
-                  icon="bell"
-                  onPress={() => setShowPendingRequests(true)}
-                  style={{ marginTop: 8 }}
+                  icon="account-remove"
+                  onPress={handleRemovePartner}
+                  style={{ marginTop: 12 }}
+                  buttonColor={theme.colors.errorContainer}
                 >
-                  View {pendingRequests.length} Pending Request
-                  {pendingRequests.length !== 1 ? "s" : ""}
+                  Remove Partner
                 </Button>
-              )}
-            </>
-          )}
-        </Card.Content>
-      </Card>
+              </>
+            ) : (
+              <>
+                <Text variant="bodyLarge">
+                  No duo partner yet. Find someone to team up with!
+                </Text>
+                <Button
+                  mode="contained"
+                  icon="account-search"
+                  onPress={() => setShowPartnerSearch(true)}
+                  style={{ marginTop: 12 }}
+                >
+                  Find Duo Partner
+                </Button>
+                {pendingRequests.length > 0 && (
+                  <Button
+                    mode="outlined"
+                    icon="bell"
+                    onPress={() => setShowPendingRequests(true)}
+                    style={{ marginTop: 8 }}
+                  >
+                    View {pendingRequests.length} Pending Request
+                    {pendingRequests.length !== 1 ? "s" : ""}
+                  </Button>
+                )}
+              </>
+            )}
+          </Card.Content>
+        </Card>
 
-      <SettingsDialog />
-      {TagPickerModal}
-      <PartnerSearchModal />
-      <PendingRequestsModal />
-    </ScrollView>
+        <SettingsDialog />
+        {TagPickerModal}
+        <PartnerSearchModal />
+        <PendingRequestsModal />
+      </ScrollView>
 
-    {/* Fixed Bottom Buttons - Always Visible */}
-    <Surface style={styles.bottomButtons} elevation={4}>
-      <Button
-        mode="outlined"
-        onPress={() => {
-          loadProfile();
-          setIsEditing(false);
-        }}
-        style={styles.bottomButton}
-      >
-        Cancel
-      </Button>
-      <Button
-        mode="contained"
-        onPress={handleSave}
-        style={styles.bottomButton}
-      >
-        Save
-      </Button>
-    </Surface>
-  </View>
+      {/* Fixed Bottom Buttons - Always Visible */}
+      <Surface style={styles.bottomButtons} elevation={4}>
+        <Button
+          mode="outlined"
+          onPress={() => {
+            loadProfile();
+            setIsEditing(false);
+          }}
+          style={styles.bottomButton}
+        >
+          Cancel
+        </Button>
+        <Button
+          mode="contained"
+          onPress={handleSave}
+          style={styles.bottomButton}
+        >
+          Save
+        </Button>
+      </Surface>
+    </View>
   );
 }
 
@@ -1595,16 +1609,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bottomButtons: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: "#e0e0e0",
   },
   bottomButton: {
     flex: 1,
