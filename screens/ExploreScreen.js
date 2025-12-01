@@ -2,12 +2,13 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
-  Dimensions,
   Alert,
-  Modal,
   ScrollView,
   Linking,
   Platform,
+  ActivityIndicator,
+  Image,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -21,11 +22,11 @@ import {
   Surface,
   useTheme,
   Icon,
-  IconButton,
 } from "react-native-paper";
-import MapView, { Marker } from "react-native-maps";
+// import MapView, { Marker } from "react-native-maps"; // Using static maps instead
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PLACES_API_KEY } from "../services/googleMapsConfig";
 
 const categories = [
   "Restaurants",
@@ -35,7 +36,6 @@ const categories = [
   "Gyms",
   "Libraries",
   "Malls",
-  "Hospitals",
 ];
 
 export default function ExploreScreen() {
@@ -45,7 +45,7 @@ export default function ExploreScreen() {
   const [pins, setPins] = useState([]);
   const [places, setPlaces] = useState([]);
   const [recommendedPlaces, setRecommendedPlaces] = useState([]);
-  const [visibleCount, setVisibleCount] = useState(3);
+  const [visibleCount, setVisibleCount] = useState(5);
   const [searchText, setSearchText] = useState("");
   const [previousSearches, setPreviousSearches] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -54,7 +54,9 @@ export default function ExploreScreen() {
   const [reviews, setReviews] = useState([]);
   const [locationPermission, setLocationPermission] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mapError, setMapError] = useState(null);
 
+  // Load previous search history from storage
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem("previousSearches");
@@ -62,10 +64,12 @@ export default function ExploreScreen() {
     })();
   }, []);
 
+  // Check location permission on mount
   useEffect(() => {
     checkLocationPermission();
   }, []);
 
+  // Check and request location permission
   const checkLocationPermission = async () => {
     try {
       setIsLoading(true);
@@ -84,6 +88,7 @@ export default function ExploreScreen() {
     }
   };
 
+  // Get user's current location and fetch nearby places
   const fetchUserLocation = async () => {
     try {
       const timeoutPromise = new Promise((_, reject) =>
@@ -105,8 +110,8 @@ export default function ExploreScreen() {
 
       setRegion(userRegion);
 
-      // Generate recommended places on initial load
-      const recommended = generateRecommendedPlaces(userRegion);
+      // Fetch recommended places on initial load
+      const recommended = await fetchNearbyPlaces(userRegion);
       setRecommendedPlaces(recommended);
       setPins(recommended);
       setPlaces(recommended);
@@ -118,6 +123,7 @@ export default function ExploreScreen() {
     }
   };
 
+  // Request location permission from user
   const handleRequestPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -151,63 +157,225 @@ export default function ExploreScreen() {
     }
   };
 
-  const generateRecommendedPlaces = (userRegion) => {
-    if (!userRegion) return [];
+  // Calculate distance between two coordinates in kilometers
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
-    const recommendedCategories = ["Restaurants", "Cafes", "Parks", "Museums"];
-    const places = [];
+  // Generate URL for static map showing all visible places (not currently used)
+  const generateStaticMapUrl = () => {
+    if (!region) return null;
 
-    recommendedCategories.forEach((category, categoryIndex) => {
-      // Generate 3-5 places per category
-      const count = 3 + Math.floor(Math.random() * 3);
-      for (let i = 0; i < count; i++) {
-        places.push({
-          id: `recommended-${category}-${i}`,
-          name: `${category.slice(0, -1)} ${String.fromCharCode(
-            65 + categoryIndex * 5 + i
-          )}`,
-          category: category,
-          latitude: userRegion.latitude + (Math.random() - 0.5) * 0.08,
-          longitude: userRegion.longitude + (Math.random() - 0.5) * 0.08,
-          distance: (Math.random() * 5).toFixed(1),
-        });
-      }
+    const { width } = Dimensions.get("window");
+    const mapWidth = Math.floor(width - 16);
+    const mapHeight = 250;
+
+    let url = `https://maps.googleapis.com/maps/api/staticmap?center=${region.latitude},${region.longitude}&zoom=13&size=${mapWidth}x${mapHeight}&scale=2`;
+    url += `&markers=color:blue|label:You|${region.latitude},${region.longitude}`;
+
+    const visiblePins = places.slice(0, visibleCount);
+    visiblePins.forEach((pin, index) => {
+      const label = index + 1;
+      url += `&markers=color:red|label:${label}|${pin.latitude},${pin.longitude}`;
     });
 
-    return places.sort((a, b) => a.distance - b.distance);
+    url += `&key=${PLACES_API_KEY}`;
+    return url;
   };
 
-  const generateMockPlaces = (category) => {
-    if (!region) return [];
-    const newPlaces = Array.from({ length: 40 }).map((_, i) => ({
-      id: `${category}-${i}`,
-      name: `${category} #${i + 1}`,
-      latitude: region.latitude + (Math.random() - 0.5) * 0.3,
-      longitude: region.longitude + (Math.random() - 0.5) * 0.3,
-      distance: (Math.random() * 50).toFixed(1),
-    }));
-    return newPlaces.sort((a, b) => a.distance - b.distance);
+  // Generate URL for static map showing selected place in dialog
+  const generatePlaceStaticMapUrl = (place) => {
+    if (!place) return null;
+
+    const { width } = Dimensions.get("window");
+    const mapWidth = Math.floor(width - 32);
+    const mapHeight = 200;
+
+    let url = `https://maps.googleapis.com/maps/api/staticmap?center=${place.latitude},${place.longitude}&zoom=15&size=${mapWidth}x${mapHeight}&scale=2`;
+    url += `&markers=color:red|label:P|${place.latitude},${place.longitude}`;
+    url += `&key=${PLACES_API_KEY}`;
+
+    return url;
   };
 
-  const handleCategorySelect = (category) => {
+  // Fetch nearby places from Google Places API by type
+  const fetchNearbyPlaces = async (
+    userRegion,
+    types = ["restaurant", "cafe", "park", "museum"]
+  ) => {
+    if (!userRegion) return [];
+
+    try {
+      const radius = 5000;
+      const location = `${userRegion.latitude},${userRegion.longitude}`;
+      const allPlaces = [];
+
+      for (const type of types) {
+        const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${PLACES_API_KEY}`;
+
+        console.log(`Fetching ${type} places...`);
+        const response = await fetch(url);
+        const data = await response.json();
+
+        console.log(`API Response Status for ${type}:`, data.status);
+        if (data.error_message) {
+          console.error(`API Error for ${type}:`, data.error_message);
+        }
+
+        if (data.status === "REQUEST_DENIED") {
+          Alert.alert(
+            "API Access Denied",
+            `Error: ${
+              data.error_message || "Request denied"
+            }\n\nPlease check:\n1. Billing is enabled in Google Cloud Console\n2. Places API is enabled\n3. API key has no restrictions blocking this request`
+          );
+          return [];
+        }
+
+        if (data.status === "OK" && data.results) {
+          const places = data.results.slice(0, 5).map((place) => {
+            const placeLat = place.geometry.location.lat;
+            const placeLng = place.geometry.location.lng;
+            const distance = calculateDistance(
+              userRegion.latitude,
+              userRegion.longitude,
+              placeLat,
+              placeLng
+            );
+
+            return {
+              id: place.place_id,
+              name: place.name,
+              category: type.charAt(0).toUpperCase() + type.slice(1) + "s",
+              latitude: placeLat,
+              longitude: placeLng,
+              distance: distance.toFixed(1),
+              rating: place.rating,
+              vicinity: place.vicinity,
+            };
+          });
+
+          allPlaces.push(...places);
+        } else if (data.status !== "ZERO_RESULTS") {
+          console.warn(`Unexpected status for ${type}:`, data.status);
+        }
+      }
+
+      return allPlaces.sort((a, b) => a.distance - b.distance);
+    } catch (error) {
+      console.error("Error fetching nearby places:", error);
+      Alert.alert("Error", "Failed to fetch nearby places. Please try again.");
+      return [];
+    }
+  };
+
+  // Fetch places filtered by selected category
+  const fetchPlacesByCategory = async (category, userRegion) => {
+    if (!userRegion) return [];
+
+    try {
+      const radius = 10000;
+      const location = `${userRegion.latitude},${userRegion.longitude}`;
+
+      const categoryTypeMap = {
+        Restaurants: "restaurant",
+        Parks: "park",
+        Cafes: "cafe",
+        Museums: "museum",
+        Gyms: "gym",
+        Libraries: "library",
+        Malls: "shopping_mall",
+      };
+
+      const type = categoryTypeMap[category] || category.toLowerCase();
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${PLACES_API_KEY}`;
+
+      console.log(`Fetching category: ${category}...`);
+      const response = await fetch(url);
+      const data = await response.json();
+
+      console.log(`API Response Status for ${category}:`, data.status);
+      if (data.error_message) {
+        console.error(`API Error for ${category}:`, data.error_message);
+      }
+
+      if (data.status === "REQUEST_DENIED") {
+        Alert.alert(
+          "API Access Denied",
+          `Error: ${
+            data.error_message || "Request denied"
+          }\n\nPlease check:\n1. Billing is enabled in Google Cloud Console\n2. Places API is enabled\n3. API key has no restrictions blocking this request`
+        );
+        return [];
+      }
+
+      if (data.status === "OK" && data.results) {
+        console.log(`Found ${data.results.length} places for ${category}`);
+        return data.results
+          .map((place) => {
+            const placeLat = place.geometry.location.lat;
+            const placeLng = place.geometry.location.lng;
+            const distance = calculateDistance(
+              userRegion.latitude,
+              userRegion.longitude,
+              placeLat,
+              placeLng
+            );
+
+            return {
+              id: place.place_id,
+              name: place.name,
+              category: category,
+              latitude: placeLat,
+              longitude: placeLng,
+              distance: distance.toFixed(1),
+              rating: place.rating,
+              vicinity: place.vicinity,
+            };
+          })
+          .sort((a, b) => a.distance - b.distance);
+      }
+
+      return [];
+    } catch (error) {
+      console.error("Error fetching places by category:", error);
+      Alert.alert("Error", "Failed to fetch places. Please try again.");
+      return [];
+    }
+  };
+
+  // Handle category chip selection/deselection
+  const handleCategorySelect = async (category) => {
     if (selectedCategory === category) {
       setSelectedCategory(null);
       setPins(recommendedPlaces);
       setPlaces(recommendedPlaces);
-      setVisibleCount(3);
+      setVisibleCount(5);
     } else {
       setSelectedCategory(category);
-      const generated = generateMockPlaces(category);
-      setPins(generated);
-      setPlaces(generated);
-      setVisibleCount(3);
+      const results = await fetchPlacesByCategory(category, region);
+      setPins(results);
+      setPlaces(results);
+      setVisibleCount(5);
     }
   };
 
+  // Increase visible places count by 10
   const handleShowMore = () => {
     setVisibleCount((prev) => Math.min(prev + 10, places.length));
   };
 
+  // Search for places and update results
   const handleSearch = async (term) => {
     if (!term) return;
     setSearchText(term);
@@ -220,10 +388,11 @@ export default function ExploreScreen() {
     setPreviousSearches(newHistory);
     await AsyncStorage.setItem("previousSearches", JSON.stringify(newHistory));
 
-    const result = generateMockPlaces(term);
+    const result = await searchPlaces(term, region);
     setPins(result);
     setPlaces(result);
-    setVisibleCount(3);
+    setVisibleCount(5);
+
     if (result.length > 0) {
       setRegion({
         ...region,
@@ -233,44 +402,125 @@ export default function ExploreScreen() {
     }
   };
 
+  // Search places using text query via Google Places API
+  const searchPlaces = async (query, userRegion) => {
+    if (!userRegion) return [];
+
+    try {
+      const location = `${userRegion.latitude},${userRegion.longitude}`;
+      const radius = 10000;
+      const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+        query
+      )}&location=${location}&radius=${radius}&key=${PLACES_API_KEY}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === "OK" && data.results) {
+        return data.results
+          .map((place) => {
+            const placeLat = place.geometry.location.lat;
+            const placeLng = place.geometry.location.lng;
+            const distance = calculateDistance(
+              userRegion.latitude,
+              userRegion.longitude,
+              placeLat,
+              placeLng
+            );
+
+            const placeTypes = place.types || [];
+            let category = "Places";
+            if (placeTypes.includes("restaurant")) category = "Restaurants";
+            else if (placeTypes.includes("cafe")) category = "Cafes";
+            else if (placeTypes.includes("park")) category = "Parks";
+            else if (placeTypes.includes("museum")) category = "Museums";
+            else if (placeTypes.includes("gym")) category = "Gyms";
+            else if (placeTypes.includes("library")) category = "Libraries";
+            else if (placeTypes.includes("shopping_mall")) category = "Malls";
+
+            return {
+              id: place.place_id,
+              name: place.name,
+              category: category,
+              latitude: placeLat,
+              longitude: placeLng,
+              distance: distance.toFixed(1),
+              rating: place.rating,
+              vicinity: place.formatted_address || place.vicinity,
+            };
+          })
+          .sort((a, b) => a.distance - b.distance);
+      }
+
+      return [];
+    } catch (error) {
+      console.error("Error searching places:", error);
+      Alert.alert("Error", "Failed to search places. Please try again.");
+      return [];
+    }
+  };
+
+  // Fetch and display details for selected place
   const handleSelectPlace = async (place) => {
     setSelectedPlace(place);
     setPlaceDetails(null);
     setReviews([]);
 
-    const mockDetails = {
-      address: "123 Example Street, Toronto, ON",
-      rating: (Math.random() * 5).toFixed(1),
-      totalReviews: Math.floor(Math.random() * 300),
-    };
-    setPlaceDetails(mockDetails);
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.id}&fields=formatted_address,rating,user_ratings_total,reviews,formatted_phone_number,opening_hours,website&key=${PLACES_API_KEY}`;
 
-    const mockReviews = Array.from({ length: 5 }).map((_, i) => ({
-      id: i.toString(),
-      user: `User${i + 1}`,
-      comment: `This is a mock review for ${place.name}. Great atmosphere!`,
-      rating: (Math.random() * 5).toFixed(1),
-    }));
-    setReviews(mockReviews);
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === "OK" && data.result) {
+        const details = {
+          address:
+            data.result.formatted_address ||
+            place.vicinity ||
+            "Address not available",
+          rating: data.result.rating || place.rating || "N/A",
+          totalReviews: data.result.user_ratings_total || 0,
+          phoneNumber: data.result.formatted_phone_number,
+          website: data.result.website,
+          openingHours: data.result.opening_hours?.weekday_text,
+        };
+        setPlaceDetails(details);
+
+        if (data.result.reviews) {
+          const placeReviews = data.result.reviews.map((review, index) => ({
+            id: index.toString(),
+            user: review.author_name,
+            comment: review.text,
+            rating: review.rating,
+            time: review.relative_time_description,
+          }));
+          setReviews(placeReviews);
+        }
+      } else {
+        setPlaceDetails({
+          address: place.vicinity || "Address not available",
+          rating: place.rating || "N/A",
+          totalReviews: 0,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching place details:", error);
+      setPlaceDetails({
+        address: place.vicinity || "Address not available",
+        rating: place.rating || "N/A",
+        totalReviews: 0,
+      });
+    }
   };
 
   if (isLoading) {
     return (
       <View
-        style={[
-          styles.container,
-          styles.centerContent,
-          { backgroundColor: theme.colors.background },
-        ]}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Icon
-          source="map-marker-radius"
-          size={48}
-          color={theme.colors.primary}
-        />
-        <Text variant="titleMedium" style={{ marginTop: 16 }}>
-          Fetching location...
-        </Text>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" />
+        </View>
       </View>
     );
   }
@@ -284,7 +534,7 @@ export default function ExploreScreen() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <Card style={styles.permissionCard} elevation={2}>
+        <Card style={styles.permissionCard} elevation={0}>
           <Card.Content style={styles.permissionContent}>
             <Icon
               source="map-marker-off"
@@ -328,7 +578,7 @@ export default function ExploreScreen() {
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <Surface style={styles.header} elevation={2}>
+      <Surface style={styles.header} elevation={0}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Icon source="compass" size={28} color={theme.colors.primary} />
           <Text variant="headlineMedium">
@@ -342,7 +592,15 @@ export default function ExploreScreen() {
         value={searchText}
         onFocus={() => setShowHistory(true)}
         onBlur={() => setShowHistory(false)}
-        onChangeText={setSearchText}
+        onChangeText={(text) => {
+          setSearchText(text);
+          if (text === "") {
+            setPins(recommendedPlaces);
+            setPlaces(recommendedPlaces);
+            setVisibleCount(5);
+            setSelectedCategory(null);
+          }
+        }}
         onSubmitEditing={() => handleSearch(searchText)}
         style={styles.searchBar}
       />
@@ -380,30 +638,8 @@ export default function ExploreScreen() {
       </ScrollView>
 
       <ScrollView style={styles.scrollContent}>
-        <View style={styles.mapContainer}>
-          <MapView
-            style={styles.map}
-            initialRegion={region}
-            scrollEnabled={true}
-            zoomEnabled={true}
-            rotateEnabled={true}
-            pitchEnabled={true}
-          >
-            <Marker coordinate={region} title="You are here" pinColor="blue" />
-            {pins.map((p) => (
-              <Marker
-                key={p.id}
-                coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-                title={p.name}
-                description={`${p.distance} km away`}
-                onPress={() => handleSelectPlace(p)}
-              />
-            ))}
-          </MapView>
-        </View>
-
         <View style={styles.placesList}>
-          {places.slice(0, visibleCount).map((item) => (
+          {places.slice(0, visibleCount).map((item, index) => (
             <Card
               key={item.id}
               style={styles.placeCard}
@@ -418,10 +654,45 @@ export default function ExploreScreen() {
                   }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text variant="titleMedium">{item.name}</Text>
-                    <Text variant="bodySmall">{item.distance} km away</Text>
+                    <Text variant="titleMedium" numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        marginTop: 4,
+                      }}
+                    >
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        {item.distance} km away
+                      </Text>
+                      {item.rating && (
+                        <>
+                          <Text
+                            variant="bodySmall"
+                            style={{ color: theme.colors.onSurfaceVariant }}
+                          >
+                            •
+                          </Text>
+                          <Icon
+                            source="star"
+                            size={14}
+                            color={theme.colors.tertiary}
+                          />
+                          <Text
+                            variant="bodySmall"
+                            style={{ color: theme.colors.onSurfaceVariant }}
+                          >
+                            {item.rating}
+                          </Text>
+                        </>
+                      )}
+                    </View>
                   </View>
-                  {item.category && !selectedCategory && (
+                  {item.category && (
                     <Chip compact style={styles.categoryBadge}>
                       {item.category}
                     </Chip>
@@ -447,59 +718,139 @@ export default function ExploreScreen() {
         <Dialog
           visible={!!selectedPlace}
           onDismiss={() => setSelectedPlace(null)}
+          style={styles.dialog}
         >
           <Dialog.Title>{selectedPlace?.name}</Dialog.Title>
-          <Dialog.ScrollArea>
+          <Dialog.ScrollArea style={styles.dialogScrollArea}>
             <ScrollView>
+              {selectedPlace && placeDetails && (
+                <Card style={styles.dialogInfoCard} elevation={0}>
+                  <Card.Content style={{ padding: 0 }}>
+                    <View style={styles.dialogMapContainer}>
+                      <Image
+                        source={{
+                          uri: generatePlaceStaticMapUrl(selectedPlace),
+                        }}
+                        style={styles.dialogMap}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  </Card.Content>
+                  <Card.Content style={{ paddingBottom: 8 }}>
+                    <List.Item
+                      title={placeDetails.address}
+                      left={(props) => (
+                        <List.Icon
+                          {...props}
+                          icon="map-marker"
+                          color={theme.colors.primary}
+                        />
+                      )}
+                      titleNumberOfLines={3}
+                      style={{ paddingVertical: 0, minHeight: 40 }}
+                    />
+                    <List.Item
+                      title={`${placeDetails.rating} (${placeDetails.totalReviews} reviews)`}
+                      left={(props) => (
+                        <List.Icon
+                          {...props}
+                          icon="star"
+                          color={theme.colors.tertiary}
+                        />
+                      )}
+                      style={{ paddingVertical: 0, minHeight: 40 }}
+                    />
+                    <Button
+                      mode="contained"
+                      onPress={() => {
+                        const lat = selectedPlace.latitude;
+                        const lng = selectedPlace.longitude;
+                        const label = encodeURIComponent(selectedPlace.name);
+                        const url =
+                          Platform.OS === "ios"
+                            ? `maps://app?daddr=${lat},${lng}`
+                            : `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+                        Linking.openURL(url);
+                      }}
+                      style={{ marginTop: 8 }}
+                    >
+                      Get Directions
+                    </Button>
+                  </Card.Content>
+                </Card>
+              )}
               {placeDetails && (
                 <>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Icon source="map-marker" size={16} />
-                    <Text variant="bodyMedium">{placeDetails.address}</Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Icon source="star" size={16} color="#FFD700" />
-                    <Text variant="bodyMedium">
-                      {placeDetails.rating} ({placeDetails.totalReviews}{" "}
-                      reviews)
-                    </Text>
-                  </View>
-                  <Text variant="titleSmall" style={styles.reviewsTitle}>
-                    User Reviews:
-                  </Text>
-                  {reviews.map((r) => (
-                    <Card key={r.id} style={styles.reviewCard}>
-                      <Card.Content>
-                        <Text variant="labelLarge">{r.user}</Text>
-                        <Text variant="bodySmall">{r.comment}</Text>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                            marginTop: 4,
-                          }}
+                  {reviews.length > 0 && (
+                    <>
+                      <Text variant="titleSmall" style={styles.reviewsTitle}>
+                        User Reviews
+                      </Text>
+                      {reviews.map((r) => (
+                        <Card
+                          key={r.id}
+                          style={styles.reviewCard}
+                          elevation={0}
                         >
-                          <Icon source="star" size={14} color="#FFD700" />
-                          <Text variant="bodySmall">{r.rating}</Text>
-                        </View>
-                      </Card.Content>
-                    </Card>
-                  ))}
+                          <Card.Content>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 4,
+                              }}
+                            >
+                              <Text
+                                variant="labelLarge"
+                                style={{ color: theme.colors.onSurface }}
+                              >
+                                {r.user}
+                              </Text>
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                <Icon
+                                  source="star"
+                                  size={14}
+                                  color={theme.colors.tertiary}
+                                />
+                                <Text
+                                  variant="bodySmall"
+                                  style={{
+                                    color: theme.colors.onSurfaceVariant,
+                                  }}
+                                >
+                                  {r.rating}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text
+                              variant="bodySmall"
+                              style={{ color: theme.colors.onSurfaceVariant }}
+                            >
+                              {r.comment}
+                            </Text>
+                            {r.time && (
+                              <Text
+                                variant="bodySmall"
+                                style={{
+                                  color: theme.colors.outline,
+                                  marginTop: 4,
+                                }}
+                              >
+                                {r.time}
+                              </Text>
+                            )}
+                          </Card.Content>
+                        </Card>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
             </ScrollView>
@@ -513,7 +864,6 @@ export default function ExploreScreen() {
   );
 }
 
-const { height } = Dimensions.get("window");
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -562,17 +912,37 @@ const styles = StyleSheet.create({
   categoryChip: {
     marginRight: 8,
   },
-  mapContainer: {
-    height: height * 0.3,
-    margin: 8,
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  map: {
-    flex: 1,
-  },
   scrollContent: {
     flex: 1,
+  },
+  mapCard: {
+    margin: 8,
+    overflow: "hidden",
+  },
+  mapContainer: {
+    height: 250,
+    borderRadius: 10,
+    overflow: "hidden",
+    position: "relative",
+  },
+  map: {
+    width: "100%",
+    height: "100%",
+  },
+  mapErrorContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 16,
+  },
+  mapErrorText: {
+    textAlign: "center",
+    marginTop: 8,
   },
   placesList: {
     padding: 8,
@@ -592,5 +962,40 @@ const styles = StyleSheet.create({
   },
   categoryBadge: {
     marginLeft: 8,
+  },
+  dialogMapContainer: {
+    height: 200,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  dialogMap: {
+    width: "100%",
+    height: "100%",
+  },
+  dialog: {
+    maxHeight: "100%",
+    maxWidth: 500,
+    alignSelf: "center",
+  },
+  dialogScrollArea: {
+    maxHeight: "99%",
+  },
+  dialogCard: {
+    marginBottom: 0,
+  },
+  dialogInfoCard: {
+    marginBottom: 0,
+  },
+  placeNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeNumberText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
   },
 });
