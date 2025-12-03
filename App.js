@@ -28,6 +28,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [user, setUser] = useState(null);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
     // ✅ FIXED: React Native Firebase auth listener
@@ -35,6 +36,8 @@ export default function App() {
       console.log("Auth state changed:", user ? user.uid : "null");
       setUser(user);
       if (user) {
+        const { creationTime, lastSignInTime } = user.metadata;
+        setIsNewUser(creationTime === lastSignInTime);
         setCurrentUserId(user.uid);
       } else {
         setCurrentUserId(null);
@@ -43,6 +46,14 @@ export default function App() {
 
     return unsubscribe;
   }, []);
+
+  // new users get put into the profile screen first 
+  useEffect(() => {
+    if (isNewUser) {
+      console.log("New user detected, redirecting to profile setup.");
+      setActiveTab("profile");
+    }
+  }, [isNewUser]);
 
   const theme = useMemo(
     () => (isDarkMode ? darkTheme : lightTheme),
@@ -101,7 +112,7 @@ export default function App() {
     //premium: () => <PremiumScreen />, //commenting out premiium tab
     // payment: () => <CheckoutScreen />,  // COMMENTED OUT - Payment disabled
     profile: () => (
-      <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+      <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme}/>
     ),
   });
 
@@ -140,7 +151,7 @@ export default function App() {
   } else {
     return (
       <PaperProvider theme={theme}>
-        <SigninScreen />
+        <SigninScreen/>
       </PaperProvider>
     );
   }

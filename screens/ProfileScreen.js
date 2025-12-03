@@ -131,7 +131,7 @@ const AVAILABLE_TAGS = [
   "🌊 Ocean Views",
 ];
 
-export default function ProfileScreen({ isDarkMode, toggleTheme }) {
+export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const theme = useTheme();
   const [profile, setProfile] = useState({
     name: "",
