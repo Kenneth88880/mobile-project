@@ -40,9 +40,6 @@ export default function PremiumScreen() {
       </Surface>
     </View>
   );
-
-    
-  
 }
 
 const styles = StyleSheet.create({
