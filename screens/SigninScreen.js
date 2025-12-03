@@ -1,13 +1,8 @@
 import { StyleSheet, View, KeyboardAvoidingView } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-} from "firebase/auth";
-const auth = getAuth();
+// ✅ FIXED: Using React Native Firebase instead of web SDK
+import auth from "@react-native-firebase/auth";
 
 const SigninScreen = () => {
   const theme = useTheme();
@@ -16,7 +11,8 @@ const SigninScreen = () => {
 
   // handles sign up
   const handleSignUp = () => {
-    createUserWithEmailAndPassword(auth, email, password)
+    auth()
+      .createUserWithEmailAndPassword(email, password)
       .then((userCredential) => {
         // Signed up
         const user = userCredential.user;
@@ -27,29 +23,25 @@ const SigninScreen = () => {
         const errorCode = error.code;
         const errorMessage = error.message;
         console.log(errorCode + errorMessage);
-        console.log("nope dumbass");
+        alert("Sign up failed: " + errorMessage);
         // ..
       });
   };
 
   // handles sign in
   const handleSignIn = () => {
-    signInWithEmailAndPassword(auth, email, password)
+    auth()
+      .signInWithEmailAndPassword(email, password)
       .then((userCredential) => {
         // Signed in
-        console.log("trying");
-        //isLoggedIn = true;
-        //console.log(isLoggedIn);
-        const user = userCredential.user;
-        console.log("Logged in with:", user.email);
+        console.log("Logged in with:", userCredential.user.email);
         // ...
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        alert(errorCode + errorMessage);
+        alert("Login failed: " + errorMessage);
         console.log(errorCode + errorMessage);
-        console.log("nope dumbass");
         // ..')
       });
   };
@@ -95,18 +87,8 @@ const SigninScreen = () => {
 // the login/signup screen
 export default SigninScreen;
 
-// exports the UID once the user is logged in
-export const UID = onAuthStateChanged(auth, (user) => {
-  if (user) {
-    const uid = user.uid;
-    console.log("UID from SigninScreen: " + uid);
-    return uid;
-  } else {
-    // const uid = user.uid;
-    console.log("No user is signed in");
-    return null;
-  }
-});
+// ✅ FIXED: Removed UID export - this doesn't work the way it was written
+// Use auth().currentUser or the onAuthStateChanged listener in App.js instead
 
 const styles = StyleSheet.create({
   container: {
