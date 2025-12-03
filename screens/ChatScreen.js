@@ -36,20 +36,6 @@ import {
   deleteDoc,
   getDocs,
 } from "firebase/firestore";
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  serverTimestamp,
-  updateDoc,
-  doc,
-  getDoc,
-  deleteDoc,
-  getDocs,
-} from "firebase/firestore";
 import { getUserProfile, saveRating } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
