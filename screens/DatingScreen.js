@@ -89,7 +89,7 @@ export default function DatingScreen() {
 
   const handleProfileClick = async (profile) => {
     if (!profile) return; // ✅ Safety check
-    
+
     try {
       const fullProfile = await getUserProfile(profile.userId || profile.id);
       if (fullProfile) {
@@ -128,7 +128,7 @@ export default function DatingScreen() {
       await saveRating(currentUserId, ratingProfile.userId, rating);
       Alert.alert(
         "Success",
-        `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
+        `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
       );
       setShowRatingModal(false);
       setRatingProfile(null);
@@ -224,7 +224,11 @@ export default function DatingScreen() {
     );
   }
 
-  if (!duoPairs || duoPairs.length === 0 || currentPairIndex >= duoPairs.length) {
+  if (
+    !duoPairs ||
+    duoPairs.length === 0 ||
+    currentPairIndex >= duoPairs.length
+  ) {
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -232,9 +236,11 @@ export default function DatingScreen() {
         <EmptyState
           icon="heart-multiple"
           title="No Duo Pairs Available"
-          message={!currentDuo 
-            ? "You need a duo partner first! Go to Profile → Edit to find a partner."
-            : "No more duo pairs to show. Check back later or invite friends to join!"}
+          message={
+            !currentDuo
+              ? "You need a duo partner first! Go to Profile → Edit to find a partner."
+              : "No more duo pairs to show. Check back later or invite friends to join!"
+          }
           actionLabel="Reload"
           onAction={loadData}
         />
@@ -243,14 +249,20 @@ export default function DatingScreen() {
   }
 
   const currentDuoPair = duoPairs[currentPairIndex];
-  
+
   // ✅ SAFETY: Get profiles safely with fallbacks
-  const topProfile = currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
-  const bottomProfile = currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
+  const topProfile =
+    currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
+  const bottomProfile =
+    currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
 
   // ✅ SAFETY: Get photo URLs safely
-  const topPhoto = topProfile?.photos?.[0] || 'https://via.placeholder.com/400x300?text=No+Photo';
-  const bottomPhoto = bottomProfile?.photos?.[0] || 'https://via.placeholder.com/400x300?text=No+Photo';
+  const topPhoto =
+    topProfile?.photos?.[0] ||
+    "https://via.placeholder.com/400x300?text=No+Photo";
+  const bottomPhoto =
+    bottomProfile?.photos?.[0] ||
+    "https://via.placeholder.com/400x300?text=No+Photo";
 
   // ✅ SAFETY: Get names and ages safely
   const topName = topProfile?.name || "Unknown";
@@ -264,7 +276,7 @@ export default function DatingScreen() {
       <View style={styles.modalOverlay}>
         <Card style={styles.ratingCard}>
           <Card.Title
-            title={`Rate ${ratingProfile.name || 'User'}`}
+            title={`Rate ${ratingProfile.name || "User"}`}
             subtitle="How would you rate this profile?"
           />
           <Card.Content>
@@ -300,7 +312,8 @@ export default function DatingScreen() {
     const profilePhotos = selectedProfile?.photos || [];
     const profileName = selectedProfile?.name || "Unknown";
     const profileAge = selectedProfile?.age || "?";
-    const profileDescription = selectedProfile?.description || "No description available";
+    const profileDescription =
+      selectedProfile?.description || "No description available";
     const profileTags = selectedProfile?.tags || [];
     const profileCity = selectedProfile?.city;
     const profileLastActive = selectedProfile?.lastActive;
@@ -348,7 +361,9 @@ export default function DatingScreen() {
         ) : (
           <Card style={styles.imageCard}>
             <Card.Cover
-              source={{ uri: 'https://via.placeholder.com/400x300?text=No+Photo' }}
+              source={{
+                uri: "https://via.placeholder.com/400x300?text=No+Photo",
+              }}
               style={styles.cardCover}
             />
           </Card>
@@ -391,7 +406,7 @@ export default function DatingScreen() {
 
       {currentDuo ? (
         <Chip icon="account-multiple" style={styles.duoChip}>
-          You & {currentDuo?.partnerProfile?.name || 'Partner'}
+          You & {currentDuo?.partnerProfile?.name || "Partner"}
         </Chip>
       ) : (
         <Chip icon="alert" style={styles.warningChip}>
