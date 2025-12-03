@@ -10,7 +10,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+// ✅ FIXED: Using React Native Firebase instead of web SDK
+import auth from "@react-native-firebase/auth";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
@@ -23,15 +24,15 @@ import CheckoutScreen from "./screens/PaymentScreen";
 import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
 import SigninScreen from "./screens/SigninScreen";
 
-const auth = getAuth();
-
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    // ✅ FIXED: React Native Firebase auth listener
+    const unsubscribe = auth().onAuthStateChanged((user) => {
+      console.log("Auth state changed:", user ? user.uid : "null");
       setUser(user);
       if (user) {
         setCurrentUserId(user.uid);

@@ -1,7 +1,8 @@
 // locationTracker.js
-import * as Location from 'expo-location';
-import { saveUserProfile, getUserProfile } from '../services/profileService';
-import { serverTimestamp } from 'firebase/firestore';
+import * as Location from "expo-location";
+import { saveUserProfile, getUserProfile } from "../services/profileService";
+// ✅ FIXED: Using React Native Firebase instead of web SDK
+import firestore from "@react-native-firebase/firestore";
 
 /**
  * Live Location Tracker
@@ -20,13 +21,13 @@ class LocationTracker {
    * Start live location tracking
    * Updates location every 5 minutes while app is active
    * Also updates "lastActive" timestamp
-   * 
+   *
    * @param {string} userId - Current user ID
    * @param {number} updateIntervalMinutes - How often to update (default: 5 minutes)
    */
   async startTracking(userId, updateIntervalMinutes = 5) {
     if (this.isTracking) {
-      console.log('Location tracking already active');
+      console.log("Location tracking already active");
       return;
     }
 
@@ -36,8 +37,8 @@ class LocationTracker {
     try {
       // Request permission
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Location permission not granted');
+      if (status !== "granted") {
+        console.log("Location permission not granted");
         this.isTracking = false;
         return false;
       }
@@ -51,10 +52,12 @@ class LocationTracker {
         await this.updateLocationAndStatus();
       }, intervalMs);
 
-      console.log(`Live location tracking started (updates every ${updateIntervalMinutes} minutes)`);
+      console.log(
+        `Live location tracking started (updates every ${updateIntervalMinutes} minutes)`
+      );
       return true;
     } catch (error) {
-      console.error('Error starting location tracking:', error);
+      console.error("Error starting location tracking:", error);
       this.isTracking = false;
       return false;
     }
@@ -75,20 +78,24 @@ class LocationTracker {
       const { latitude, longitude } = position.coords;
 
       // Get city name
-      let city = 'Unknown';
+      let city = "Unknown";
       try {
-        const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const addresses = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
         if (addresses && addresses.length > 0) {
           const address = addresses[0];
-          city = address.city || address.subregion || address.region || 'Unknown';
+          city =
+            address.city || address.subregion || address.region || "Unknown";
         }
       } catch (geocodeError) {
-        console.error('Error getting city:', geocodeError);
+        console.error("Error getting city:", geocodeError);
       }
 
       // Get current profile
       const currentProfile = await getUserProfile(this.currentUserId);
-      
+
       if (currentProfile) {
         // Update location and last active time
         await saveUserProfile(this.currentUserId, {
@@ -101,10 +108,12 @@ class LocationTracker {
         });
 
         this.lastUpdateTime = new Date();
-        console.log(`Location updated for user ${this.currentUserId}: ${city} (${latitude}, ${longitude})`);
+        console.log(
+          `Location updated for user ${this.currentUserId}: ${city} (${latitude}, ${longitude})`
+        );
       }
     } catch (error) {
-      console.error('Error updating location and status:', error);
+      console.error("Error updating location and status:", error);
     }
   }
 
@@ -117,7 +126,7 @@ class LocationTracker {
 
     try {
       const currentProfile = await getUserProfile(this.currentUserId);
-      
+
       if (currentProfile) {
         await saveUserProfile(this.currentUserId, {
           ...currentProfile,
@@ -126,7 +135,7 @@ class LocationTracker {
         });
       }
     } catch (error) {
-      console.error('Error updating last active:', error);
+      console.error("Error updating last active:", error);
     }
   }
 
@@ -139,7 +148,7 @@ class LocationTracker {
 
     try {
       const currentProfile = await getUserProfile(this.currentUserId);
-      
+
       if (currentProfile) {
         await saveUserProfile(this.currentUserId, {
           ...currentProfile,
@@ -148,7 +157,7 @@ class LocationTracker {
         });
       }
     } catch (error) {
-      console.error('Error setting offline status:', error);
+      console.error("Error setting offline status:", error);
     }
   }
 
@@ -172,7 +181,7 @@ class LocationTracker {
 
     this.isTracking = false;
     this.currentUserId = null;
-    console.log('Location tracking stopped');
+    console.log("Location tracking stopped");
   }
 
   /**
@@ -193,12 +202,12 @@ class LocationTracker {
  */
 export const formatLastActive = (lastActiveISO, isOnline = false) => {
   if (!lastActiveISO) {
-    return 'Last seen: Unknown';
+    return "Last seen: Unknown";
   }
 
   // If user is marked as online, show "Active now"
   if (isOnline) {
-    return '🟢 Active now';
+    return "🟢 Active now";
   }
 
   const lastActiveDate = new Date(lastActiveISO);
@@ -209,7 +218,7 @@ export const formatLastActive = (lastActiveISO, isOnline = false) => {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffMinutes < 1) {
-    return '🟢 Active now';
+    return "🟢 Active now";
   } else if (diffMinutes < 60) {
     return `🟡 Active ${diffMinutes}m ago`;
   } else if (diffHours < 24) {
@@ -217,7 +226,7 @@ export const formatLastActive = (lastActiveISO, isOnline = false) => {
   } else if (diffDays < 7) {
     return `⚪ Active ${diffDays}d ago`;
   } else {
-    return '⚪ Last seen: More than a week ago';
+    return "⚪ Last seen: More than a week ago";
   }
 };
 
@@ -226,11 +235,11 @@ export const formatLastActive = (lastActiveISO, isOnline = false) => {
  */
 export const getStatusIndicator = (lastActiveISO, isOnline = false) => {
   if (!lastActiveISO) {
-    return '⚪'; // Gray - unknown
+    return "⚪"; // Gray - unknown
   }
 
   if (isOnline) {
-    return '🟢'; // Green - online now
+    return "🟢"; // Green - online now
   }
 
   const lastActiveDate = new Date(lastActiveISO);
@@ -238,11 +247,11 @@ export const getStatusIndicator = (lastActiveISO, isOnline = false) => {
   const diffMinutes = Math.floor((now - lastActiveDate) / 60000);
 
   if (diffMinutes < 5) {
-    return '🟢'; // Green - recently active
+    return "🟢"; // Green - recently active
   } else if (diffMinutes < 60) {
-    return '🟡'; // Yellow - active within last hour
+    return "🟡"; // Yellow - active within last hour
   } else {
-    return '⚪'; // Gray - offline
+    return "⚪"; // Gray - offline
   }
 };
 

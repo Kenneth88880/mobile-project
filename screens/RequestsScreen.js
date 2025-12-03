@@ -19,8 +19,8 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-import { db } from "../services/firebaseConfig";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+// ✅ FIXED: Using React Native Firebase instead of web SDK
+import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
   getCurrentDuoPartner,
@@ -56,8 +56,12 @@ export default function RequestsScreen() {
     setLoading(true);
     try {
       const duo = await getCurrentDuoPartner(currentUserId);
+      console.log("Current duo loaded:", duo);
       setCurrentDuo(duo);
-      if (!duo) setLoading(false);
+      if (!duo) {
+        console.log("No duo partner found");
+        setLoading(false);
+      }
     } catch (error) {
       console.error("Error loading duo partner:", error);
       setLoading(false);
@@ -65,47 +69,60 @@ export default function RequestsScreen() {
   };
 
   useEffect(() => {
-    if (!currentDuo) return;
+    if (!currentDuo) {
+      console.log("No current duo, skipping listener setup");
+      return;
+    }
 
-    const likesQuery = query(
-      collection(db, "duoLikes"),
-      where("toDuoId", "==", currentDuo.duoId),
-      where("status", "==", "pending")
-    );
+    console.log("Setting up duo likes listener for duoId:", currentDuo.duoId);
 
-    const unsubscribe = onSnapshot(
-      likesQuery,
-      async (snapshot) => {
-        const likes = [];
-        for (const doc of snapshot.docs) {
-          const likeData = doc.data();
-          const user1Profile = await getUserProfile(likeData.fromUser1);
-          const user2Profile = await getUserProfile(likeData.fromUser2);
+    // ✅ FIXED: Using React Native Firebase syntax
+    const unsubscribe = firestore()
+      .collection("duoLikes")
+      .where("toDuoId", "==", currentDuo.duoId)
+      .where("status", "==", "pending")
+      .onSnapshot(
+        async (snapshot) => {
+          console.log("Duo likes snapshot received, docs:", snapshot.size);
 
-          if (user1Profile && user2Profile) {
-            likes.push({
-              id: doc.id,
-              fromDuoId: likeData.fromDuoId,
-              toDuoId: likeData.toDuoId,
-              user1: user1Profile,
-              user2: user2Profile,
-              acceptedBy: likeData.acceptedBy || [],
-              timestamp: likeData.timestamp,
-              status: likeData.status,
-            });
+          const likes = [];
+          for (const doc of snapshot.docs) {
+            const likeData = doc.data();
+            console.log("Processing like:", doc.id, likeData);
+
+            const user1Profile = await getUserProfile(likeData.fromUser1);
+            const user2Profile = await getUserProfile(likeData.fromUser2);
+
+            if (user1Profile && user2Profile) {
+              likes.push({
+                id: doc.id,
+                fromDuoId: likeData.fromDuoId,
+                toDuoId: likeData.toDuoId,
+                user1: user1Profile,
+                user2: user2Profile,
+                acceptedBy: likeData.acceptedBy || [],
+                timestamp: likeData.timestamp,
+                status: likeData.status,
+              });
+            } else {
+              console.log("Missing profile data for like:", doc.id);
+            }
           }
+
+          console.log("Total duo likes loaded:", likes.length);
+          setDuoLikes(likes);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error loading pending requests:", error);
+          setLoading(false);
         }
+      );
 
-        setDuoLikes(likes);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error in duo likes listener:", error);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
+    return () => {
+      console.log("Cleaning up duo likes listener");
+      unsubscribe();
+    };
   }, [currentDuo]);
 
   const loadData = async () => {
@@ -292,8 +309,7 @@ export default function RequestsScreen() {
           <Card style={styles.infoCard}>
             <Card.Content>
               <Text variant="headlineMedium">
-                {selectedProfile.name || "Unknown"},{" "}
-                {selectedProfile.age || "?"}
+                {selectedProfile.name}, {selectedProfile.age}
               </Text>
 
               {selectedProfile.description && (
@@ -302,11 +318,11 @@ export default function RequestsScreen() {
                 </Text>
               )}
 
-              {selectedProfile.tags && selectedProfile.tags.length > 0 && (
+              {selectedProfile.tags && (
                 <View style={styles.tagsContainer}>
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
-                    {selectedProfile.tags.map((tag, index) => (
+                    {selectedProfile.tags.split(" ").map((tag, index) => (
                       <Chip key={index} style={styles.tag} compact>
                         {tag}
                       </Chip>
@@ -315,84 +331,48 @@ export default function RequestsScreen() {
                 </View>
               )}
             </Card.Content>
-            <Card.Actions>
-              <Button mode="contained" icon="star" onPress={handleRateProfile}>
-                Rate Profile
-              </Button>
-            </Card.Actions>
           </Card>
         </ScrollView>
       </View>
     );
   }
 
+  // Loading state
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" />
+        <Text variant="bodyLarge" style={styles.loadingText}>
+          Loading requests...
+        </Text>
+      </View>
+    );
+  }
+
+  // No duo partner
   if (!currentDuo) {
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <Surface style={styles.header} elevation={2}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Like Requests</Text>
-          </View>
-        </Surface>
         <EmptyState
-          icon="account-multiple"
+          icon="account-group"
           title="No Duo Partner"
-          message="You need to be in a duo to receive double date requests! Go to your Profile tab to find a duo partner."
+          message="You need to set up a duo partner first to receive duo likes. Go to your profile to get started!"
+          actionLabel="Refresh"
+          onAction={onRefresh}
         />
       </View>
     );
   }
 
-  if (loading) {
-    return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Surface style={styles.header} elevation={2}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Like Requests</Text>
-          </View>
-        </Surface>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" />
-          <Text variant="bodyLarge" style={styles.loadingText}>
-            Loading requests...
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (duoLikes.length === 0) {
-    return (
-      <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <Surface style={styles.header} elevation={2}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Like Requests</Text>
-          </View>
-          <Chip icon="account-multiple">
-            Your duo with {currentDuo.partnerName}
-          </Chip>
-        </Surface>
-        <EmptyState
-          icon="email-heart"
-          title="No Requests Yet"
-          message={`When other duos like you, they'll appear here!\n\nBoth you and ${currentDuo.partnerName} need to accept before matching.`}
-        />
-      </ScrollView>
-    );
-  }
-
+  // Main view
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -402,149 +382,169 @@ export default function RequestsScreen() {
     >
       <Surface style={styles.header} elevation={2}>
         <View style={styles.headerContent}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Icon source="heart" size={28} color={theme.colors.primary} />
-            <Text variant="headlineMedium">Like Requests</Text>
-          </View>
-          <Chip icon="account-multiple" style={styles.duoChip}>
-            Your duo with {currentDuo.partnerName}
-          </Chip>
+          <Text variant="headlineMedium">Duo Likes</Text>
+          {currentDuo && (
+            <Chip icon="account-group" style={styles.duoChip}>
+              Duo with {currentDuo.partnerName}
+            </Chip>
+          )}
         </View>
       </Surface>
 
       <View style={styles.requestsList}>
-        {duoLikes.map((like) => {
-          const fromUser1Accepted =
-            like.acceptedBy?.includes(like.user1.userId) || false;
-          const fromUser2Accepted =
-            like.acceptedBy?.includes(like.user2.userId) || false;
-          const currentUserAccepted =
-            like.acceptedBy?.includes(currentUserId) || false;
-          const partnerAccepted = currentDuo
-            ? like.acceptedBy?.includes(currentDuo.partnerId) || false
-            : false;
+        {duoLikes.length === 0 ? (
+          <EmptyState
+            icon="heart-outline"
+            title="No Pending Requests"
+            message="When other duos like you, they'll appear here!"
+          />
+        ) : (
+          duoLikes.map((like) => {
+            const fromUser1Accepted =
+              like.acceptedBy?.includes(like.user1.userId) || false;
+            const fromUser2Accepted =
+              like.acceptedBy?.includes(like.user2.userId) || false;
+            const currentUserAccepted =
+              like.acceptedBy?.includes(currentUserId) || false;
+            const partnerAccepted = currentDuo
+              ? like.acceptedBy?.includes(currentDuo.partnerId) || false
+              : false;
 
-          const sendingDuoAcceptances =
-            (fromUser1Accepted ? 1 : 0) + (fromUser2Accepted ? 1 : 0);
-          const yourDuoFullyAccepted = currentUserAccepted && partnerAccepted;
-          const allAccepted =
-            sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
+            const sendingDuoAcceptances =
+              (fromUser1Accepted ? 1 : 0) + (fromUser2Accepted ? 1 : 0);
+            const yourDuoFullyAccepted = currentUserAccepted && partnerAccepted;
+            const allAccepted =
+              sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
 
-          return (
-            <Card key={like.id} style={styles.requestCard}>
-              <Card.Title
-                title={allAccepted ? "Match Ready!" : "Duo Like"}
-                titleVariant="titleLarge"
-                left={(props) => (
-                  <Icon
-                    source={allAccepted ? "check-circle" : "heart"}
-                    size={24}
-                    color={allAccepted ? "#4CAF50" : theme.colors.primary}
-                  />
-                )}
-              />
-              <Card.Content>
-                <View style={styles.duoPairContainer}>
-                  <Button
-                    mode="text"
-                    onPress={() => handleProfileClick(like.user1)}
-                    style={styles.profileButton}
-                  >
-                    <View style={styles.profileCard}>
-                      <ProfilePhoto uri={like.user1.photos?.[0]} size={80} />
-                      <Text variant="titleMedium" style={styles.profileName}>
-                        {like.user1.name}, {like.user1.age}
-                      </Text>
-                      {fromUser1Accepted && (
-                        <Chip icon="check" style={styles.acceptedChip} compact>
-                          Accepted
-                        </Chip>
-                      )}
-                    </View>
-                  </Button>
+            return (
+              <Card key={like.id} style={styles.requestCard}>
+                <Card.Title
+                  title={allAccepted ? "Match Ready!" : "Duo Like"}
+                  titleVariant="titleLarge"
+                  left={(props) => (
+                    <Icon
+                      source={allAccepted ? "check-circle" : "heart"}
+                      size={24}
+                      color={allAccepted ? "#4CAF50" : theme.colors.primary}
+                    />
+                  )}
+                />
+                <Card.Content>
+                  <View style={styles.duoPairContainer}>
+                    <Button
+                      mode="text"
+                      onPress={() => handleProfileClick(like.user1)}
+                      style={styles.profileButton}
+                    >
+                      <View style={styles.profileCard}>
+                        <ProfilePhoto uri={like.user1.photos?.[0]} size={80} />
+                        <Text variant="titleMedium" style={styles.profileName}>
+                          {like.user1.name}, {like.user1.age}
+                        </Text>
+                        {fromUser1Accepted && (
+                          <Chip
+                            icon="check"
+                            style={styles.acceptedChip}
+                            compact
+                          >
+                            Accepted
+                          </Chip>
+                        )}
+                      </View>
+                    </Button>
 
-                  <Text variant="displaySmall" style={styles.plusSign}>
-                    +
-                  </Text>
+                    <Text variant="displaySmall" style={styles.plusSign}>
+                      +
+                    </Text>
 
-                  <Button
-                    mode="text"
-                    onPress={() => handleProfileClick(like.user2)}
-                    style={styles.profileButton}
-                  >
-                    <View style={styles.profileCard}>
-                      <ProfilePhoto uri={like.user2.photos?.[0]} size={80} />
-                      <Text variant="titleMedium" style={styles.profileName}>
-                        {like.user2.name}, {like.user2.age}
-                      </Text>
-                      {fromUser2Accepted && (
-                        <Chip icon="check" style={styles.acceptedChip} compact>
-                          Accepted
-                        </Chip>
-                      )}
-                    </View>
-                  </Button>
-                </View>
-
-                <Divider style={styles.divider} />
-
-                <Surface style={styles.statusSection} elevation={1}>
-                  <Text variant="titleSmall">Acceptance Status:</Text>
-                  <Text variant="bodyMedium" style={styles.statusText}>
-                    Their duo: {sendingDuoAcceptances}/2 accepted
-                  </Text>
-                  <Text variant="bodyMedium" style={styles.statusText}>
-                    Your duo:{" "}
-                    {currentUserAccepted ? "You (accepted)" : "You (pending)"} •{" "}
-                    {partnerAccepted
-                      ? `${currentDuo.partnerName} (accepted)`
-                      : `${currentDuo.partnerName} (pending)`}
-                  </Text>
-                </Surface>
-
-                {!allAccepted && (
-                  <View style={styles.actionButtons}>
-                    {!currentUserAccepted ? (
-                      <>
-                        <Button
-                          mode="outlined"
-                          icon="close"
-                          onPress={() => handleDecline(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Decline
-                        </Button>
-                        <Button
-                          mode="contained"
-                          icon="check"
-                          onPress={() => handleAccept(like.id, like.fromDuoId)}
-                          style={styles.actionButton}
-                        >
-                          Accept
-                        </Button>
-                      </>
-                    ) : (
-                      <Chip icon="clock" style={styles.waitingChip}>
-                        Waiting for {currentDuo.partnerName} to accept
-                      </Chip>
-                    )}
+                    <Button
+                      mode="text"
+                      onPress={() => handleProfileClick(like.user2)}
+                      style={styles.profileButton}
+                    >
+                      <View style={styles.profileCard}>
+                        <ProfilePhoto uri={like.user2.photos?.[0]} size={80} />
+                        <Text variant="titleMedium" style={styles.profileName}>
+                          {like.user2.name}, {like.user2.age}
+                        </Text>
+                        {fromUser2Accepted && (
+                          <Chip
+                            icon="check"
+                            style={styles.acceptedChip}
+                            compact
+                          >
+                            Accepted
+                          </Chip>
+                        )}
+                      </View>
+                    </Button>
                   </View>
-                )}
 
-                {allAccepted && (
-                  <Chip icon="check-circle" style={styles.matchedChip}>
-                    Match complete! Check Messages to chat!
-                  </Chip>
-                )}
+                  <Divider style={styles.divider} />
 
-                <Text variant="bodySmall" style={styles.timestamp}>
-                  Liked on{" "}
-                  {new Date(like.timestamp?.toDate()).toLocaleDateString()}
-                </Text>
-              </Card.Content>
-            </Card>
-          );
-        })}
+                  <Surface style={styles.statusSection} elevation={1}>
+                    <Text variant="titleSmall">Acceptance Status:</Text>
+                    <Text variant="bodyMedium" style={styles.statusText}>
+                      Their duo: {sendingDuoAcceptances}/2 accepted
+                    </Text>
+                    <Text variant="bodyMedium" style={styles.statusText}>
+                      Your duo:{" "}
+                      {currentUserAccepted ? "You (accepted)" : "You (pending)"}{" "}
+                      •{" "}
+                      {partnerAccepted
+                        ? `${currentDuo.partnerName} (accepted)`
+                        : `${currentDuo.partnerName} (pending)`}
+                    </Text>
+                  </Surface>
+
+                  {!allAccepted && (
+                    <View style={styles.actionButtons}>
+                      {!currentUserAccepted ? (
+                        <>
+                          <Button
+                            mode="outlined"
+                            icon="close"
+                            onPress={() =>
+                              handleDecline(like.id, like.fromDuoId)
+                            }
+                            style={styles.actionButton}
+                          >
+                            Decline
+                          </Button>
+                          <Button
+                            mode="contained"
+                            icon="check"
+                            onPress={() =>
+                              handleAccept(like.id, like.fromDuoId)
+                            }
+                            style={styles.actionButton}
+                          >
+                            Accept
+                          </Button>
+                        </>
+                      ) : (
+                        <Chip icon="clock" style={styles.waitingChip}>
+                          Waiting for {currentDuo.partnerName} to accept
+                        </Chip>
+                      )}
+                    </View>
+                  )}
+
+                  {allAccepted && (
+                    <Chip icon="check-circle" style={styles.matchedChip}>
+                      Match complete! Check Messages to chat!
+                    </Chip>
+                  )}
+
+                  <Text variant="bodySmall" style={styles.timestamp}>
+                    Liked on{" "}
+                    {new Date(like.timestamp?.toDate()).toLocaleDateString()}
+                  </Text>
+                </Card.Content>
+              </Card>
+            );
+          })
+        )}
       </View>
     </ScrollView>
   );
