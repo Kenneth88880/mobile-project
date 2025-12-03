@@ -1,181 +1,166 @@
 // services/profileService.js
-// ✅ FIXED: Proper duo filtering to prevent re-appearing after swipes/likes
+// ✅ FIXED: Using React Native Firebase instead of web SDK
 
-import firestore from '@react-native-firebase/firestore';
-import storage from '@react-native-firebase/storage';
+import firestore from "@react-native-firebase/firestore";
 
-// ==================== CORE PROFILE FUNCTIONS ====================
-
+/**
+ * Get a user's profile by userId
+ */
 export const getUserProfile = async (userId) => {
   try {
-    const docSnap = await firestore()
-      .collection('profiles')
-      .doc(userId)
-      .get();
+    const doc = await firestore().collection("users").doc(userId).get();
 
-    if (docSnap.exists) {
-      return { userId, ...docSnap.data() };
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting user profile:', error);
-    return null;
-  }
-};
-
-export const saveUserProfile = async (userId, profileData) => {
-  try {
-    await firestore()
-      .collection('profiles')
-      .doc(userId)
-      .set(profileData, { merge: true });
-    return true;
-  } catch (error) {
-    console.error('Error saving user profile:', error);
-    return false;
-  }
-};
-
-// ==================== DUO PARTNER FUNCTIONS ====================
-
-export const getCurrentDuoPartner = async (userId) => {
-  try {
-    const querySnapshot = await firestore()
-      .collection('duos')
-      .where('users', 'array-contains', userId)
-      .get();
-
-    if (!querySnapshot.empty) {
-      const duoDoc = querySnapshot.docs[0];
-      const duoData = duoDoc.data();
-      const partnerId = duoData.users.find((id) => id !== userId);
-
+    if (doc.exists) {
       return {
-        duoId: duoDoc.id,
-        partnerId,
-        users: duoData.users,
+        userId: doc.id,
+        ...doc.data(),
       };
     }
     return null;
   } catch (error) {
-    console.error('Error getting duo partner:', error);
+    console.error("Error getting user profile:", error);
     return null;
   }
 };
 
-// ==================== DUO PAIRS FILTERING (MAIN LOGIC) ====================
+/**
+ * Save/update a user's profile
+ */
+export const saveUserProfile = async (userId, data) => {
+  try {
+    await firestore()
+      .collection("users")
+      .doc(userId)
+      .set(data, { merge: true });
+    return true;
+  } catch (error) {
+    console.error("Error saving user profile:", error);
+    return false;
+  }
+};
 
 /**
- * Get all duo pairs that the current user's duo hasn't interacted with yet
- * Filters out:
- * - Duos already liked
- * - Duos already swiped (passed)
- * - Duos that have liked you (they should only appear in requests)
- * - Your own duo
+ * Get all duo pairs for matching
  */
-export const getAllDuoPairs = async (currentUserId) => {
+export const getAllDuoPairs = async (userId) => {
   try {
-    // Step 1: Get current user's duo
-    const currentDuo = await getCurrentDuoPartner(currentUserId);
-    
+    console.log("Loading duo pairs for user:", userId);
+
+    // Get the current user's duo
+    const currentDuo = await getCurrentDuoPartner(userId);
     if (!currentDuo) {
-      console.log('No duo partner found');
+      console.log("No current duo found");
       return [];
     }
 
-    const currentDuoId = currentDuo.duoId;
+    console.log("Current duo ID:", currentDuo.duoId);
 
-    // Step 2: Get all duo IDs that current duo has already interacted with
-    const interactedDuoIds = new Set();
-
-    // Get all likes FROM current duo
-    const likesFromSnapshot = await firestore()
-      .collection('duoLikes')
-      .where('fromDuoId', '==', currentDuoId)
-      .get();
-    
-    likesFromSnapshot.forEach(doc => {
-      interactedDuoIds.add(doc.data().toDuoId);
-    });
-
-    // Get all likes TO current duo (these should only show in requests)
-    const likesToSnapshot = await firestore()
-      .collection('duoLikes')
-      .where('toDuoId', '==', currentDuoId)
-      .get();
-    
-    likesToSnapshot.forEach(doc => {
-      interactedDuoIds.add(doc.data().fromDuoId);
-    });
-
-    // Get all swipes/passes from current duo
+    // Get duo pairs that haven't been swiped yet
     const swipesSnapshot = await firestore()
-      .collection('duoSwipes')
-      .where('fromDuoId', '==', currentDuoId)
-      .get();
-    
-    swipesSnapshot.forEach(doc => {
-      interactedDuoIds.add(doc.data().toDuoId);
-    });
-
-    console.log('Filtered out duo IDs:', Array.from(interactedDuoIds));
-
-    // Step 3: Get all duos
-    const allDuosSnapshot = await firestore()
-      .collection('duos')
+      .collection("duoSwipes")
+      .where("fromDuoId", "==", currentDuo.duoId)
       .get();
 
-    const availablePairs = [];
+    const swipedDuoIds = swipesSnapshot.docs.map((doc) => doc.data().toDuoId);
+    console.log("Already swiped duo IDs:", swipedDuoIds);
 
-    // Step 4: Filter and build duo pairs
-    for (const duoDoc of allDuosSnapshot.docs) {
-      const duoId = duoDoc.id;
-      const duoData = duoDoc.data();
+    // Get all active duo pairs, excluding own duo and already swiped
+    const duosSnapshot = await firestore()
+      .collection("duos")
+      .where("status", "==", "active")
+      .get();
 
-      // Skip if this is the current user's duo
-      if (duoId === currentDuoId) {
+    const pairs = [];
+    for (const doc of duosSnapshot.docs) {
+      const duoData = doc.data();
+      const duoId = doc.id;
+
+      // Skip own duo and already swiped duos
+      if (duoId === currentDuo.duoId || swipedDuoIds.includes(duoId)) {
         continue;
       }
 
-      // Skip if already interacted with this duo
-      if (interactedDuoIds.has(duoId)) {
-        console.log(`Skipping duo ${duoId} - already interacted`);
-        continue;
-      }
-
-      // Get profiles for both users in this duo
-      const [user1Id, user2Id] = duoData.users;
-      
-      const user1Profile = await getUserProfile(user1Id);
-      const user2Profile = await getUserProfile(user2Id);
+      // Get profiles for both users
+      const user1Profile = await getUserProfile(duoData.user1);
+      const user2Profile = await getUserProfile(duoData.user2);
 
       if (user1Profile && user2Profile) {
-        availablePairs.push({
+        pairs.push({
           id: duoId,
-          users: duoData.users,
           user1Profile,
           user2Profile,
-          // Legacy compatibility
-          user1: user1Profile,
-          user2: user2Profile,
+          users: [duoData.user1, duoData.user2],
+          createdAt: duoData.createdAt,
         });
       }
     }
 
-    console.log(`Found ${availablePairs.length} available duo pairs`);
-    return availablePairs;
-
+    console.log("Total duo pairs loaded:", pairs.length);
+    return pairs;
   } catch (error) {
-    console.error('Error getting duo pairs:', error);
+    console.error("Error loading duo pairs:", error);
     return [];
   }
 };
 
-// ==================== DUO LIKES ====================
+/**
+ * Get current user's duo partner
+ */
+export const getCurrentDuoPartner = async (userId) => {
+  try {
+    // Check if user is user1
+    let snapshot = await firestore()
+      .collection("duos")
+      .where("user1", "==", userId)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const duoDoc = snapshot.docs[0];
+      const duoData = duoDoc.data();
+      const partnerProfile = await getUserProfile(duoData.user2);
+
+      return {
+        duoId: duoDoc.id,
+        partnerId: duoData.user2,
+        partnerName: partnerProfile?.name || "Partner",
+        partnerProfile,
+        ...duoData,
+      };
+    }
+
+    // Check if user is user2
+    snapshot = await firestore()
+      .collection("duos")
+      .where("user2", "==", userId)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const duoDoc = snapshot.docs[0];
+      const duoData = duoDoc.data();
+      const partnerProfile = await getUserProfile(duoData.user1);
+
+      return {
+        duoId: duoDoc.id,
+        partnerId: duoData.user1,
+        partnerName: partnerProfile?.name || "Partner",
+        partnerProfile,
+        ...duoData,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting duo partner:", error);
+    return null;
+  }
+};
 
 /**
- * Save a like from one duo to another
- * Creates a pending request in duoLikes collection
+ * Save a duo like
  */
 export const saveDuoLike = async (
   fromDuoId,
@@ -186,320 +171,282 @@ export const saveDuoLike = async (
   toUser2
 ) => {
   try {
-    // Check if like already exists
-    const existingLike = await firestore()
-      .collection('duoLikes')
-      .where('fromDuoId', '==', fromDuoId)
-      .where('toDuoId', '==', toDuoId)
-      .get();
-
-    if (!existingLike.empty) {
-      console.log('Like already exists');
-      return true;
-    }
-
-    // Create the like
-    await firestore()
-      .collection('duoLikes')
-      .add({
-        fromDuoId,
-        toDuoId,
-        fromUser1,
-        fromUser2,
-        toUser1,
-        toUser2,
-        status: 'pending',
-        acceptedBy: [],
-        timestamp: firestore.FieldValue.serverTimestamp(),
-      });
-
-    console.log(`Duo ${fromDuoId} liked duo ${toDuoId}`);
+    await firestore().collection("duoLikes").add({
+      fromDuoId,
+      toDuoId,
+      fromUser1,
+      fromUser2,
+      toUser1,
+      toUser2,
+      status: "pending",
+      acceptedBy: [],
+      timestamp: firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+    });
     return true;
   } catch (error) {
-    console.error('Error saving duo like:', error);
+    console.error("Error saving duo like:", error);
+    return false;
+  }
+};
+
+/**
+ * Delete duo like between two duos
+ */
+export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
+  try {
+    const snapshot = await firestore()
+      .collection("duoLikes")
+      .where("fromDuoId", "==", fromDuoId)
+      .where("toDuoId", "==", toDuoId)
+      .get();
+
+    const deletePromises = snapshot.docs.map((doc) => doc.ref.delete());
+    await Promise.all(deletePromises);
+    return true;
+  } catch (error) {
+    console.error("Error deleting duo like:", error);
+    return false;
+  }
+};
+
+/**
+ * Save a duo swipe (pass or like)
+ */
+export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
+  try {
+    await firestore().collection("duoSwipes").add({
+      fromDuoId,
+      toDuoId,
+      action, // 'pass' or 'like'
+      timestamp: firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error saving duo swipe:", error);
     return false;
   }
 };
 
 /**
  * Accept a duo like
- * Both users in the receiving duo must accept to create a match
  */
-export const acceptDuoLike = async (
-  likeId,
-  acceptingUserId,
-  currentDuoId,
-  fromDuoId
-) => {
+export const acceptDuoLike = async (likeId, userId, yourDuoId, fromDuoId) => {
   try {
-    const likeRef = firestore().collection('duoLikes').doc(likeId);
+    const likeRef = firestore().collection("duoLikes").doc(likeId);
     const likeDoc = await likeRef.get();
 
     if (!likeDoc.exists) {
-      console.log('Like not found');
+      console.error("Duo like not found");
       return false;
     }
 
     const likeData = likeDoc.data();
     const acceptedBy = likeData.acceptedBy || [];
 
-    // Add this user to acceptedBy if not already there
-    if (!acceptedBy.includes(acceptingUserId)) {
-      acceptedBy.push(acceptingUserId);
+    // Add user to acceptedBy if not already there
+    if (!acceptedBy.includes(userId)) {
+      acceptedBy.push(userId);
+
+      await likeRef.update({
+        acceptedBy,
+        lastUpdated: firestore.FieldValue.serverTimestamp(),
+      });
     }
 
-    // Update the like
-    await likeRef.update({
-      acceptedBy,
-    });
+    // Check if both users in the receiving duo have accepted
+    const duo = await getCurrentDuoPartner(userId);
+    if (duo) {
+      const bothAccepted =
+        acceptedBy.includes(duo.user1 || userId) &&
+        acceptedBy.includes(duo.user2 || duo.partnerId);
 
-    // Check if both users in the duo have accepted
-    const currentDuo = await firestore()
-      .collection('duos')
-      .doc(currentDuoId)
-      .get();
-    
-    const currentDuoUsers = currentDuo.data().users;
-    const bothAccepted = currentDuoUsers.every(userId => 
-      acceptedBy.includes(userId)
-    );
+      if (bothAccepted) {
+        // Create a match/chat
+        await createDuoMatch(yourDuoId, fromDuoId, likeId);
 
-    if (bothAccepted) {
-      // Create a match!
-      await likeRef.update({
-        status: 'matched',
-        matchedAt: firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Create a chat for the matched duos
-      await createDuoChat(currentDuoId, fromDuoId, likeData);
-
-      console.log(`Match created between ${currentDuoId} and ${fromDuoId}!`);
+        // Update status to matched
+        await likeRef.update({
+          status: "matched",
+          matchedAt: firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
 
     return true;
   } catch (error) {
-    console.error('Error accepting duo like:', error);
+    console.error("Error accepting duo like:", error);
     return false;
   }
 };
 
 /**
- * Delete a duo like (decline)
+ * Delete a duo like
  */
 export const deleteDuoLike = async (likeId) => {
   try {
-    await firestore()
-      .collection('duoLikes')
-      .doc(likeId)
-      .delete();
+    await firestore().collection("duoLikes").doc(likeId).delete();
     return true;
   } catch (error) {
-    console.error('Error deleting duo like:', error);
+    console.error("Error deleting duo like:", error);
     return false;
   }
 };
 
 /**
- * Delete a specific like between two duos
+ * Create a chat when both duos match
  */
-export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
-  try {
-    const snapshot = await firestore()
-      .collection('duoLikes')
-      .where('fromDuoId', '==', fromDuoId)
-      .where('toDuoId', '==', toDuoId)
-      .get();
-
-    const deletePromises = snapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(deletePromises);
-    
-    return true;
-  } catch (error) {
-    console.error('Error deleting duo like between:', error);
-    return false;
-  }
-};
-
-// ==================== DUO SWIPES (PASSES) ====================
-
-/**
- * Save a swipe/pass
- * This ensures the duo won't appear again
- */
-export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
-  try {
-    // Check if swipe already exists
-    const existingSwipe = await firestore()
-      .collection('duoSwipes')
-      .where('fromDuoId', '==', fromDuoId)
-      .where('toDuoId', '==', toDuoId)
-      .get();
-
-    if (!existingSwipe.empty) {
-      // Update existing swipe
-      await existingSwipe.docs[0].ref.update({
-        action,
-        timestamp: firestore.FieldValue.serverTimestamp(),
-      });
-    } else {
-      // Create new swipe
-      await firestore()
-        .collection('duoSwipes')
-        .add({
-          fromDuoId,
-          toDuoId,
-          action,
-          timestamp: firestore.FieldValue.serverTimestamp(),
-        });
-    }
-
-    console.log(`Duo ${fromDuoId} ${action} duo ${toDuoId}`);
-    return true;
-  } catch (error) {
-    console.error('Error saving duo swipe:', error);
-    return false;
-  }
-};
-
-// ==================== CHAT CREATION ====================
-
-/**
- * Create a group chat when two duos match
- */
-const createDuoChat = async (duo1Id, duo2Id, likeData) => {
+const createDuoMatch = async (duo1Id, duo2Id, likeId) => {
   try {
     // Get both duos
-    const duo1Doc = await firestore().collection('duos').doc(duo1Id).get();
-    const duo2Doc = await firestore().collection('duos').doc(duo2Id).get();
+    const duo1Doc = await firestore().collection("duos").doc(duo1Id).get();
+    const duo2Doc = await firestore().collection("duos").doc(duo2Id).get();
 
     if (!duo1Doc.exists || !duo2Doc.exists) {
-      console.log('One or both duos not found');
+      console.error("One or both duos not found");
       return false;
     }
 
-    const duo1Users = duo1Doc.data().users;
-    const duo2Users = duo2Doc.data().users;
-    const allParticipants = [...duo1Users, ...duo2Users];
+    const duo1Data = duo1Doc.data();
+    const duo2Data = duo2Doc.data();
 
-    // Get names for chat title
-    const user1Profile = await getUserProfile(duo1Users[0]);
-    const user2Profile = await getUserProfile(duo1Users[1]);
-    const user3Profile = await getUserProfile(duo2Users[0]);
-    const user4Profile = await getUserProfile(duo2Users[1]);
+    const participants = [
+      duo1Data.user1,
+      duo1Data.user2,
+      duo2Data.user1,
+      duo2Data.user2,
+    ];
 
-    const chatName = `${user1Profile?.name} & ${user2Profile?.name} + ${user3Profile?.name} & ${user4Profile?.name}`;
-
-    // Create the chat
+    // Create chat
     await firestore()
-      .collection('chats')
+      .collection("chats")
       .add({
-        participants: allParticipants,
-        isGroupChat: true,
-        groupName: chatName,
+        participants,
+        duo1Id,
+        duo2Id,
         createdAt: firestore.FieldValue.serverTimestamp(),
+        lastMessage: "Match created! Start chatting!",
         lastMessageTime: firestore.FieldValue.serverTimestamp(),
-        lastMessageText: 'You matched! Say hi 👋',
-        unreadCount: Object.fromEntries(
-          allParticipants.map(userId => [userId, 0])
-        ),
+        unreadCount: {
+          [duo1Data.user1]: 0,
+          [duo1Data.user2]: 0,
+          [duo2Data.user1]: 0,
+          [duo2Data.user2]: 0,
+        },
       });
 
-    console.log('Chat created for matched duos');
     return true;
   } catch (error) {
-    console.error('Error creating duo chat:', error);
+    console.error("Error creating duo match:", error);
     return false;
   }
 };
 
-// ==================== RATINGS ====================
-
+/**
+ * Save a rating for a user
+ */
 export const saveRating = async (fromUserId, toUserId, rating) => {
   try {
-    await firestore()
-      .collection('ratings')
-      .add({
-        fromUserId,
-        toUserId,
-        rating,
-        timestamp: firestore.FieldValue.serverTimestamp(),
-      });
+    await firestore().collection("ratings").add({
+      fromUserId,
+      toUserId,
+      rating,
+      timestamp: firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+    });
     return true;
   } catch (error) {
-    console.error('Error saving rating:', error);
+    console.error("Error saving rating:", error);
     return false;
   }
 };
 
-export const getAverageRating = async (userId) => {
+/**
+ * Get average rating for a user
+ */
+export const getUserRating = async (userId) => {
   try {
-    const ratingsSnapshot = await firestore()
-      .collection('ratings')
-      .where('toUserId', '==', userId)
+    const snapshot = await firestore()
+      .collection("ratings")
+      .where("toUserId", "==", userId)
       .get();
 
-    if (ratingsSnapshot.empty) {
-      return { average: '0.0', count: 0 };
+    if (snapshot.empty) {
+      return { average: 0, count: 0 };
     }
 
-    const ratings = ratingsSnapshot.docs.map(doc => doc.data().rating);
-    const sum = ratings.reduce((acc, val) => acc + val, 0);
-    const average = sum / ratings.length;
+    let total = 0;
+    snapshot.forEach((doc) => {
+      total += doc.data().rating || 0;
+    });
 
     return {
-      average: average.toFixed(1),
-      count: ratings.length,
+      average: total / snapshot.size,
+      count: snapshot.size,
     };
   } catch (error) {
-    console.error('Error getting average rating:', error);
-    return { average: '0.0', count: 0 };
+    console.error("Error getting user rating:", error);
+    return { average: 0, count: 0 };
   }
 };
 
-// ==================== PHOTO UPLOAD ====================
-
-export const uploadPhoto = async (userId, photoUri, index) => {
+/**
+ * Create or update a duo partnership
+ */
+export const createDuoPartnership = async (user1Id, user2Id) => {
   try {
-    const filename = `${userId}_${index}_${Date.now()}.jpg`;
-    const reference = storage().ref(`profile_photos/${filename}`);
+    // Check if duo already exists
+    let snapshot = await firestore()
+      .collection("duos")
+      .where("user1", "==", user1Id)
+      .where("user2", "==", user2Id)
+      .where("status", "==", "active")
+      .get();
 
-    await reference.putFile(photoUri);
-    const downloadURL = await reference.getDownloadURL();
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
 
-    return downloadURL;
+    // Check reverse
+    snapshot = await firestore()
+      .collection("duos")
+      .where("user1", "==", user2Id)
+      .where("user2", "==", user1Id)
+      .where("status", "==", "active")
+      .get();
+
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
+    }
+
+    // Create new duo
+    const duoRef = await firestore().collection("duos").add({
+      user1: user1Id,
+      user2: user2Id,
+      status: "active",
+      createdAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    return duoRef.id;
   } catch (error) {
-    console.error('Error uploading photo:', error);
+    console.error("Error creating duo partnership:", error);
     return null;
   }
 };
 
-// ==================== RESET FUNCTIONS ====================
-
 /**
- * Reset all duo-related data (for testing/debugging)
+ * End a duo partnership
  */
-export const resetAllDuoData = async () => {
+export const endDuoPartnership = async (duoId) => {
   try {
-    // Delete all duoLikes
-    const likesSnapshot = await firestore().collection('duoLikes').get();
-    const likesDeletePromises = likesSnapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(likesDeletePromises);
-
-    // Delete all duoSwipes
-    const swipesSnapshot = await firestore().collection('duoSwipes').get();
-    const swipesDeletePromises = swipesSnapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(swipesDeletePromises);
-
-    // Delete all duoMatches
-    const matchesSnapshot = await firestore().collection('duoMatches').get();
-    const matchesDeletePromises = matchesSnapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(matchesDeletePromises);
-
-    console.log('All duo data reset successfully');
-    return { success: true };
+    await firestore().collection("duos").doc(duoId).update({
+      status: "inactive",
+      endedAt: firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
   } catch (error) {
-    console.error('Error resetting duo data:', error);
-    return { success: false, error };
+    console.error("Error ending duo partnership:", error);
+    return false;
   }
 };
