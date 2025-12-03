@@ -1,6 +1,7 @@
 import { StyleSheet, View, KeyboardAvoidingView } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
+import TOSPopup from "../components/TOSPopup";
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -13,6 +14,20 @@ const SigninScreen = () => {
   const theme = useTheme();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [isTOSVisible, setTOSVisible] = React.useState(false);
+
+  const handleSignUpPress = () => {
+    setTOSVisible(true);
+  };
+
+  const handleAcceptTOS = () => {
+    handleSignUp();
+    setTOSVisible(false);
+  };
+
+  const handleDeclineTOS = () => {
+    setTOSVisible(false);
+  };
 
   // handles sign up
   const handleSignUp = () => {
@@ -21,6 +36,7 @@ const SigninScreen = () => {
         // Signed up
         const user = userCredential.user;
         console.log("Registered with:", user.email);
+        alert("Please Click the gear icon to set up your profile!");
         // ...
       })
       .catch((error) => {
@@ -59,6 +75,10 @@ const SigninScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior="padding"
     >
+      <TOSPopup
+        visible={isTOSVisible}
+        onAccept={handleAcceptTOS}
+        onDecline={handleDeclineTOS}/>
       <View style={styles.inputContainer}>
         <TextInput
           label="Email"
@@ -84,7 +104,11 @@ const SigninScreen = () => {
           Login
         </Button>
 
-        <Button mode="outlined" onPress={handleSignUp} style={styles.button}>
+        <Button
+          mode="outlined"
+          onPress={handleSignUpPress}
+          style={styles.button}
+        >
           Register
         </Button>
       </View>
