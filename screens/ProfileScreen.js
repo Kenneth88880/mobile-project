@@ -34,23 +34,9 @@ import {
   resetAllDuoData,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
-import { getAuth, signOut } from "firebase/auth";
-import { db } from "../services/firebaseConfig";
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { formatLastActive } from "../utils/locationTracker";
-
-const auth = getAuth();
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -153,8 +139,16 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState(null);
   const [searchTimeout, setSearchTimeout] = useState(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
@@ -172,13 +166,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const loadPendingRequests = async () => {
     try {
-      // ✅ Web SDK syntax
-      const q = query(
-        collection(db, "duoRequests"),
-        where("toUserId", "==", CURRENT_USER_ID),
-        where("status", "==", "pending")
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await firestore()
+        .collection("duoRequests")
+        .where("toUserId", "==", CURRENT_USER_ID)
+        .where("status", "==", "pending")
+        .get();
 
       const requests = [];
       for (const docSnap of querySnapshot.docs) {
@@ -206,12 +198,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const loadDuo = async () => {
     try {
-      // ✅ Web SDK syntax
-      const q = query(
-        collection(db, "duos"),
-        where("users", "array-contains", CURRENT_USER_ID)
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .get();
 
       if (!querySnapshot.empty) {
         const duoDoc = querySnapshot.docs[0];
@@ -347,19 +337,22 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   };
 
   const handleSearchPartner = async (searchText) => {
+    // Prevent search if already searching
+    if (searching) {
+      return;
+    }
+
     if (!searchText.trim()) {
       setSearchResults([]);
       setSearching(false);
-      setSearchError(null);
       return;
     }
 
     setSearching(true);
-    setSearchError(null);
 
     try {
-      // Search by User ID
-      const userDoc = await getDoc(doc(db, "profiles", searchText.trim()));
+      // Search by User ID in 'profiles' collection
+      const userDoc = await firestore().collection("profiles").doc(searchText.trim().get());
 
       if (userDoc.exists() && userDoc.id !== CURRENT_USER_ID) {
         const userData = userDoc.data();
@@ -370,61 +363,37 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
             tags: Array.isArray(userData.tags) ? userData.tags : [],
           },
         ]);
-        setSearchError(null);
-      } else if (userDoc.id === CURRENT_USER_ID) {
-        setSearchResults([]);
-        setSearchError("You can't add yourself as a duo partner!");
       } else {
+        // Just clear results - don't show any error
         setSearchResults([]);
-        setSearchError("No user found with that ID");
       }
     } catch (error) {
       console.error("Error searching users:", error);
       setSearchResults([]);
-      setSearchError("No user found with that ID");
     } finally {
       setSearching(false);
     }
   };
 
-  const debouncedSearch = useCallback(
-    (text) => {
-      // Clear previous timeout
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
-      }
-
-      // Set new timeout
-      const timeout = setTimeout(() => {
-        handleSearchPartner(text);
-      }, 800); // 800ms delay after user stops typing
-
-      setSearchTimeout(timeout);
-    },
-    [searchTimeout]
-  );
-
   const handleSendPartnerRequest = async (targetUserId) => {
     try {
-      const requestsRef = collection(db, "duoRequests");
-      const q = query(
-        requestsRef,
-        where("fromUserId", "==", CURRENT_USER_ID),
-        where("toUserId", "==", targetUserId),
-        where("status", "==", "pending")
-      );
-      const existingRequests = await getDocs(q);
+      const existingRequests = await firestore()
+        .collection("duoRequests")
+        .where("fromUserId", "==", CURRENT_USER_ID)
+        .where("toUserId", "==", targetUserId)
+        .where("status", "==", "pending")
+        .get();
 
       if (!existingRequests.empty) {
         Alert.alert("Info", "You've already sent a request to this user!");
         return;
       }
 
-      await addDoc(requestsRef, {
+      await firestore().collection("duoRequests").add({
         fromUserId: CURRENT_USER_ID,
         toUserId: targetUserId,
         status: "pending",
-        timestamp: serverTimestamp(),
+        timestamp: firestore.FieldValue.serverTimestamp(),
       });
 
       Alert.alert("Success", "Partner request sent!");
@@ -439,25 +408,23 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleAcceptRequest = async (requestId, fromUserId) => {
     try {
-      const duosRef = collection(db, "duos");
-      const q = query(
-        duosRef,
-        where("users", "array-contains", CURRENT_USER_ID)
-      );
-      const existingDuos = await getDocs(q);
+      const existingDuos = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .get();
 
       if (!existingDuos.empty) {
         Alert.alert("Error", "You're already in a duo!");
         return;
       }
 
-      await addDoc(duosRef, {
+      await firestore().collection("duos").add({
         users: [CURRENT_USER_ID, fromUserId],
-        createdAt: serverTimestamp(),
+        status: "active",
+        createdAt: firestore.FieldValue.serverTimestamp(),
       });
 
-      const requestRef = doc(db, "duoRequests", requestId);
-      await updateDoc(requestRef, { status: "accepted" });
+      await firestore().collection("duoRequests").doc(requestId).update({ status: "accepted" });
 
       Alert.alert("Success", "You're now duo partners!");
       loadPendingRequests();
@@ -471,8 +438,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleDeclineRequest = async (requestId) => {
     try {
-      const requestRef = doc(db, "duoRequests", requestId);
-      await deleteDoc(requestRef);
+      await firestore().collection("duoRequests").doc(requestId).delete();
 
       Alert.alert("Success", "Request declined");
       loadPendingRequests();
@@ -493,16 +459,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           style: "destructive",
           onPress: async () => {
             try {
-              const duosRef = collection(db, "duos");
-              const q = query(
-                duosRef,
-                where("users", "array-contains", CURRENT_USER_ID)
-              );
-              const querySnapshot = await getDocs(q);
+              const querySnapshot = await firestore()
+                .collection("duos")
+                .where("users", "array-contains", CURRENT_USER_ID)
+                .get();
 
               if (!querySnapshot.empty) {
                 const duoDoc = querySnapshot.docs[0];
-                await deleteDoc(doc(db, "duos", duoDoc.id));
+                await firestore().collection("duos").doc(duoDoc.id).delete();
                 Alert.alert("Success", "Partner removed");
                 setDuoPartnerProfile(null);
                 setProfile({ ...profile, duoPartnerId: null });
@@ -691,6 +655,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 setShowPartnerSearch(false);
                 setSearchQuery("");
                 setSearchResults([]);
+                if (searchTimeout) {
+                  clearTimeout(searchTimeout);
+                  setSearchTimeout(null);
+                }
               }}
               style={{ position: "absolute", right: 16, top: 16 }}
             />
@@ -715,12 +683,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                   icon="content-copy"
                   size={20}
                   onPress={() => {
-                    // Note: Clipboard requires expo-clipboard package
-                    // For now, users can long-press to copy
-                    Alert.alert(
-                      "Copy ID",
-                      "Long-press your ID above to copy it, then share it with your friend!"
-                    );
+                    // User can long-press the ID text to copy it
                   }}
                 />
               </View>
@@ -735,13 +698,23 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               value={searchQuery}
               onChangeText={(text) => {
                 setSearchQuery(text);
-                debouncedSearch(text);
+                setSearchResults([]);
               }}
               mode="outlined"
               style={styles.searchInput}
               left={<TextInput.Icon icon="account-search" />}
               placeholder="Paste their User ID here"
+              onSubmitEditing={() => handleSearchPartner(searchQuery)}
             />
+
+            <Button
+              mode="contained"
+              onPress={() => handleSearchPartner(searchQuery)}
+              disabled={!searchQuery.trim() || searching}
+              style={{ marginTop: 8, marginBottom: 16 }}
+            >
+              {searching ? "Searching..." : "Search"}
+            </Button>
 
             {searching && (
               <View style={styles.emptyState}>
@@ -750,35 +723,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </View>
             )}
 
-            {searchError && (
-              <View
-                style={[
-                  styles.emptyState,
-                  {
-                    backgroundColor: "#ffebee",
-                    padding: 16,
-                    borderRadius: 8,
-                    marginTop: 16,
-                  },
-                ]}
-              >
-                <Text style={{ color: "#c62828", textAlign: "center" }}>
-                  {searchError}
+            {!searching && searchResults.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={{ textAlign: "center" }}>
+                  Ask your friend for their User ID and paste it above, then
+                  click Search!
                 </Text>
               </View>
             )}
-
-            {!searching &&
-              !searchError &&
-              searchResults.length === 0 &&
-              !searchQuery && (
-                <View style={styles.emptyState}>
-                  <Text style={{ textAlign: "center" }}>
-                    Ask your friend for their User ID and paste it above to find
-                    them!
-                  </Text>
-                </View>
-              )}
 
             <FlatList
               data={searchResults}
@@ -844,14 +796,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Modal>
       </Portal>
     );
-  }, [
-    showPartnerSearch,
-    searchQuery,
-    searchResults,
-    searching,
-    theme.colors.background,
-    debouncedSearch,
-  ]);
+  }, [showPartnerSearch, searchResults, searching, theme.colors.background]);
 
   const PendingRequestsModal = useCallback(() => {
     return (
