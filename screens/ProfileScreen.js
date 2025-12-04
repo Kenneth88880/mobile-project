@@ -153,8 +153,17 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState(null);
   const [searchTimeout, setSearchTimeout] = useState(null);
+  const [sendingRequest, setSendingRequest] = useState(false);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
@@ -347,18 +356,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   };
 
   const handleSearchPartner = async (searchText) => {
+    // Prevent search if already searching
+    if (searching) {
+      return;
+    }
+
     if (!searchText.trim()) {
       setSearchResults([]);
       setSearching(false);
-      setSearchError(null);
       return;
     }
 
     setSearching(true);
-    setSearchError(null);
 
     try {
-      // Search by User ID
+      // Search by User ID in 'profiles' collection
       const userDoc = await getDoc(doc(db, "profiles", searchText.trim()));
 
       if (userDoc.exists() && userDoc.id !== CURRENT_USER_ID) {
@@ -370,42 +382,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
             tags: Array.isArray(userData.tags) ? userData.tags : [],
           },
         ]);
-        setSearchError(null);
-      } else if (userDoc.id === CURRENT_USER_ID) {
-        setSearchResults([]);
-        setSearchError("You can't add yourself as a duo partner!");
       } else {
+        // Just clear results - don't show any error
         setSearchResults([]);
-        setSearchError("No user found with that ID");
       }
     } catch (error) {
       console.error("Error searching users:", error);
       setSearchResults([]);
-      setSearchError("No user found with that ID");
     } finally {
       setSearching(false);
     }
   };
 
-  const debouncedSearch = useCallback(
-    (text) => {
-      // Clear previous timeout
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
-      }
-
-      // Set new timeout
-      const timeout = setTimeout(() => {
-        handleSearchPartner(text);
-      }, 800); // 800ms delay after user stops typing
-
-      setSearchTimeout(timeout);
-    },
-    [searchTimeout]
-  );
-
   const handleSendPartnerRequest = async (targetUserId) => {
     try {
+      setSendingRequest(true);
       const requestsRef = collection(db, "duoRequests");
       const q = query(
         requestsRef,
@@ -434,6 +425,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     } catch (error) {
       console.error("Error sending partner request:", error);
       Alert.alert("Error", "Failed to send partner request");
+    } finally {
+      setSendingRequest(false);
     }
   };
 
@@ -669,6 +662,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   }, [showTagPicker, profile.tags, theme.colors.background]);
 
   const PartnerSearchModal = useCallback(() => {
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
+
     return (
       <Portal>
         <Modal
@@ -691,6 +686,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 setShowPartnerSearch(false);
                 setSearchQuery("");
                 setSearchResults([]);
+                if (searchTimeout) {
+                  clearTimeout(searchTimeout);
+                  setSearchTimeout(null);
+                }
               }}
               style={{ position: "absolute", right: 16, top: 16 }}
             />
@@ -701,47 +700,44 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               <Text variant="bodySmall" style={{ marginBottom: 4 }}>
                 Your User ID:
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
+              <Text variant="bodyLarge" selectable style={{ marginBottom: 8 }}>
+                {CURRENT_USER_ID}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ opacity: 0.6, fontStyle: "italic" }}
               >
-                <Text variant="bodyLarge" selectable style={{ flex: 1 }}>
-                  {CURRENT_USER_ID}
-                </Text>
-                <IconButton
-                  icon="content-copy"
-                  size={20}
-                  onPress={() => {
-                    // Note: Clipboard requires expo-clipboard package
-                    // For now, users can long-press to copy
-                    Alert.alert(
-                      "Copy ID",
-                      "Long-press your ID above to copy it, then share it with your friend!"
-                    );
-                  }}
-                />
-              </View>
+                Long-press your ID above to copy it
+              </Text>
             </Surface>
 
             <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
               Enter your friend's User ID to send them a duo partner request.
             </Text>
 
-            <TextInput
-              label="Friend's User ID"
-              value={searchQuery}
-              onChangeText={(text) => {
-                setSearchQuery(text);
-                debouncedSearch(text);
-              }}
-              mode="outlined"
-              style={styles.searchInput}
-              left={<TextInput.Icon icon="account-search" />}
-              placeholder="Paste their User ID here"
-            />
+            <View style={{ marginBottom: 16 }}>
+              <TextInput
+                label="Friend's User ID"
+                value={localSearchQuery}
+                onChangeText={setLocalSearchQuery}
+                mode="outlined"
+                style={styles.searchInput}
+                placeholder="Paste their User ID here"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                blurOnSubmit={false}
+              />
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={() => handleSearchPartner(localSearchQuery)}
+              disabled={!localSearchQuery.trim() || searching}
+              style={{ marginTop: 8, marginBottom: 16 }}
+            >
+              {searching ? "Searching..." : "Search"}
+            </Button>
 
             {searching && (
               <View style={styles.emptyState}>
@@ -750,35 +746,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </View>
             )}
 
-            {searchError && (
-              <View
-                style={[
-                  styles.emptyState,
-                  {
-                    backgroundColor: "#ffebee",
-                    padding: 16,
-                    borderRadius: 8,
-                    marginTop: 16,
-                  },
-                ]}
-              >
-                <Text style={{ color: "#c62828", textAlign: "center" }}>
-                  {searchError}
+            {!searching && !localSearchQuery && searchResults.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={{ textAlign: "center" }}>
+                  Ask your friend for their User ID and paste it above, then
+                  click Search!
                 </Text>
               </View>
             )}
-
-            {!searching &&
-              !searchError &&
-              searchResults.length === 0 &&
-              !searchQuery && (
-                <View style={styles.emptyState}>
-                  <Text style={{ textAlign: "center" }}>
-                    Ask your friend for their User ID and paste it above to find
-                    them!
-                  </Text>
-                </View>
-              )}
 
             <FlatList
               data={searchResults}
@@ -832,9 +807,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                       mode="contained"
                       onPress={() => handleSendPartnerRequest(item.id)}
                       style={{ marginTop: 12 }}
-                      icon="account-plus"
+                      icon={sendingRequest ? "loading" : "account-plus"}
+                      disabled={sendingRequest}
+                      loading={sendingRequest}
                     >
-                      Send Request
+                      {sendingRequest ? "Sending..." : "Send Request"}
                     </Button>
                   </Card.Content>
                 </Card>
@@ -846,11 +823,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     );
   }, [
     showPartnerSearch,
-    searchQuery,
     searchResults,
     searching,
+    sendingRequest,
     theme.colors.background,
-    debouncedSearch,
   ]);
 
   const PendingRequestsModal = useCallback(() => {
