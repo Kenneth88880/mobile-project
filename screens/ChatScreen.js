@@ -21,21 +21,7 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-import { db } from "../services/firebaseConfig";
-import {
-  collection,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  serverTimestamp,
-  updateDoc,
-  doc,
-  getDoc,
-  deleteDoc,
-  getDocs,
-} from "firebase/firestore";
+import firestore from '@react-native-firebase/firestore';
 import { getUserProfile, saveRating } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
@@ -45,14 +31,17 @@ const getUserID = () => CURRENT_USER_ID;
 // Delete a specific chat
 const deleteChat = async (chatId) => {
   try {
-    const messagesSnapshot = await getDocs(
-      collection(db, "chats", chatId, "messages")
-    );
+    const messagesSnapshot = await firestore()
+      .collection("chats")
+      .doc(chatId)
+      .collection("messages")
+      .get();
+      
     const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
-      deleteDoc(msgDoc.ref)
+      msgDoc.ref.delete()
     );
     await Promise.all(deleteMessagesPromises);
-    await deleteDoc(doc(db, "chats", chatId));
+    await firestore().collection("chats").doc(chatId).delete();
     return true;
   } catch (error) {
     console.error("Error deleting chat:", error);
@@ -63,15 +52,14 @@ const deleteChat = async (chatId) => {
 // Report a chat
 const reportChat = async (chatId, reportingUserId) => {
   try {
-    const chatRef = doc(db, "chats", chatId);
-    const chatDoc = await getDoc(chatRef);
+    const chatDoc = await firestore().collection("chats").doc(chatId).get();
 
-    if (chatDoc.exists()) {
+    if (chatDoc.exists) {
       const data = chatDoc.data();
       const reports = data.reports || [];
       reports.push({
         reportedBy: reportingUserId,
-        reportedAt: serverTimestamp(),
+        reportedAt: firestore.FieldValue.serverTimestamp(),
         reason: "User reported inappropriate content",
       });
 
@@ -80,11 +68,11 @@ const reportChat = async (chatId, reportingUserId) => {
         (id) => id !== reportingUserId
       );
 
-      await updateDoc(chatRef, {
+      await firestore().collection("chats").doc(chatId).update({
         reports: reports,
         participants: updatedParticipants,
         flaggedForModeration: true,
-        lastReportedAt: serverTimestamp(),
+        lastReportedAt: firestore.FieldValue.serverTimestamp(),
       });
 
       return true;
@@ -104,8 +92,8 @@ function ChatListScreen({ onChatSelect }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const chatsRef = collection(db, "chats");
-    const unsubscribe = onSnapshot(
+    const chatsRef = firestore().collection("chats");
+    const unsubscribe = .onSnapshot(
       chatsRef,
       (snapshot) => {
         const chatsList = [];
@@ -344,8 +332,7 @@ function IndividualChatScreen({ chat, onBack }) {
 
     const markAsRead = async () => {
       try {
-        const chatRef = doc(db, "chats", chat.id);
-        await updateDoc(chatRef, {
+        await firestore().collection("chats").doc(chat.id).update({
           [`unreadCount.${currentUserId}`]: 0,
         });
       } catch (error) {
@@ -355,10 +342,10 @@ function IndividualChatScreen({ chat, onBack }) {
 
     markAsRead();
 
-    const messagesRef = collection(db, "chats", chat.id, "messages");
-    const messagesQuery = query(messagesRef, orderBy("createdAt", "desc"));
+    const messagesRef = firestore().collection("chats").doc(chat.id).collection("messages");
+    const messagesQuery = messagesRef, orderBy("createdAt", "desc"));
 
-    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+    const unsubscribe = .onSnapshot(messagesQuery, (snapshot) => {
       const messagesList = snapshot.docs.map((doc) => {
         const data = doc.data();
         return {
@@ -400,19 +387,20 @@ function IndividualChatScreen({ chat, onBack }) {
     if (!chat?.id || !inputText.trim()) return;
 
     try {
-      const messagesRef = collection(db, "chats", chat.id, "messages");
-      await addDoc(messagesRef, {
-        text: inputText.trim(),
-        createdAt: serverTimestamp(),
-        user: {
-          _id: currentUserId,
-          name: "You",
-        },
-      });
+      await firestore()
+        .collection("chats")
+        .doc(chat.id)
+        .collection("messages")
+        .add({
+          text: inputText.trim(),
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          user: {
+            _id: currentUserId,
+            name: "You",
+          },
+        });
 
-      const chatRef = doc(db, "chats", chat.id);
       const unreadUpdate = {};
-
       chat.participants.forEach((participantId) => {
         if (participantId !== currentUserId) {
           unreadUpdate[`unreadCount.${participantId}`] =
@@ -420,9 +408,9 @@ function IndividualChatScreen({ chat, onBack }) {
         }
       });
 
-      await updateDoc(chatRef, {
+      await firestore().collection("chats").doc(chat.id).update({
         lastMessageText: inputText.trim(),
-        lastMessageTime: serverTimestamp(),
+        lastMessageTime: firestore.FieldValue.serverTimestamp(),
         ...unreadUpdate,
       });
 
