@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Image,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   Alert,
@@ -11,13 +10,8 @@ import {
 } from "react-native";
 import { Text, IconButton, Surface, useTheme } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
+// ✅ FIXED: Using React Native Firebase Storage
+import storage from "@react-native-firebase/storage";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 
 export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
@@ -32,22 +26,19 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
         throw new Error("Invalid image URI");
       }
 
-      const filename = `${CURRENT_USER_ID}_${Date.now()}.jpg`;
-      const storage = getStorage();
-      const storageRef = ref(storage, `profile_photos/${filename}`);
+      // ✅ NEW FOLDER STRUCTURE: profile_photos/{userId}/{filename}
+      const filename = `${Date.now()}.jpg`;
+      const storagePath = `profile_photos/${CURRENT_USER_ID}/${filename}`;
 
       console.log("Uploading from:", uri);
-      console.log("Uploading to:", `profile_photos/${filename}`);
+      console.log("Uploading to:", storagePath);
 
-      // Fetch the image as a blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      // Upload blob to Firebase Storage
-      await uploadBytes(storageRef, blob);
+      // Upload to Firebase Storage using React Native Firebase
+      const reference = storage().ref(storagePath);
+      await reference.putFile(uri);
 
       // Get download URL
-      const downloadURL = await getDownloadURL(storageRef);
+      const downloadURL = await reference.getDownloadURL();
       console.log("Upload complete! URL:", downloadURL);
 
       return downloadURL;
@@ -138,14 +129,16 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
               photoToRemove &&
               photoToRemove.includes("firebasestorage.googleapis.com")
             ) {
-              const storage = getStorage();
               // Extract the path from the URL
+              // Example URL: https://firebasestorage.googleapis.com/v0/b/PROJECT/o/profile_photos%2FUSER_ID%2F123.jpg?token=...
               const urlParts = photoToRemove.split("/o/")[1];
               if (urlParts) {
                 const pathPart = urlParts.split("?")[0];
                 const filePath = decodeURIComponent(pathPart);
-                const fileRef = ref(storage, filePath);
-                await deleteObject(fileRef);
+
+                // Delete using React Native Firebase
+                const reference = storage().ref(filePath);
+                await reference.delete();
                 console.log("Deleted from Firebase Storage:", photoToRemove);
               }
             } else {
