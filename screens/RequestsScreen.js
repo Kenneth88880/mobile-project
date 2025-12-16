@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   Image,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -497,8 +498,12 @@ export default function RequestsScreen({ isActive = true }) {
                 />
                 <Card.Content>
                   <View style={styles.duoPairContainer}>
-                    {/* First Profile */}
-                    <View style={styles.profileButton}>
+                    {/* First Profile - Clickable */}
+                    <TouchableOpacity
+                      style={styles.profileButton}
+                      onPress={() => handleProfileClick(like.user1)}
+                      disabled={!like.user1}
+                    >
                       <View style={styles.profileCard}>
                         <ProfilePhoto uri={like.user1?.photos?.[0]} size={80} />
                         <Text variant="titleMedium" style={styles.profileName}>
@@ -514,14 +519,18 @@ export default function RequestsScreen({ isActive = true }) {
                           </Chip>
                         )}
                       </View>
-                    </View>
+                    </TouchableOpacity>
 
                     <Text variant="displaySmall" style={styles.plusSign}>
                       +
                     </Text>
 
-                    {/* Second Profile */}
-                    <View style={styles.profileButton}>
+                    {/* Second Profile - Clickable */}
+                    <TouchableOpacity
+                      style={styles.profileButton}
+                      onPress={() => handleProfileClick(like.user2)}
+                      disabled={!like.user2}
+                    >
                       <View style={styles.profileCard}>
                         <ProfilePhoto uri={like.user2?.photos?.[0]} size={80} />
                         <Text variant="titleMedium" style={styles.profileName}>
@@ -537,7 +546,7 @@ export default function RequestsScreen({ isActive = true }) {
                           </Chip>
                         )}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
 
                   <Divider style={styles.divider} />
