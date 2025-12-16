@@ -2,13 +2,7 @@ import { StyleSheet, View, KeyboardAvoidingView } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-} from "firebase/auth";
-const auth = getAuth();
+import auth from "@react-native-firebase/auth";
 
 const SigninScreen = () => {
   const theme = useTheme();
@@ -75,7 +69,8 @@ const SigninScreen = () => {
       <TOSPopup
         visible={isTOSVisible}
         onAccept={handleAcceptTOS}
-        onDecline={handleDeclineTOS}/>
+        onDecline={handleDeclineTOS}
+      />
       <View style={styles.inputContainer}>
         <TextInput
           label="Email"
