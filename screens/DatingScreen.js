@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Image,
@@ -7,7 +7,6 @@ import {
   Alert,
   StyleSheet,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import {
   Text,
   Card,
@@ -37,7 +36,7 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import { getDistanceToProfile } from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 
-export default function DatingScreen() {
+export default function DatingScreen({ isActive = true }) {
   const theme = useTheme();
   const [duoPairs, setDuoPairs] = useState([]);
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
@@ -57,13 +56,13 @@ export default function DatingScreen() {
 
   const currentUserId = CURRENT_USER_ID;
 
-  // ✅ FIX: Reload data every time the Dating tab comes into focus
+  // ✅ FIX: Reload data when component becomes active
   // This prevents swiped duos from reappearing when navigating between tabs
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
+    if (isActive) {
       loadData();
-    }, [])
-  );
+    }
+  }, [isActive]);
 
   const loadData = async () => {
     setLoading(true);
