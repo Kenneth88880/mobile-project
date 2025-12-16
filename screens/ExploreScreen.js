@@ -641,7 +641,7 @@ export default function ExploreScreen() {
         <View style={styles.placesList}>
           {places.slice(0, visibleCount).map((item, index) => (
             <Card
-              key={item.id}
+              key={`${item.id}-${index}`}
               style={styles.placeCard}
               onPress={() => handleSelectPlace(item)}
             >
