@@ -31,7 +31,6 @@ import {
   getUserProfile,
   saveUserProfile,
   getAverageRating,
-  resetAllDuoData,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
@@ -152,6 +151,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [showSettings, setShowSettings] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
+  const [viewingPartnerProfile, setViewingPartnerProfile] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     loadProfile();
@@ -352,7 +353,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     try {
       // Search by User ID in 'profiles' collection
-      const userDoc = await firestore().collection("profiles").doc(searchText.trim()).get();
+      const userDoc = await firestore()
+        .collection("profiles")
+        .doc(searchText.trim())
+        .get();
 
       if (userDoc.exists && userDoc.id !== CURRENT_USER_ID) {
         const userData = userDoc.data();
@@ -538,33 +542,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 />
               )}
             />
-            <Divider style={{ marginVertical: 8 }} />
-            <Button
-              mode="outlined"
-              onPress={async () => {
-                Alert.alert(
-                  "Reset All Data",
-                  "This will remove ALL your duo data including matches, likes, and swipes. Your profile will remain. Continue?",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Reset",
-                      style: "destructive",
-                      onPress: async () => {
-                        const success = await resetAllDuoData(CURRENT_USER_ID);
-                        if (success) {
-                          Alert.alert("Success", "All duo data has been reset");
-                          loadProfile();
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              style={{ marginTop: 16 }}
-            >
-              Reset All Duo Data
-            </Button>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowSettings(false)}>Close</Button>
@@ -924,6 +901,166 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   // View Mode
   if (!isEditing) {
+    // Partner profile viewing modal
+    if (viewingPartnerProfile && duoPartnerProfile) {
+      const hasPhotos =
+        duoPartnerProfile.photos && duoPartnerProfile.photos.length > 0;
+      const currentPhoto = hasPhotos
+        ? duoPartnerProfile.photos[currentImageIndex]
+        : null;
+
+      return (
+        <View
+          style={[
+            styles.container,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <Surface
+            style={{ flexDirection: "row", alignItems: "center", padding: 16 }}
+            elevation={2}
+          >
+            <IconButton
+              icon="arrow-left"
+              onPress={() => setViewingPartnerProfile(false)}
+            />
+            <Text variant="titleLarge">{duoPartnerProfile.name}'s Profile</Text>
+          </Surface>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Card style={styles.card}>
+              {currentPhoto ? (
+                <Card.Cover
+                  source={{ uri: currentPhoto }}
+                  style={{ height: 400 }}
+                />
+              ) : (
+                <View
+                  style={{
+                    height: 400,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "#f0f0f0",
+                  }}
+                >
+                  <Avatar.Icon size={120} icon="account" />
+                  <Text variant="bodyLarge" style={{ marginTop: 8 }}>
+                    No photos available
+                  </Text>
+                </View>
+              )}
+
+              {hasPhotos && duoPartnerProfile.photos.length > 1 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 16,
+                    left: 0,
+                    right: 0,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <IconButton
+                    icon="chevron-left"
+                    iconColor="white"
+                    onPress={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === 0
+                          ? duoPartnerProfile.photos.length - 1
+                          : prev - 1
+                      )
+                    }
+                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                  />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {duoPartnerProfile.photos.map((_, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          width: index === currentImageIndex ? 10 : 8,
+                          height: index === currentImageIndex ? 10 : 8,
+                          borderRadius: index === currentImageIndex ? 5 : 4,
+                          backgroundColor:
+                            index === currentImageIndex
+                              ? "white"
+                              : "rgba(255, 255, 255, 0.5)",
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <IconButton
+                    icon="chevron-right"
+                    iconColor="white"
+                    onPress={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === duoPartnerProfile.photos.length - 1
+                          ? 0
+                          : prev + 1
+                      )
+                    }
+                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                  />
+                </View>
+              )}
+            </Card>
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text variant="headlineMedium">
+                  {duoPartnerProfile.name}, {duoPartnerProfile.age}
+                </Text>
+                <Text
+                  variant="bodyMedium"
+                  style={{
+                    marginTop: 8,
+                    fontStyle: "italic",
+                    color: theme.colors.primary,
+                  }}
+                >
+                  Your Duo Partner
+                </Text>
+
+                {duoPartnerProfile.city && (
+                  <Text variant="bodyMedium" style={{ marginTop: 4 }}>
+                    📍 {duoPartnerProfile.city}
+                  </Text>
+                )}
+
+                {duoPartnerProfile.description && (
+                  <Text style={{ marginTop: 12, lineHeight: 24 }}>
+                    {duoPartnerProfile.description}
+                  </Text>
+                )}
+
+                {duoPartnerProfile.tags &&
+                  duoPartnerProfile.tags.length > 0 && (
+                    <View style={{ marginTop: 16 }}>
+                      <Text variant="titleSmall">Interests:</Text>
+                      <View style={styles.tagsDisplay}>
+                        {duoPartnerProfile.tags.map((tag, index) => (
+                          <Chip key={index} style={styles.tagDisplay} compact>
+                            {tag}
+                          </Chip>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                <Text
+                  variant="bodySmall"
+                  style={{ marginTop: 16, textAlign: "center", opacity: 0.7 }}
+                >
+                  You cannot rate your duo partner
+                </Text>
+              </Card.Content>
+            </Card>
+          </ScrollView>
+        </View>
+      );
+    }
+
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: theme.colors.background }}
@@ -1044,40 +1181,48 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           <Card.Content>
             {duoPartnerProfile ? (
               <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 12,
+                <TouchableOpacity
+                  onPress={() => {
+                    setCurrentImageIndex(0);
+                    setViewingPartnerProfile(true);
                   }}
                 >
-                  <Avatar.Image
-                    size={64}
-                    source={{
-                      uri:
-                        duoPartnerProfile.photos && duoPartnerProfile.photos[0]
-                          ? duoPartnerProfile.photos[0]
-                          : "https://via.placeholder.com/150",
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 12,
                     }}
-                  />
-                  <View style={{ marginLeft: 16 }}>
-                    <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
-                    <Text variant="bodyMedium">
-                      {duoPartnerProfile.age} years old
-                    </Text>
-                  </View>
-                </View>
-
-                {duoPartnerProfile.tags &&
-                  duoPartnerProfile.tags.length > 0 && (
-                    <View style={styles.tagsDisplay}>
-                      {duoPartnerProfile.tags.map((tag, index) => (
-                        <Chip key={index} style={styles.tagDisplay}>
-                          {tag}
-                        </Chip>
-                      ))}
+                  >
+                    <Avatar.Image
+                      size={64}
+                      source={{
+                        uri:
+                          duoPartnerProfile.photos &&
+                          duoPartnerProfile.photos[0]
+                            ? duoPartnerProfile.photos[0]
+                            : "https://via.placeholder.com/150",
+                      }}
+                    />
+                    <View style={{ marginLeft: 16 }}>
+                      <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
+                      <Text variant="bodyMedium">
+                        {duoPartnerProfile.age} years old
+                      </Text>
                     </View>
-                  )}
+                  </View>
+
+                  {duoPartnerProfile.tags &&
+                    duoPartnerProfile.tags.length > 0 && (
+                      <View style={styles.tagsDisplay}>
+                        {duoPartnerProfile.tags.map((tag, index) => (
+                          <Chip key={index} style={styles.tagDisplay}>
+                            {tag}
+                          </Chip>
+                        ))}
+                      </View>
+                    )}
+                </TouchableOpacity>
 
                 <Button
                   mode="outlined"
