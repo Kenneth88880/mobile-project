@@ -141,6 +141,15 @@ export const getAllDuoPairs = async (userId) => {
 
     const likedDuoIds = likesSnapshot.docs.map((doc) => doc.data().toDuoId);
     console.log("Already liked duo IDs:", likedDuoIds);
+    console.log(
+      "Like details:",
+      likesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        toDuoId: doc.data().toDuoId,
+        status: doc.data().status,
+        acceptedBy: doc.data().acceptedBy?.length || 0,
+      }))
+    );
 
     // Combine both lists
     const excludedDuoIds = [...swipedDuoIds, ...likedDuoIds];
@@ -158,18 +167,32 @@ export const getAllDuoPairs = async (userId) => {
       const duoId = doc.id;
 
       // Skip own duo and already swiped/liked duos
-      if (duoId === currentDuo.duoId || excludedDuoIds.includes(duoId)) {
+      if (duoId === currentDuo.duoId) {
+        console.log(`Skipping own duo: ${duoId}`);
+        continue;
+      }
+
+      if (excludedDuoIds.includes(duoId)) {
+        console.log(`Skipping already interacted duo: ${duoId}`);
         continue;
       }
 
       // Get profiles for both users
       const users = duoData.users || [];
-      if (users.length !== 2) continue;
+      if (users.length !== 2) {
+        console.log(
+          `Skipping duo ${duoId} - invalid user count: ${users.length}`
+        );
+        continue;
+      }
 
       const user1Profile = await getUserProfile(users[0]);
       const user2Profile = await getUserProfile(users[1]);
 
       if (user1Profile && user2Profile) {
+        console.log(
+          `✅ Including duo ${duoId}: ${user1Profile.name} + ${user2Profile.name}`
+        );
         pairs.push({
           id: duoId,
           user1Profile,
@@ -362,27 +385,53 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
  */
 const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
   try {
-    // Create a group chat for the matched duos
+    console.log("Creating duo match and group chat...");
+
+    const users = [
+      likeData.fromUser1,
+      likeData.fromUser2,
+      likeData.toUser1,
+      likeData.toUser2,
+    ].filter(Boolean);
+
+    if (users.length !== 4) {
+      console.error("Cannot create match - missing user IDs:", users);
+      return false;
+    }
+
+    // Get user profiles for chat name
+    const profiles = await Promise.all(users.map((id) => getUserProfile(id)));
+    const names = profiles.map((p) => p?.name || "User").join(", ");
+
+    // ✅ FIX: Create chat in 'chats' collection (where ChatScreen looks)
     await firestore()
-      .collection("duoMatches")
+      .collection("chats")
       .add({
+        participants: users,
+        isGroupChat: true,
+        groupName: `Duo Match: ${names}`,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        lastMessageText: "Chat created! Say hi to your match!",
+        lastMessageTime: firestore.FieldValue.serverTimestamp(),
+        unreadCount: {},
         duo1Id,
         duo2Id,
-        users: [
-          likeData.fromUser1,
-          likeData.fromUser2,
-          likeData.toUser1,
-          likeData.toUser2,
-        ],
-        matchedAt: firestore.FieldValue.serverTimestamp(),
-        createdAt: new Date().toISOString(),
-        status: "active",
       });
 
-    console.log("Duo match created!");
+    // Also create match record for tracking
+    await firestore().collection("duoMatches").add({
+      duo1Id,
+      duo2Id,
+      users,
+      matchedAt: firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+      status: "active",
+    });
+
+    console.log("✅ Duo match and group chat created successfully!");
     return true;
   } catch (error) {
-    console.error("Error creating duo match:", error);
+    console.error("❌ Error creating duo match:", error);
     return false;
   }
 };
