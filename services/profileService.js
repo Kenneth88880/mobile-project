@@ -224,3 +224,136 @@ export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
     return false;
   }
 };
+
+/**
+ * Delete any existing duo like between two duos (to prevent duplicates)
+ */
+export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
+  try {
+    const snapshot = await firestore()
+      .collection("duoLikes")
+      .where("fromDuoId", "==", fromDuoId)
+      .where("toDuoId", "==", toDuoId)
+      .get();
+
+    const deletePromises = snapshot.docs.map((doc) => doc.ref.delete());
+    await Promise.all(deletePromises);
+
+    console.log(`Deleted ${snapshot.size} existing likes between duos`);
+    return true;
+  } catch (error) {
+    console.error("Error deleting duo like:", error);
+    return false;
+  }
+};
+
+/**
+ * Accept a duo like (add user to acceptedBy array)
+ */
+export const acceptDuoLike = async (
+  likeId,
+  userId,
+  currentDuoId,
+  fromDuoId
+) => {
+  try {
+    const likeRef = firestore().collection("duoLikes").doc(likeId);
+    const doc = await likeRef.get();
+
+    if (!doc.exists) {
+      console.error("Duo like not found");
+      return false;
+    }
+
+    const likeData = doc.data();
+    const acceptedBy = likeData.acceptedBy || [];
+
+    // Add user to acceptedBy if not already there
+    if (!acceptedBy.includes(userId)) {
+      acceptedBy.push(userId);
+    }
+
+    // Check if all 4 users have accepted (2 from each duo)
+    const allAccepted = acceptedBy.length >= 4;
+
+    await likeRef.update({
+      acceptedBy,
+      status: allAccepted ? "matched" : "pending",
+      updatedAt: new Date().toISOString(),
+    });
+
+    // If all accepted, create a match/conversation
+    if (allAccepted) {
+      await createDuoMatch(currentDuoId, fromDuoId, likeData);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error accepting duo like:", error);
+    return false;
+  }
+};
+
+/**
+ * Delete a duo like by ID
+ */
+export const deleteDuoLike = async (likeId) => {
+  try {
+    await firestore().collection("duoLikes").doc(likeId).delete();
+    console.log("Duo like deleted:", likeId);
+    return true;
+  } catch (error) {
+    console.error("Error deleting duo like:", error);
+    return false;
+  }
+};
+
+/**
+ * Save a rating for a user
+ */
+export const saveRating = async (fromUserId, toUserId, rating) => {
+  try {
+    await firestore().collection("ratings").add({
+      fromUserId,
+      toUserId,
+      rating,
+      timestamp: firestore.FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+    });
+    console.log(`Rating saved: ${fromUserId} -> ${toUserId}: ${rating} stars`);
+    return true;
+  } catch (error) {
+    console.error("Error saving rating:", error);
+    return false;
+  }
+};
+
+/**
+ * Create a match between two duos (creates a group chat)
+ */
+const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
+  try {
+    // Create a group chat for the matched duos
+    await firestore()
+      .collection("duoMatches")
+      .add({
+        duo1Id,
+        duo2Id,
+        users: [
+          likeData.fromUser1,
+          likeData.fromUser2,
+          likeData.toUser1,
+          likeData.toUser2,
+        ],
+        matchedAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: new Date().toISOString(),
+        status: "active",
+      });
+
+    console.log("Duo match created!");
+    return true;
+  } catch (error) {
+    console.error("Error creating duo match:", error);
+    return false;
+  }
+};
