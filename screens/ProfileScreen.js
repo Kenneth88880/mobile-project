@@ -352,7 +352,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     try {
       // Search by User ID in 'profiles' collection
-      const userDoc = await firestore().collection("profiles").doc(searchText.trim().get());
+      const userDoc = await firestore().collection("profiles").doc(searchText.trim()).get();
 
       if (userDoc.exists() && userDoc.id !== CURRENT_USER_ID) {
         const userData = userDoc.data();
@@ -483,7 +483,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await auth().signOut();
     } catch (error) {
       console.error("Error signing out:", error);
       Alert.alert("Error", "Failed to sign out");
