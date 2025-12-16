@@ -118,6 +118,9 @@ export default function RequestsScreen({ isActive = true }) {
                 toDuoId: likeData.toDuoId,
                 user1: user1Profile,
                 user2: user2Profile,
+                // ✅ FIX: Store original user IDs for acceptance checking
+                fromUser1Id: likeData.fromUser1,
+                fromUser2Id: likeData.fromUser2,
                 acceptedBy: likeData.acceptedBy || [],
                 timestamp: likeData.timestamp,
                 status: likeData.status,
@@ -435,10 +438,11 @@ export default function RequestsScreen({ isActive = true }) {
           />
         ) : (
           duoLikes.map((like) => {
+            // ✅ FIX: Use the stored original user IDs from duoLikes document
             const fromUser1Accepted =
-              like.acceptedBy?.includes(like.user1?.userId) || false;
+              like.acceptedBy?.includes(like.fromUser1Id) || false;
             const fromUser2Accepted =
-              like.acceptedBy?.includes(like.user2?.userId) || false;
+              like.acceptedBy?.includes(like.fromUser2Id) || false;
             const currentUserAccepted =
               like.acceptedBy?.includes(currentUserId) || false;
             const partnerAccepted = currentDuo
@@ -456,6 +460,8 @@ export default function RequestsScreen({ isActive = true }) {
               likeId: like.id,
               user1: like.user1?.name,
               user2: like.user2?.name,
+              fromUser1Id: like.fromUser1Id,
+              fromUser2Id: like.fromUser2Id,
               fromUser1Accepted,
               fromUser2Accepted,
               currentUserAccepted,
