@@ -34,8 +34,8 @@ import {
   resetAllDuoData,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
-import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
+import firestore from "@react-native-firebase/firestore";
+import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
 
 // Pre-defined tags users can choose from
@@ -352,9 +352,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     try {
       // Search by User ID in 'profiles' collection
-      const userDoc = await firestore().collection("profiles").doc(searchText.trim().get());
+      const userDoc = await firestore()
+        .collection("profiles")
+        .doc(searchText.trim())
+        .get();
 
-      if (userDoc.exists() && userDoc.id !== CURRENT_USER_ID) {
+      if (userDoc.exists && userDoc.id !== CURRENT_USER_ID) {
         const userData = userDoc.data();
         setSearchResults([
           {
@@ -418,13 +421,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         return;
       }
 
-      await firestore().collection("duos").add({
-        users: [CURRENT_USER_ID, fromUserId],
-        status: "active",
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      });
+      await firestore()
+        .collection("duos")
+        .add({
+          users: [CURRENT_USER_ID, fromUserId],
+          status: "active",
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
 
-      await firestore().collection("duoRequests").doc(requestId).update({ status: "accepted" });
+      await firestore()
+        .collection("duoRequests")
+        .doc(requestId)
+        .update({ status: "accepted" });
 
       Alert.alert("Success", "You're now duo partners!");
       loadPendingRequests();
