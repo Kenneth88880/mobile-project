@@ -24,7 +24,7 @@ module.exports = {
       },
       edgeToEdgeEnabled: true,
       package: "com.galaxies.firebase",
-      googleServicesFile: "./google-services.json",
+      googleServicesFile: "services/google-services.json",
     },
     web: {
       favicon: "./assets/favicon.png",
@@ -39,9 +39,7 @@ module.exports = {
           },
         },
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      "@react-native-firebase/storage", // ✅ ADDED!
+
     ],
     extra: {
       router: {},
