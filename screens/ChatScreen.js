@@ -3,7 +3,6 @@ import {
   View,
   FlatList,
   Alert,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -22,7 +21,7 @@ import {
   Icon,
 } from "react-native-paper";
 import firestore from '@react-native-firebase/firestore';
-import { getUserProfile, saveRating } from "../services/profileService";
+import { getUserProfile } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
@@ -36,11 +35,12 @@ const deleteChat = async (chatId) => {
       .doc(chatId)
       .collection("messages")
       .get();
-      
+    
     const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
       msgDoc.ref.delete()
     );
     await Promise.all(deleteMessagesPromises);
+    
     await firestore().collection("chats").doc(chatId).delete();
     return true;
   } catch (error) {
@@ -52,7 +52,8 @@ const deleteChat = async (chatId) => {
 // Report a chat
 const reportChat = async (chatId, reportingUserId) => {
   try {
-    const chatDoc = await firestore().collection("chats").doc(chatId).get();
+    const chatRef = firestore().collection("chats").doc(chatId);
+    const chatDoc = await chatRef.get();
 
     if (chatDoc.exists) {
       const data = chatDoc.data();
@@ -68,7 +69,7 @@ const reportChat = async (chatId, reportingUserId) => {
         (id) => id !== reportingUserId
       );
 
-      await firestore().collection("chats").doc(chatId).update({
+      await chatRef.update({
         reports: reports,
         participants: updatedParticipants,
         flaggedForModeration: true,
@@ -92,36 +93,36 @@ function ChatListScreen({ onChatSelect }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const chatsRef = firestore().collection("chats");
-    const unsubscribe = .onSnapshot(
-      chatsRef,
-      (snapshot) => {
-        const chatsList = [];
+    const unsubscribe = firestore()
+      .collection("chats")
+      .onSnapshot(
+        (snapshot) => {
+          const chatsList = [];
 
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.participants && data.participants.includes(currentUserId)) {
-            chatsList.push({
-              id: docSnap.id,
-              ...data,
-            });
-          }
-        });
+          snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.participants && data.participants.includes(currentUserId)) {
+              chatsList.push({
+                id: docSnap.id,
+                ...data,
+              });
+            }
+          });
 
-        chatsList.sort((a, b) => {
-          const aTime = a.lastMessageTime?.seconds || 0;
-          const bTime = b.lastMessageTime?.seconds || 0;
-          return bTime - aTime;
-        });
+          chatsList.sort((a, b) => {
+            const aTime = a.lastMessageTime?.seconds || 0;
+            const bTime = b.lastMessageTime?.seconds || 0;
+            return bTime - aTime;
+          });
 
-        setChats(chatsList);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error loading chats:", error);
-        setLoading(false);
-      }
-    );
+          setChats(chatsList);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error loading chats:", error);
+          setLoading(false);
+        }
+      );
 
     return () => unsubscribe();
   }, [currentUserId]);
@@ -332,9 +333,12 @@ function IndividualChatScreen({ chat, onBack }) {
 
     const markAsRead = async () => {
       try {
-        await firestore().collection("chats").doc(chat.id).update({
-          [`unreadCount.${currentUserId}`]: 0,
-        });
+        await firestore()
+          .collection("chats")
+          .doc(chat.id)
+          .update({
+            [`unreadCount.${currentUserId}`]: 0,
+          });
       } catch (error) {
         console.error("Error marking as read:", error);
       }
@@ -342,32 +346,34 @@ function IndividualChatScreen({ chat, onBack }) {
 
     markAsRead();
 
-    const messagesRef = firestore().collection("chats").doc(chat.id).collection("messages");
-    const messagesQuery = messagesRef, orderBy("createdAt", "desc"));
+    const unsubscribe = firestore()
+      .collection("chats")
+      .doc(chat.id)
+      .collection("messages")
+      .orderBy("createdAt", "desc")
+      .onSnapshot((snapshot) => {
+        const messagesList = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            _id: doc.id,
+            text: data.text,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            user: {
+              _id: data.user._id,
+              name: data.user.name,
+            },
+          };
+        });
 
-    const unsubscribe = .onSnapshot(messagesQuery, (snapshot) => {
-      const messagesList = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          _id: doc.id,
-          text: data.text,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          user: {
-            _id: data.user._id,
-            name: data.user.name,
-          },
-        };
+        setMessages(messagesList);
       });
 
-      setMessages(messagesList);
-    });
-
     return () => unsubscribe();
-  }, [chat]);
+  }, [chat, currentUserId]);
 
   useEffect(() => {
     const loadOtherUsers = async () => {
-      if (!chat.participants) return;
+      if (!chat?.participants) return;
 
       const allProfiles = {};
       for (const userId of chat.participants) {
@@ -401,18 +407,23 @@ function IndividualChatScreen({ chat, onBack }) {
         });
 
       const unreadUpdate = {};
-      chat.participants.forEach((participantId) => {
-        if (participantId !== currentUserId) {
-          unreadUpdate[`unreadCount.${participantId}`] =
-            (chat.unreadCount?.[participantId] || 0) + 1;
-        }
-      });
+      if (chat.participants) {
+        chat.participants.forEach((participantId) => {
+          if (participantId !== currentUserId) {
+            unreadUpdate[`unreadCount.${participantId}`] =
+              (chat.unreadCount?.[participantId] || 0) + 1;
+          }
+        });
+      }
 
-      await firestore().collection("chats").doc(chat.id).update({
-        lastMessageText: inputText.trim(),
-        lastMessageTime: firestore.FieldValue.serverTimestamp(),
-        ...unreadUpdate,
-      });
+      await firestore()
+        .collection("chats")
+        .doc(chat.id)
+        .update({
+          lastMessageText: inputText.trim(),
+          lastMessageTime: firestore.FieldValue.serverTimestamp(),
+          ...unreadUpdate,
+        });
 
       setInputText("");
     } catch (error) {
@@ -420,6 +431,14 @@ function IndividualChatScreen({ chat, onBack }) {
       Alert.alert("Error", "Failed to send message");
     }
   }, [chat, currentUserId, inputText]);
+
+  if (!chat) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Text>No chat selected</Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
