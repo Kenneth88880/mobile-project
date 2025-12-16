@@ -472,6 +472,16 @@ export default function RequestsScreen({ isActive = true }) {
               acceptedBy: like.acceptedBy,
             });
 
+            // ✅ Debug: Check if profiles exist
+            console.log("Profile check:", {
+              hasUser1: !!like.user1,
+              hasUser2: !!like.user2,
+              user1Name: like.user1?.name,
+              user2Name: like.user2?.name,
+              user1Age: like.user1?.age,
+              user2Age: like.user2?.age,
+            });
+
             return (
               <Card key={like.id} style={styles.requestCard}>
                 <Card.Title
@@ -487,93 +497,47 @@ export default function RequestsScreen({ isActive = true }) {
                 />
                 <Card.Content>
                   <View style={styles.duoPairContainer}>
-                    {like.user1 ? (
-                      <Button
-                        mode="text"
-                        onPress={() => handleProfileClick(like.user1)}
-                        style={styles.profileButton}
-                      >
-                        <View style={styles.profileCard}>
-                          <ProfilePhoto
-                            uri={like.user1.photos?.[0]}
-                            size={80}
-                          />
-                          <Text
-                            variant="titleMedium"
-                            style={styles.profileName}
+                    {/* First Profile */}
+                    <View style={styles.profileButton}>
+                      <View style={styles.profileCard}>
+                        <ProfilePhoto uri={like.user1?.photos?.[0]} size={80} />
+                        <Text variant="titleMedium" style={styles.profileName}>
+                          {like.user1?.name || "?"}, {like.user1?.age || "?"}
+                        </Text>
+                        {fromUser1Accepted && (
+                          <Chip
+                            icon="check"
+                            style={styles.acceptedChip}
+                            compact
                           >
-                            {like.user1.name}, {like.user1.age}
-                          </Text>
-                          {fromUser1Accepted && (
-                            <Chip
-                              icon="check"
-                              style={styles.acceptedChip}
-                              compact
-                            >
-                              Accepted
-                            </Chip>
-                          )}
-                        </View>
-                      </Button>
-                    ) : (
-                      <View style={styles.profileButton}>
-                        <View style={styles.profileCard}>
-                          <ProfilePhoto size={80} />
-                          <Text
-                            variant="titleMedium"
-                            style={styles.profileName}
-                          >
-                            Loading...
-                          </Text>
-                        </View>
+                            Accepted
+                          </Chip>
+                        )}
                       </View>
-                    )}
+                    </View>
 
                     <Text variant="displaySmall" style={styles.plusSign}>
                       +
                     </Text>
 
-                    {like.user2 ? (
-                      <Button
-                        mode="text"
-                        onPress={() => handleProfileClick(like.user2)}
-                        style={styles.profileButton}
-                      >
-                        <View style={styles.profileCard}>
-                          <ProfilePhoto
-                            uri={like.user2.photos?.[0]}
-                            size={80}
-                          />
-                          <Text
-                            variant="titleMedium"
-                            style={styles.profileName}
+                    {/* Second Profile */}
+                    <View style={styles.profileButton}>
+                      <View style={styles.profileCard}>
+                        <ProfilePhoto uri={like.user2?.photos?.[0]} size={80} />
+                        <Text variant="titleMedium" style={styles.profileName}>
+                          {like.user2?.name || "?"}, {like.user2?.age || "?"}
+                        </Text>
+                        {fromUser2Accepted && (
+                          <Chip
+                            icon="check"
+                            style={styles.acceptedChip}
+                            compact
                           >
-                            {like.user2.name}, {like.user2.age}
-                          </Text>
-                          {fromUser2Accepted && (
-                            <Chip
-                              icon="check"
-                              style={styles.acceptedChip}
-                              compact
-                            >
-                              Accepted
-                            </Chip>
-                          )}
-                        </View>
-                      </Button>
-                    ) : (
-                      <View style={styles.profileButton}>
-                        <View style={styles.profileCard}>
-                          <ProfilePhoto size={80} />
-                          <Text
-                            variant="titleMedium"
-                            style={styles.profileName}
-                          >
-                            Loading...
-                          </Text>
-                        </View>
+                            Accepted
+                          </Chip>
+                        )}
                       </View>
-                    )}
+                    </View>
                   </View>
 
                   <Divider style={styles.divider} />

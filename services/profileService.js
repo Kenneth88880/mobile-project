@@ -202,6 +202,9 @@ export const saveDuoLike = async (
   try {
     console.log("Saving duo like:", { fromDuoId, toDuoId });
 
+    // ✅ FIX: Pre-accept the sending duo since they initiated the like
+    const acceptedBy = [fromUser1, fromUser2];
+
     await firestore().collection("duoLikes").add({
       fromDuoId,
       toDuoId,
@@ -210,12 +213,12 @@ export const saveDuoLike = async (
       toUser1,
       toUser2,
       status: "pending",
-      acceptedBy: [],
+      acceptedBy, // ✅ Sending duo is pre-accepted
       timestamp: firestore.FieldValue.serverTimestamp(),
       createdAt: new Date().toISOString(),
     });
 
-    console.log("✅ Duo like saved successfully to Firebase!");
+    console.log("✅ Duo like saved with sending duo pre-accepted:", acceptedBy);
     return true;
   } catch (error) {
     console.error("❌ Error saving duo like:", error);
