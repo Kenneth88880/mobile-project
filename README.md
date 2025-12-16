@@ -5,14 +5,13 @@
 - Report bug system
 - ~~Premium notifications~~
 - ~~User interface~~
-- Onboarding system
+- ~~Onboarding system~~
 - Star system
-- Duo system
-- Chat system
+- ~~Duo system~~
+- ~~Chat system~~
 - ~~Like/request system~~
-- Profile system
+- ~~Profile system~~
 - Explore system
 - Add report system
-- Make it so that different phones can see images
+- ~~Make it so that different phones can see images~~
 
--test
