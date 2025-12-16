@@ -124,7 +124,7 @@ export const getAllDuoPairs = async (userId) => {
 
     console.log("Current duo ID:", currentDuo.duoId);
 
-    // Get duo pairs that haven't been swiped yet
+    // Get duo pairs that have been swiped (passed)
     const swipesSnapshot = await firestore()
       .collection("duoSwipes")
       .where("fromDuoId", "==", currentDuo.duoId)
@@ -133,7 +133,20 @@ export const getAllDuoPairs = async (userId) => {
     const swipedDuoIds = swipesSnapshot.docs.map((doc) => doc.data().toDuoId);
     console.log("Already swiped duo IDs:", swipedDuoIds);
 
-    // Get all active duo pairs, excluding own duo and already swiped
+    // ✅ FIX: Also get duo pairs that have been liked
+    const likesSnapshot = await firestore()
+      .collection("duoLikes")
+      .where("fromDuoId", "==", currentDuo.duoId)
+      .get();
+
+    const likedDuoIds = likesSnapshot.docs.map((doc) => doc.data().toDuoId);
+    console.log("Already liked duo IDs:", likedDuoIds);
+
+    // Combine both lists
+    const excludedDuoIds = [...swipedDuoIds, ...likedDuoIds];
+    console.log("Total excluded duo IDs:", excludedDuoIds);
+
+    // Get all active duo pairs, excluding own duo and already interacted with
     const duosSnapshot = await firestore()
       .collection("duos")
       .where("status", "==", "active")
@@ -144,8 +157,8 @@ export const getAllDuoPairs = async (userId) => {
       const duoData = doc.data();
       const duoId = doc.id;
 
-      // Skip own duo and already swiped duos
-      if (duoId === currentDuo.duoId || swipedDuoIds.includes(duoId)) {
+      // Skip own duo and already swiped/liked duos
+      if (duoId === currentDuo.duoId || excludedDuoIds.includes(duoId)) {
         continue;
       }
 
@@ -187,6 +200,8 @@ export const saveDuoLike = async (
   toUser2
 ) => {
   try {
+    console.log("Saving duo like:", { fromDuoId, toDuoId });
+
     await firestore().collection("duoLikes").add({
       fromDuoId,
       toDuoId,
@@ -199,9 +214,11 @@ export const saveDuoLike = async (
       timestamp: firestore.FieldValue.serverTimestamp(),
       createdAt: new Date().toISOString(),
     });
+
+    console.log("✅ Duo like saved successfully to Firebase!");
     return true;
   } catch (error) {
-    console.error("Error saving duo like:", error);
+    console.error("❌ Error saving duo like:", error);
     return false;
   }
 };
@@ -230,19 +247,28 @@ export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
  */
 export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
   try {
+    console.log("Checking for existing likes between:", { fromDuoId, toDuoId });
+
     const snapshot = await firestore()
       .collection("duoLikes")
       .where("fromDuoId", "==", fromDuoId)
       .where("toDuoId", "==", toDuoId)
       .get();
 
-    const deletePromises = snapshot.docs.map((doc) => doc.ref.delete());
-    await Promise.all(deletePromises);
+    if (snapshot.size > 0) {
+      console.log(`Found ${snapshot.size} existing like(s) to delete`);
+      const deletePromises = snapshot.docs.map((doc) => doc.ref.delete());
+      await Promise.all(deletePromises);
+      console.log(`✅ Deleted ${snapshot.size} existing likes between duos`);
+    } else {
+      console.log(
+        "No existing likes found (this is normal for first-time likes)"
+      );
+    }
 
-    console.log(`Deleted ${snapshot.size} existing likes between duos`);
     return true;
   } catch (error) {
-    console.error("Error deleting duo like:", error);
+    console.error("❌ Error deleting duo like:", error);
     return false;
   }
 };
