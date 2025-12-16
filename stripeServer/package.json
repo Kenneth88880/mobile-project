@@ -1,0 +1,27 @@
+{
+  "name": "stripeserver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@stripe/stripe-react-native": "^0.57.0",
+    "expo-blur": "~15.0.7",
+    "expo-linear-gradient": "~15.0.7",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "stripe": "^20.0.0"
+  },
+  "devDependencies": {
+    "express": "^5.1.0",
+    "nodemon": "^3.1.11"
+  }
+}
