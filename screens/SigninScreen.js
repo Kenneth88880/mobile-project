@@ -2,6 +2,7 @@ import { StyleSheet, View, KeyboardAvoidingView } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
+// ✅ FIXED: Use React Native Firebase
 import auth from "@react-native-firebase/auth";
 
 const SigninScreen = () => {
@@ -28,18 +29,15 @@ const SigninScreen = () => {
     auth()
       .createUserWithEmailAndPassword(email, password)
       .then((userCredential) => {
-        // Signed up
         const user = userCredential.user;
         console.log("Registered with:", user.email);
         alert("Please Click the gear icon to set up your profile!");
-        // ...
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
         console.log(errorCode + errorMessage);
         alert("Sign up failed: " + errorMessage);
-        // ..
       });
   };
 
@@ -48,16 +46,13 @@ const SigninScreen = () => {
     auth()
       .signInWithEmailAndPassword(email, password)
       .then((userCredential) => {
-        // Signed in
         console.log("Logged in with:", userCredential.user.email);
-        // ...
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
         alert("Login failed: " + errorMessage);
         console.log(errorCode + errorMessage);
-        // ..')
       });
   };
 
@@ -108,11 +103,7 @@ const SigninScreen = () => {
   );
 };
 
-// the login/signup screen
 export default SigninScreen;
-
-// ✅ FIXED: Removed UID export - this doesn't work the way it was written
-// Use auth().currentUser or the onAuthStateChanged listener in App.js instead
 
 const styles = StyleSheet.create({
   container: {
