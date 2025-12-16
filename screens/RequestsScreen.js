@@ -93,8 +93,23 @@ export default function RequestsScreen({ isActive = true }) {
             const likeData = doc.data();
             console.log("Processing like:", doc.id, likeData);
 
+            // ✅ Better logging for debugging
+            console.log("Fetching profiles for:", {
+              fromUser1: likeData.fromUser1,
+              fromUser2: likeData.fromUser2,
+            });
+
             const user1Profile = await getUserProfile(likeData.fromUser1);
             const user2Profile = await getUserProfile(likeData.fromUser2);
+
+            console.log("Profiles loaded:", {
+              user1: user1Profile
+                ? `${user1Profile.name} (${user1Profile.userId})`
+                : "MISSING",
+              user2: user2Profile
+                ? `${user2Profile.name} (${user2Profile.userId})`
+                : "MISSING",
+            });
 
             if (user1Profile && user2Profile) {
               likes.push({
@@ -108,7 +123,12 @@ export default function RequestsScreen({ isActive = true }) {
                 status: likeData.status,
               });
             } else {
-              console.log("Missing profile data for like:", doc.id);
+              console.error("⚠️ Missing profile data for like:", doc.id, {
+                user1Profile: !!user1Profile,
+                user2Profile: !!user2Profile,
+                fromUser1: likeData.fromUser1,
+                fromUser2: likeData.fromUser2,
+              });
             }
           }
 
@@ -325,11 +345,23 @@ export default function RequestsScreen({ isActive = true }) {
                 <View style={styles.tagsContainer}>
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
-                    {selectedProfile.tags.split(" ").map((tag, index) => (
-                      <Chip key={index} style={styles.tag} compact>
-                        {tag}
-                      </Chip>
-                    ))}
+                    {(() => {
+                      // ✅ FIX: Handle tags being string, array, or undefined
+                      let tagsArray = [];
+                      if (typeof selectedProfile.tags === "string") {
+                        tagsArray = selectedProfile.tags
+                          .split(" ")
+                          .filter((tag) => tag.trim());
+                      } else if (Array.isArray(selectedProfile.tags)) {
+                        tagsArray = selectedProfile.tags;
+                      }
+
+                      return tagsArray.map((tag, index) => (
+                        <Chip key={index} style={styles.tag} compact>
+                          {tag}
+                        </Chip>
+                      ));
+                    })()}
                   </View>
                 </View>
               )}
@@ -404,9 +436,9 @@ export default function RequestsScreen({ isActive = true }) {
         ) : (
           duoLikes.map((like) => {
             const fromUser1Accepted =
-              like.acceptedBy?.includes(like.user1.userId) || false;
+              like.acceptedBy?.includes(like.user1?.userId) || false;
             const fromUser2Accepted =
-              like.acceptedBy?.includes(like.user2.userId) || false;
+              like.acceptedBy?.includes(like.user2?.userId) || false;
             const currentUserAccepted =
               like.acceptedBy?.includes(currentUserId) || false;
             const partnerAccepted = currentDuo
@@ -418,6 +450,21 @@ export default function RequestsScreen({ isActive = true }) {
             const yourDuoFullyAccepted = currentUserAccepted && partnerAccepted;
             const allAccepted =
               sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
+
+            // ✅ Debug logging for acceptance tracking
+            console.log("Rendering like card:", {
+              likeId: like.id,
+              user1: like.user1?.name,
+              user2: like.user2?.name,
+              fromUser1Accepted,
+              fromUser2Accepted,
+              currentUserAccepted,
+              partnerAccepted,
+              sendingDuoAcceptances,
+              yourDuoFullyAccepted,
+              allAccepted,
+              acceptedBy: like.acceptedBy,
+            });
 
             return (
               <Card key={like.id} style={styles.requestCard}>
@@ -434,53 +481,93 @@ export default function RequestsScreen({ isActive = true }) {
                 />
                 <Card.Content>
                   <View style={styles.duoPairContainer}>
-                    <Button
-                      mode="text"
-                      onPress={() => handleProfileClick(like.user1)}
-                      style={styles.profileButton}
-                    >
-                      <View style={styles.profileCard}>
-                        <ProfilePhoto uri={like.user1.photos?.[0]} size={80} />
-                        <Text variant="titleMedium" style={styles.profileName}>
-                          {like.user1.name}, {like.user1.age}
-                        </Text>
-                        {fromUser1Accepted && (
-                          <Chip
-                            icon="check"
-                            style={styles.acceptedChip}
-                            compact
+                    {like.user1 ? (
+                      <Button
+                        mode="text"
+                        onPress={() => handleProfileClick(like.user1)}
+                        style={styles.profileButton}
+                      >
+                        <View style={styles.profileCard}>
+                          <ProfilePhoto
+                            uri={like.user1.photos?.[0]}
+                            size={80}
+                          />
+                          <Text
+                            variant="titleMedium"
+                            style={styles.profileName}
                           >
-                            Accepted
-                          </Chip>
-                        )}
+                            {like.user1.name}, {like.user1.age}
+                          </Text>
+                          {fromUser1Accepted && (
+                            <Chip
+                              icon="check"
+                              style={styles.acceptedChip}
+                              compact
+                            >
+                              Accepted
+                            </Chip>
+                          )}
+                        </View>
+                      </Button>
+                    ) : (
+                      <View style={styles.profileButton}>
+                        <View style={styles.profileCard}>
+                          <ProfilePhoto size={80} />
+                          <Text
+                            variant="titleMedium"
+                            style={styles.profileName}
+                          >
+                            Loading...
+                          </Text>
+                        </View>
                       </View>
-                    </Button>
+                    )}
 
                     <Text variant="displaySmall" style={styles.plusSign}>
                       +
                     </Text>
 
-                    <Button
-                      mode="text"
-                      onPress={() => handleProfileClick(like.user2)}
-                      style={styles.profileButton}
-                    >
-                      <View style={styles.profileCard}>
-                        <ProfilePhoto uri={like.user2.photos?.[0]} size={80} />
-                        <Text variant="titleMedium" style={styles.profileName}>
-                          {like.user2.name}, {like.user2.age}
-                        </Text>
-                        {fromUser2Accepted && (
-                          <Chip
-                            icon="check"
-                            style={styles.acceptedChip}
-                            compact
+                    {like.user2 ? (
+                      <Button
+                        mode="text"
+                        onPress={() => handleProfileClick(like.user2)}
+                        style={styles.profileButton}
+                      >
+                        <View style={styles.profileCard}>
+                          <ProfilePhoto
+                            uri={like.user2.photos?.[0]}
+                            size={80}
+                          />
+                          <Text
+                            variant="titleMedium"
+                            style={styles.profileName}
                           >
-                            Accepted
-                          </Chip>
-                        )}
+                            {like.user2.name}, {like.user2.age}
+                          </Text>
+                          {fromUser2Accepted && (
+                            <Chip
+                              icon="check"
+                              style={styles.acceptedChip}
+                              compact
+                            >
+                              Accepted
+                            </Chip>
+                          )}
+                        </View>
+                      </Button>
+                    ) : (
+                      <View style={styles.profileButton}>
+                        <View style={styles.profileCard}>
+                          <ProfilePhoto size={80} />
+                          <Text
+                            variant="titleMedium"
+                            style={styles.profileName}
+                          >
+                            Loading...
+                          </Text>
+                        </View>
                       </View>
-                    </Button>
+                    )}
                   </View>
 
                   <Divider style={styles.divider} />
