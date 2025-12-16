@@ -189,29 +189,49 @@ export default function DatingScreen({ isActive = true }) {
         useNativeDriver: false,
       }),
     ]).start(async () => {
-      if (action === "like") {
-        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
-        await saveDuoLike(
-          currentDuo.duoId,
-          currentDuoPair.id,
-          currentUserId,
-          currentDuo.partnerId,
-          currentDuoPair.users?.[0],
-          currentDuoPair.users?.[1]
+      try {
+        if (action === "like") {
+          console.log("Saving duo like...");
+          await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
+          await saveDuoLike(
+            currentDuo.duoId,
+            currentDuoPair.id,
+            currentUserId,
+            currentDuo.partnerId,
+            currentDuoPair.users?.[0],
+            currentDuoPair.users?.[1]
+          );
+          console.log("Duo like saved successfully!");
+        } else {
+          console.log("Saving duo pass...");
+          await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
+          console.log("Duo pass saved successfully!");
+        }
+
+        // Remove the swiped pair from the list
+        setDuoPairs((prevPairs) =>
+          prevPairs.filter((pair) => pair.id !== currentDuoPair.id)
         );
-      } else {
-        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
+
+        // Reset animation values for next card
+        pan.setValue({ x: 0, y: 0 });
+        rotate.setValue(0);
+        opacity.setValue(1);
+        scale.setValue(1);
+        setSwipeFeedback(null);
+
+        console.log(`Swipe complete. Remaining pairs: ${duoPairs.length - 1}`);
+      } catch (error) {
+        console.error("Error in swipe complete:", error);
+        Alert.alert("Error", "Failed to save your decision. Please try again.");
+
+        // Reset animation even on error
+        pan.setValue({ x: 0, y: 0 });
+        rotate.setValue(0);
+        opacity.setValue(1);
+        scale.setValue(1);
+        setSwipeFeedback(null);
       }
-
-      setDuoPairs((prevPairs) =>
-        prevPairs.filter((pair) => pair.id !== currentDuoPair.id)
-      );
-
-      pan.setValue({ x: 0, y: 0 });
-      rotate.setValue(0);
-      opacity.setValue(1);
-      scale.setValue(1);
-      setSwipeFeedback(null);
     });
   };
 

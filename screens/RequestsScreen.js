@@ -36,7 +36,7 @@ import {
   StarRating,
 } from "../components/CommonComponents";
 
-export default function RequestsScreen() {
+export default function RequestsScreen({ isActive = true }) {
   const theme = useTheme();
   const [duoLikes, setDuoLikes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,9 +48,12 @@ export default function RequestsScreen() {
 
   const currentUserId = CURRENT_USER_ID;
 
+  // Reload duo partner when screen becomes active
   useEffect(() => {
-    loadDuoPartner();
-  }, []);
+    if (isActive) {
+      loadDuoPartner();
+    }
+  }, [isActive]);
 
   const loadDuoPartner = async () => {
     setLoading(true);

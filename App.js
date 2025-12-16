@@ -106,7 +106,7 @@ export default function App() {
 
   const renderScene = BottomNavigation.SceneMap({
     dating: () => <DatingScreen isActive={activeTab === "dating"} />,
-    likes: () => <RequestsScreen />,
+    likes: () => <RequestsScreen isActive={activeTab === "likes"} />,
     explore: () => <ExploreScreen />,
     messages: () => <ChatScreen />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
