@@ -14,5 +14,3 @@
 - Explore system
 - Add report system
 - Make it so that different phones can see images
-
-connecting to branch
