@@ -15,3 +15,4 @@
 - Add report system
 - ~~Make it so that different phones can see images~~
 
+readme change
