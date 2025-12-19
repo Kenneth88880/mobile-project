@@ -1468,6 +1468,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   );
 }
 
+export const hasUserRatedProfile = async (raterId, ratedUserId) => {
+  try {
+    const ratingsSnapshot = await firestore()
+      .collection('ratings')
+      .where('raterId', '==', raterId)
+      .where('ratedUserId', '==', ratedUserId)
+      .get();
+    
+    return !ratingsSnapshot.empty;
+  } catch (error) {
+    console.error('Error checking if user rated profile:', error);
+    return false;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -30,7 +30,8 @@ import {
   saveDuoLike,
   deleteDuoLikeBetween,
   saveDuoSwipe,
-  getUserProfile,
+  getUserProfile, 
+  hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { getDistanceToProfile } from "../utils/locationUtils";
@@ -48,6 +49,7 @@ export default function DatingScreen({ isActive = true }) {
   const [currentDuo, setCurrentDuo] = useState(null);
   const [swipeFeedback, setSwipeFeedback] = useState(null);
   const [currentUserLocation, setCurrentUserLocation] = useState(null);
+  const [hasRatedUser, setHasRatedUser] = useState(false);
 
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -119,25 +121,93 @@ export default function DatingScreen({ isActive = true }) {
   const handleBackToDouble = () => {
     setSelectedProfile(null);
     setCurrentImageIndex(0);
+    setHasRatedUser(false);
   };
 
-  const handleRateProfile = (profile) => {
+  const handleRateProfile = async (profile) => {
     if (!profile) return; // ✅ Safety check
-    setRatingProfile(profile);
-    setShowRatingModal(true);
+    
+    try {
+      const profileId = profile.userId || profile.id;
+      
+      // ✅ Check if user has already rated this profile
+      const alreadyRated = await hasUserRatedProfile(currentUserId, profileId);
+      
+      if (alreadyRated) {
+        Alert.alert(
+          'Already Rated',
+          `You have already rated ${profile.name || 'this user'}. You can only rate someone once.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      setRatingProfile(profile);
+      setShowRatingModal(true);
+    } catch (error) {
+      console.error('Error checking rating status:', error);
+      Alert.alert('Error', 'Failed to check rating status. Please try again.');
+    }
   };
 
   const submitRating = async (rating) => {
-    if (ratingProfile) {
-      await saveRating(currentUserId, ratingProfile.userId, rating);
+    if (!ratingProfile) return;
+    
+    const ratedUserId = ratingProfile.userId || ratingProfile.id;
+    
+    try {
+      // ✅ Double-check before submitting (safety measure)
+      const alreadyRated = await hasUserRatedProfile(currentUserId, ratedUserId);
+      
+      if (alreadyRated) {
+        Alert.alert(
+          'Already Rated',
+          'You have already rated this user.',
+          [{ text: 'OK' }]
+        );
+        setShowRatingModal(false);
+        setRatingProfile(null);
+        return;
+      }
+      
+      // Submit the rating
+      await saveRating(currentUserId, ratedUserId, rating);
+      
       Alert.alert(
-        "Success",
-        `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
+        'Success',
+        `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
       );
+      
       setShowRatingModal(false);
       setRatingProfile(null);
+      
+      // Update the hasRatedUser state so UI reflects the change
+      setHasRatedUser(true);
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      Alert.alert('Error', 'Failed to submit rating. Please try again.');
     }
   };
+
+  // ✅ Check rating status when viewing a profile OR when component becomes active
+  useEffect(() => {
+    const checkRatingStatus = async () => {
+      if (selectedProfile) {
+        try {
+          const profileId = selectedProfile.userId || selectedProfile.id;
+          const alreadyRated = await hasUserRatedProfile(currentUserId, profileId);
+          setHasRatedUser(alreadyRated);
+        } catch (error) {
+          console.error('Error checking rating status:', error);
+          setHasRatedUser(false);
+        }
+      } else {
+        setHasRatedUser(false);
+      }
+    };
+    
+    checkRatingStatus();
+  }, [selectedProfile, currentUserId, isActive]);
 
   const handleNextImage = () => {
     if (selectedProfile?.photos?.length > 1) {
@@ -407,14 +477,25 @@ export default function DatingScreen({ isActive = true }) {
           showOnlineStatus={profileShowOnlineStatus}
         />
 
-        <Button
-          mode="contained"
-          icon="star"
-          onPress={() => handleRateProfile(selectedProfile)}
-          style={styles.rateButton}
-        >
-          Rate Profile
-        </Button>
+        {hasRatedUser ? (
+          <Card style={{ margin: 16, backgroundColor: theme.colors.surfaceVariant }}>
+            <Card.Content>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <IconButton icon="check-circle" size={24} iconColor={theme.colors.primary} />
+                <Text variant="bodyLarge">You've already rated this user</Text>
+              </View>
+            </Card.Content>
+          </Card>
+        ) : (
+          <Button
+            mode="contained"
+            icon="star"
+            onPress={() => handleRateProfile(selectedProfile)}
+            style={styles.rateButton}
+          >
+            Rate Profile
+          </Button>
+        )}
       </ScrollView>
     );
   }
