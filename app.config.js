@@ -10,44 +10,43 @@ module.exports = {
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff"
+      backgroundColor: "#ffffff",
     },
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.galaxies.firebase",
-      googleServicesFile: "./GoogleService-Info.plist"
+      googleServicesFile: "./GoogleService-Info.plist",
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
       package: "com.galaxies.firebase",
-      googleServicesFile: "./google-services.json"
+      googleServicesFile: "services/google-services.json",
     },
     web: {
-      favicon: "./assets/favicon.png"
+      favicon: "./assets/favicon.png",
     },
     plugins: [
       "expo-router",
       [
         "expo-build-properties",
         {
-          "ios": {
-            "useFrameworks": "static"
-          }
-        }
+          ios: {
+            useFrameworks: "static",
+          },
+        },
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
+
     ],
     extra: {
-  router: {},
-  eas: {
-    projectId: "dfbf77be-2a46-4218-bf66-c8c8f00a4956"
-  }
-},
-    owner: "k0k0"
-  }
+      router: {},
+      eas: {
+        projectId: "dfbf77be-2a46-4218-bf66-c8c8f00a4956",
+      },
+    },
+    owner: "k0k0",
+  },
 };
