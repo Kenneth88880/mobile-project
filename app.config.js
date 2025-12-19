@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   expo: {
     name: "Doubly",
     slug: "doubly",
@@ -6,46 +6,49 @@ module.exports = {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
     splash: {
-      image: "./assets/splash-icon.png",
+      image: "./assets/splash.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.yourcompany.doubly", // ← Changed
-      googleServicesFile: "./GoogleService-Info.plist",
+      bundleIdentifier: "com.doublyconnections.doubly",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff",
       },
-      edgeToEdgeEnabled: true,
-      package: "com.yourcompany.doubly", // ← Changed
-      googleServicesFile: "./google-services.json", // ← Fixed path
-    },
-    web: {
-      favicon: "./assets/favicon.png",
+      googleServicesFile: "./google-services.json",
+      package: "com.doublyconnections.doubly",
     },
     plugins: [
-      "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      //"./expo-firebase-plugin.cjs",
       [
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "static",
+            useFrameworks: "dynamic",
+            deploymentTarget: "15.1",
+            buildReactNativeFromSource: true,
           },
         },
       ],
     ],
     extra: {
-      router: {},
       eas: {
         projectId: "094bfe3f-c9f2-4df3-af59-aef5b61ad64b",
       },
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
     },
-    owner: "k0k0",
   },
 };
