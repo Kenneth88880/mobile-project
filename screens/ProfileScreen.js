@@ -407,6 +407,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     } catch (error) {
       console.error("Error sending partner request:", error);
       Alert.alert("Error", "Failed to send partner request");
+    } finally {
+      setSendingRequest(false);
     }
   };
 
@@ -615,6 +617,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   }, [showTagPicker, profile.tags, theme.colors.background]);
 
   const PartnerSearchModal = useCallback(() => {
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
+
     return (
       <Portal>
         <Modal
@@ -651,12 +655,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               <Text variant="bodySmall" style={{ marginBottom: 4 }}>
                 Your User ID:
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
+              <Text variant="bodyLarge" selectable style={{ marginBottom: 8 }}>
+                {CURRENT_USER_ID}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ opacity: 0.6, fontStyle: "italic" }}
               >
                 <Text variant="bodyLarge" selectable style={{ flex: 1 }}>
                   {CURRENT_USER_ID}
@@ -766,9 +770,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                       mode="contained"
                       onPress={() => handleSendPartnerRequest(item.id)}
                       style={{ marginTop: 12 }}
-                      icon="account-plus"
+                      icon={sendingRequest ? "loading" : "account-plus"}
+                      disabled={sendingRequest}
+                      loading={sendingRequest}
                     >
-                      Send Request
+                      {sendingRequest ? "Sending..." : "Send Request"}
                     </Button>
                   </Card.Content>
                 </Card>

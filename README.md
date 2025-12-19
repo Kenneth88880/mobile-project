@@ -2,7 +2,7 @@
 
 ## Things to do before release
 
-- Report bug system
+- Report bug system 
 - ~~Premium notifications~~
 - ~~User interface~~
 - ~~Onboarding system~~
