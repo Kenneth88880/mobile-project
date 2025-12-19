@@ -656,8 +656,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                }}
-              >
+                }}>
                 <Text variant="bodyLarge" selectable style={{ flex: 1 }}>
                   {CURRENT_USER_ID}
                 </Text>
@@ -1467,21 +1466,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     </View>
   );
 }
-
-export const hasUserRatedProfile = async (raterId, ratedUserId) => {
-  try {
-    const ratingsSnapshot = await firestore()
-      .collection('ratings')
-      .where('raterId', '==', raterId)
-      .where('ratedUserId', '==', ratedUserId)
-      .get();
-    
-    return !ratingsSnapshot.empty;
-  } catch (error) {
-    console.error('Error checking if user rated profile:', error);
-    return false;
-  }
-};
 
 const styles = StyleSheet.create({
   container: {
