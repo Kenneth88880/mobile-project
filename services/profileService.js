@@ -109,6 +109,24 @@ export const getCurrentDuoPartner = async (userId) => {
 };
 
 /**
+ * Check if a user has already rated another user
+ */
+export const hasUserRatedProfile = async (raterId, ratedUserId) => {
+  try {
+    const ratingsSnapshot = await firestore()
+      .collection('ratings')
+      .where('fromUserId', '==', raterId)
+      .where('toUserId', '==', ratedUserId)
+      .get();
+    
+    return !ratingsSnapshot.empty;
+  } catch (error) {
+    console.error('Error checking if user rated profile:', error);
+    return false;
+  }
+};
+
+/**
  * Get all duo pairs for matching
  */
 export const getAllDuoPairs = async (userId) => {
@@ -365,6 +383,14 @@ export const deleteDuoLike = async (likeId) => {
  */
 export const saveRating = async (fromUserId, toUserId, rating) => {
   try {
+    // ✅ Check if user has already rated this profile
+    const alreadyRated = await hasUserRatedProfile(fromUserId, toUserId);
+    
+    if (alreadyRated) {
+      console.log(`User ${fromUserId} has already rated ${toUserId}`);
+      return false;
+    }
+    
     await firestore().collection("ratings").add({
       fromUserId,
       toUserId,
