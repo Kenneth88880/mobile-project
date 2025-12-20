@@ -21,7 +21,9 @@ import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import CheckoutScreen from "./screens/PaymentScreen";
-import { STRIPE_PUBLISHABLE_KEY } from "./services/stripeConfig";
+import Constants from "expo-constants";
+const STRIPE_PUBLISHABLE_KEY =
+  Constants.expoConfig?.extra?.stripePublishableKey;
 import SigninScreen from "./screens/SigninScreen";
 
 export default function App() {
