@@ -26,7 +26,8 @@ import {
 // import MapView, { Marker } from "react-native-maps"; // Using static maps instead
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { PLACES_API_KEY } from "../services/googleMapsConfig";
+import Constants from "expo-constants";
+const PLACES_API_KEY = Constants.expoConfig?.extra?.googlePlacesApiKey;
 
 const categories = [
   "Restaurants",
@@ -654,7 +655,13 @@ export default function ExploreScreen() {
                   }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text variant="titleMedium" numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+                    <Text
+                      variant="titleMedium"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {item.name}
+                    </Text>
                     <View
                       style={{
                         flexDirection: "row",
