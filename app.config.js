@@ -1,53 +1,54 @@
-module.exports = {
+export default {
   expo: {
-    name: "mobile-project",
-    slug: "mobile-project",
+    name: "Doubly",
+    slug: "doubly",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
     splash: {
-      image: "./assets/splash-icon.png",
+      image: "./assets/splash.png",
       resizeMode: "contain",
-      backgroundColor: "#ffffff"
+      backgroundColor: "#ffffff",
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.galaxies.firebase",
-      googleServicesFile: "./GoogleService-Info.plist"
+      bundleIdentifier: "com.doublyconnections.doubly",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#ffffff",
       },
-      edgeToEdgeEnabled: true,
-      package: "com.galaxies.firebase",
-      googleServicesFile: "./google-services.json"
-    },
-    web: {
-      favicon: "./assets/favicon.png"
+      googleServicesFile: "./google-services.json",
+      package: "com.doublyconnections.doubly",
     },
     plugins: [
-      "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      //"./expo-firebase-plugin.cjs",
       [
         "expo-build-properties",
         {
-          "ios": {
-            "useFrameworks": "static"
-          }
-        }
+          ios: {
+            useFrameworks: "dynamic",
+            deploymentTarget: "15.1",
+            buildReactNativeFromSource: true,
+          },
+        },
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
     ],
     extra: {
-  router: {},
-  eas: {
-    projectId: "dfbf77be-2a46-4218-bf66-c8c8f00a4956"
-  }
-},
-    owner: "k0k0"
-  }
+      eas: {
+        projectId: "094bfe3f-c9f2-4df3-af59-aef5b61ad64b",
+      },
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
+    },
+  },
 };

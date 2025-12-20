@@ -31,26 +31,11 @@ import {
   getUserProfile,
   saveUserProfile,
   getAverageRating,
-  resetAllDuoData,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  getDoc,
-} from "firebase/firestore";
-import { getAuth, signOut } from "firebase/auth";
-import { db } from "../services/firebaseConfig";
+import firestore from "@react-native-firebase/firestore";
+import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
-
-const auth = getAuth();
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -154,7 +139,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
-  const [sendingRequest, setSendingRequest] = useState(false);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -167,6 +151,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [showSettings, setShowSettings] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
+  const [viewingPartnerProfile, setViewingPartnerProfile] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     loadProfile();
@@ -181,13 +167,11 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const loadPendingRequests = async () => {
     try {
-      // ✅ Web SDK syntax
-      const q = query(
-        collection(db, "duoRequests"),
-        where("toUserId", "==", CURRENT_USER_ID),
-        where("status", "==", "pending")
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await firestore()
+        .collection("duoRequests")
+        .where("toUserId", "==", CURRENT_USER_ID)
+        .where("status", "==", "pending")
+        .get();
 
       const requests = [];
       for (const docSnap of querySnapshot.docs) {
@@ -215,12 +199,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const loadDuo = async () => {
     try {
-      // ✅ Web SDK syntax
-      const q = query(
-        collection(db, "duos"),
-        where("users", "array-contains", CURRENT_USER_ID)
-      );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .get();
 
       if (!querySnapshot.empty) {
         const duoDoc = querySnapshot.docs[0];
@@ -371,9 +353,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     try {
       // Search by User ID in 'profiles' collection
-      const userDoc = await getDoc(doc(db, "profiles", searchText.trim()));
+      const userDoc = await firestore()
+        .collection("profiles")
+        .doc(searchText.trim())
+        .get();
 
-      if (userDoc.exists() && userDoc.id !== CURRENT_USER_ID) {
+      if (userDoc.exists && userDoc.id !== CURRENT_USER_ID) {
         const userData = userDoc.data();
         setSearchResults([
           {
@@ -396,26 +381,23 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleSendPartnerRequest = async (targetUserId) => {
     try {
-      setSendingRequest(true);
-      const requestsRef = collection(db, "duoRequests");
-      const q = query(
-        requestsRef,
-        where("fromUserId", "==", CURRENT_USER_ID),
-        where("toUserId", "==", targetUserId),
-        where("status", "==", "pending")
-      );
-      const existingRequests = await getDocs(q);
+      const existingRequests = await firestore()
+        .collection("duoRequests")
+        .where("fromUserId", "==", CURRENT_USER_ID)
+        .where("toUserId", "==", targetUserId)
+        .where("status", "==", "pending")
+        .get();
 
       if (!existingRequests.empty) {
         Alert.alert("Info", "You've already sent a request to this user!");
         return;
       }
 
-      await addDoc(requestsRef, {
+      await firestore().collection("duoRequests").add({
         fromUserId: CURRENT_USER_ID,
         toUserId: targetUserId,
         status: "pending",
-        timestamp: serverTimestamp(),
+        timestamp: firestore.FieldValue.serverTimestamp(),
       });
 
       Alert.alert("Success", "Partner request sent!");
@@ -425,32 +407,33 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     } catch (error) {
       console.error("Error sending partner request:", error);
       Alert.alert("Error", "Failed to send partner request");
-    } finally {
-      setSendingRequest(false);
     }
   };
 
   const handleAcceptRequest = async (requestId, fromUserId) => {
     try {
-      const duosRef = collection(db, "duos");
-      const q = query(
-        duosRef,
-        where("users", "array-contains", CURRENT_USER_ID)
-      );
-      const existingDuos = await getDocs(q);
+      const existingDuos = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .get();
 
       if (!existingDuos.empty) {
         Alert.alert("Error", "You're already in a duo!");
         return;
       }
 
-      await addDoc(duosRef, {
-        users: [CURRENT_USER_ID, fromUserId],
-        createdAt: serverTimestamp(),
-      });
+      await firestore()
+        .collection("duos")
+        .add({
+          users: [CURRENT_USER_ID, fromUserId],
+          status: "active",
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
 
-      const requestRef = doc(db, "duoRequests", requestId);
-      await updateDoc(requestRef, { status: "accepted" });
+      await firestore()
+        .collection("duoRequests")
+        .doc(requestId)
+        .update({ status: "accepted" });
 
       Alert.alert("Success", "You're now duo partners!");
       loadPendingRequests();
@@ -464,8 +447,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleDeclineRequest = async (requestId) => {
     try {
-      const requestRef = doc(db, "duoRequests", requestId);
-      await deleteDoc(requestRef);
+      await firestore().collection("duoRequests").doc(requestId).delete();
 
       Alert.alert("Success", "Request declined");
       loadPendingRequests();
@@ -486,16 +468,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           style: "destructive",
           onPress: async () => {
             try {
-              const duosRef = collection(db, "duos");
-              const q = query(
-                duosRef,
-                where("users", "array-contains", CURRENT_USER_ID)
-              );
-              const querySnapshot = await getDocs(q);
+              const querySnapshot = await firestore()
+                .collection("duos")
+                .where("users", "array-contains", CURRENT_USER_ID)
+                .get();
 
               if (!querySnapshot.empty) {
                 const duoDoc = querySnapshot.docs[0];
-                await deleteDoc(doc(db, "duos", duoDoc.id));
+                await firestore().collection("duos").doc(duoDoc.id).delete();
                 Alert.alert("Success", "Partner removed");
                 setDuoPartnerProfile(null);
                 setProfile({ ...profile, duoPartnerId: null });
@@ -512,7 +492,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      await auth().signOut();
     } catch (error) {
       console.error("Error signing out:", error);
       Alert.alert("Error", "Failed to sign out");
@@ -562,33 +542,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 />
               )}
             />
-            <Divider style={{ marginVertical: 8 }} />
-            <Button
-              mode="outlined"
-              onPress={async () => {
-                Alert.alert(
-                  "Reset All Data",
-                  "This will remove ALL your duo data including matches, likes, and swipes. Your profile will remain. Continue?",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Reset",
-                      style: "destructive",
-                      onPress: async () => {
-                        const success = await resetAllDuoData(CURRENT_USER_ID);
-                        if (success) {
-                          Alert.alert("Success", "All duo data has been reset");
-                          loadProfile();
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              style={{ marginTop: 16 }}
-            >
-              Reset All Duo Data
-            </Button>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowSettings(false)}>Close</Button>
@@ -662,8 +615,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   }, [showTagPicker, profile.tags, theme.colors.background]);
 
   const PartnerSearchModal = useCallback(() => {
-    const [localSearchQuery, setLocalSearchQuery] = useState("");
-
     return (
       <Portal>
         <Modal
@@ -700,40 +651,47 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               <Text variant="bodySmall" style={{ marginBottom: 4 }}>
                 Your User ID:
               </Text>
-              <Text variant="bodyLarge" selectable style={{ marginBottom: 8 }}>
-                {CURRENT_USER_ID}
-              </Text>
-              <Text
-                variant="bodySmall"
-                style={{ opacity: 0.6, fontStyle: "italic" }}
-              >
-                Long-press your ID above to copy it
-              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}>
+                <Text variant="bodyLarge" selectable style={{ flex: 1 }}>
+                  {CURRENT_USER_ID}
+                </Text>
+                <IconButton
+                  icon="content-copy"
+                  size={20}
+                  onPress={() => {
+                    // User can long-press the ID text to copy it
+                  }}
+                />
+              </View>
             </Surface>
 
             <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
               Enter your friend's User ID to send them a duo partner request.
             </Text>
 
-            <View style={{ marginBottom: 16 }}>
-              <TextInput
-                label="Friend's User ID"
-                value={localSearchQuery}
-                onChangeText={setLocalSearchQuery}
-                mode="outlined"
-                style={styles.searchInput}
-                placeholder="Paste their User ID here"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="search"
-                blurOnSubmit={false}
-              />
-            </View>
+            <TextInput
+              label="Friend's User ID"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                setSearchResults([]);
+              }}
+              mode="outlined"
+              style={styles.searchInput}
+              left={<TextInput.Icon icon="account-search" />}
+              placeholder="Paste their User ID here"
+              onSubmitEditing={() => handleSearchPartner(searchQuery)}
+            />
 
             <Button
               mode="contained"
-              onPress={() => handleSearchPartner(localSearchQuery)}
-              disabled={!localSearchQuery.trim() || searching}
+              onPress={() => handleSearchPartner(searchQuery)}
+              disabled={!searchQuery.trim() || searching}
               style={{ marginTop: 8, marginBottom: 16 }}
             >
               {searching ? "Searching..." : "Search"}
@@ -746,7 +704,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </View>
             )}
 
-            {!searching && !localSearchQuery && searchResults.length === 0 && (
+            {!searching && searchResults.length === 0 && (
               <View style={styles.emptyState}>
                 <Text style={{ textAlign: "center" }}>
                   Ask your friend for their User ID and paste it above, then
@@ -807,11 +765,9 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                       mode="contained"
                       onPress={() => handleSendPartnerRequest(item.id)}
                       style={{ marginTop: 12 }}
-                      icon={sendingRequest ? "loading" : "account-plus"}
-                      disabled={sendingRequest}
-                      loading={sendingRequest}
+                      icon="account-plus"
                     >
-                      {sendingRequest ? "Sending..." : "Send Request"}
+                      Send Request
                     </Button>
                   </Card.Content>
                 </Card>
@@ -821,13 +777,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Modal>
       </Portal>
     );
-  }, [
-    showPartnerSearch,
-    searchResults,
-    searching,
-    sendingRequest,
-    theme.colors.background,
-  ]);
+  }, [showPartnerSearch, searchResults, searching, theme.colors.background]);
 
   const PendingRequestsModal = useCallback(() => {
     return (
@@ -950,6 +900,166 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   // View Mode
   if (!isEditing) {
+    // Partner profile viewing modal
+    if (viewingPartnerProfile && duoPartnerProfile) {
+      const hasPhotos =
+        duoPartnerProfile.photos && duoPartnerProfile.photos.length > 0;
+      const currentPhoto = hasPhotos
+        ? duoPartnerProfile.photos[currentImageIndex]
+        : null;
+
+      return (
+        <View
+          style={[
+            styles.container,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <Surface
+            style={{ flexDirection: "row", alignItems: "center", padding: 16 }}
+            elevation={2}
+          >
+            <IconButton
+              icon="arrow-left"
+              onPress={() => setViewingPartnerProfile(false)}
+            />
+            <Text variant="titleLarge">{duoPartnerProfile.name}'s Profile</Text>
+          </Surface>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Card style={styles.card}>
+              {currentPhoto ? (
+                <Card.Cover
+                  source={{ uri: currentPhoto }}
+                  style={{ height: 400 }}
+                />
+              ) : (
+                <View
+                  style={{
+                    height: 400,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: "#f0f0f0",
+                  }}
+                >
+                  <Avatar.Icon size={120} icon="account" />
+                  <Text variant="bodyLarge" style={{ marginTop: 8 }}>
+                    No photos available
+                  </Text>
+                </View>
+              )}
+
+              {hasPhotos && duoPartnerProfile.photos.length > 1 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 16,
+                    left: 0,
+                    right: 0,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <IconButton
+                    icon="chevron-left"
+                    iconColor="white"
+                    onPress={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === 0
+                          ? duoPartnerProfile.photos.length - 1
+                          : prev - 1
+                      )
+                    }
+                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                  />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {duoPartnerProfile.photos.map((_, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          width: index === currentImageIndex ? 10 : 8,
+                          height: index === currentImageIndex ? 10 : 8,
+                          borderRadius: index === currentImageIndex ? 5 : 4,
+                          backgroundColor:
+                            index === currentImageIndex
+                              ? "white"
+                              : "rgba(255, 255, 255, 0.5)",
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <IconButton
+                    icon="chevron-right"
+                    iconColor="white"
+                    onPress={() =>
+                      setCurrentImageIndex((prev) =>
+                        prev === duoPartnerProfile.photos.length - 1
+                          ? 0
+                          : prev + 1
+                      )
+                    }
+                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                  />
+                </View>
+              )}
+            </Card>
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text variant="headlineMedium">
+                  {duoPartnerProfile.name}, {duoPartnerProfile.age}
+                </Text>
+                <Text
+                  variant="bodyMedium"
+                  style={{
+                    marginTop: 8,
+                    fontStyle: "italic",
+                    color: theme.colors.primary,
+                  }}
+                >
+                  Your Duo Partner
+                </Text>
+
+                {duoPartnerProfile.city && (
+                  <Text variant="bodyMedium" style={{ marginTop: 4 }}>
+                    📍 {duoPartnerProfile.city}
+                  </Text>
+                )}
+
+                {duoPartnerProfile.description && (
+                  <Text style={{ marginTop: 12, lineHeight: 24 }}>
+                    {duoPartnerProfile.description}
+                  </Text>
+                )}
+
+                {duoPartnerProfile.tags &&
+                  duoPartnerProfile.tags.length > 0 && (
+                    <View style={{ marginTop: 16 }}>
+                      <Text variant="titleSmall">Interests:</Text>
+                      <View style={styles.tagsDisplay}>
+                        {duoPartnerProfile.tags.map((tag, index) => (
+                          <Chip key={index} style={styles.tagDisplay} compact>
+                            {tag}
+                          </Chip>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                <Text
+                  variant="bodySmall"
+                  style={{ marginTop: 16, textAlign: "center", opacity: 0.7 }}
+                >
+                  You cannot rate your duo partner
+                </Text>
+              </Card.Content>
+            </Card>
+          </ScrollView>
+        </View>
+      );
+    }
+
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: theme.colors.background }}
@@ -1070,40 +1180,48 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           <Card.Content>
             {duoPartnerProfile ? (
               <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 12,
+                <TouchableOpacity
+                  onPress={() => {
+                    setCurrentImageIndex(0);
+                    setViewingPartnerProfile(true);
                   }}
                 >
-                  <Avatar.Image
-                    size={64}
-                    source={{
-                      uri:
-                        duoPartnerProfile.photos && duoPartnerProfile.photos[0]
-                          ? duoPartnerProfile.photos[0]
-                          : "https://via.placeholder.com/150",
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 12,
                     }}
-                  />
-                  <View style={{ marginLeft: 16 }}>
-                    <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
-                    <Text variant="bodyMedium">
-                      {duoPartnerProfile.age} years old
-                    </Text>
-                  </View>
-                </View>
-
-                {duoPartnerProfile.tags &&
-                  duoPartnerProfile.tags.length > 0 && (
-                    <View style={styles.tagsDisplay}>
-                      {duoPartnerProfile.tags.map((tag, index) => (
-                        <Chip key={index} style={styles.tagDisplay}>
-                          {tag}
-                        </Chip>
-                      ))}
+                  >
+                    <Avatar.Image
+                      size={64}
+                      source={{
+                        uri:
+                          duoPartnerProfile.photos &&
+                          duoPartnerProfile.photos[0]
+                            ? duoPartnerProfile.photos[0]
+                            : "https://via.placeholder.com/150",
+                      }}
+                    />
+                    <View style={{ marginLeft: 16 }}>
+                      <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
+                      <Text variant="bodyMedium">
+                        {duoPartnerProfile.age} years old
+                      </Text>
                     </View>
-                  )}
+                  </View>
+
+                  {duoPartnerProfile.tags &&
+                    duoPartnerProfile.tags.length > 0 && (
+                      <View style={styles.tagsDisplay}>
+                        {duoPartnerProfile.tags.map((tag, index) => (
+                          <Chip key={index} style={styles.tagDisplay}>
+                            {tag}
+                          </Chip>
+                        ))}
+                      </View>
+                    )}
+                </TouchableOpacity>
 
                 <Button
                   mode="outlined"
