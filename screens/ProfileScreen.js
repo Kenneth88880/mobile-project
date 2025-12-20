@@ -9,6 +9,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
+  SafeAreaView, // ← ADD THIS
 } from "react-native";
 import {
   Text,
@@ -512,7 +513,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     return stars;
   };
 
-  const SettingsDialog = useCallback(() => {
+  const SettingsDialog = () => {
     return (
       <Portal>
         <Dialog visible={showSettings} onDismiss={() => setShowSettings(false)}>
@@ -549,15 +550,9 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Dialog>
       </Portal>
     );
-  }, [
-    showSettings,
-    isDarkMode,
-    toggleTheme,
-    profile.showOnlineStatus,
-    CURRENT_USER_ID,
-  ]);
+  };
 
-  const TagPickerModal = useMemo(() => {
+  const TagPickerModal = () => {
     return (
       <Portal>
         <Modal
@@ -612,112 +607,156 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Modal>
       </Portal>
     );
-  }, [showTagPicker, profile.tags, theme.colors.background]);
+  };
 
-  const PartnerSearchModal = useCallback(() => {
+  const PartnerSearchModal = () => {
+    // Local state inside modal - won't be affected by parent re-renders
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
+    const [localSearchResults, setLocalSearchResults] = useState([]);
+    const [localSearching, setLocalSearching] = useState(false);
+
+    // Reset local state when modal closes
+    useEffect(() => {
+      if (!showPartnerSearch) {
+        setLocalSearchQuery("");
+        setLocalSearchResults([]);
+        setLocalSearching(false);
+      }
+    }, [showPartnerSearch]);
+
+    const handleLocalSearch = async (searchText) => {
+      if (localSearching) return;
+      if (!searchText.trim()) {
+        setLocalSearchResults([]);
+        setLocalSearching(false);
+        return;
+      }
+
+      setLocalSearching(true);
+
+      try {
+        const userDoc = await firestore()
+          .collection("profiles")
+          .doc(searchText.trim())
+          .get();
+
+        if (userDoc.exists && userDoc.id !== CURRENT_USER_ID) {
+          const userData = userDoc.data();
+          setLocalSearchResults([
+            {
+              id: userDoc.id,
+              ...userData,
+              tags: Array.isArray(userData.tags) ? userData.tags : [],
+            },
+          ]);
+        } else {
+          setLocalSearchResults([]);
+        }
+      } catch (error) {
+        console.error("Error searching users:", error);
+        setLocalSearchResults([]);
+      } finally {
+        setLocalSearching(false);
+      }
+    };
+
+    const handleClose = () => {
+      setShowPartnerSearch(false);
+    };
+
+    if (!showPartnerSearch) return null;
+
     return (
-      <Portal>
-        <Modal
-          visible={showPartnerSearch}
-          onDismiss={() => {
-            setShowPartnerSearch(false);
-            setSearchQuery("");
-            setSearchResults([]);
-          }}
-          contentContainerStyle={[
-            styles.modalContainer,
-            { backgroundColor: theme.colors.background },
-          ]}
+      <Modal
+        visible={showPartnerSearch}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleClose}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: theme.colors.background }}
         >
-          <View style={styles.modalHeader}>
-            <Text variant="headlineMedium">Find Duo Partner</Text>
-            <IconButton
-              icon="close"
-              onPress={() => {
-                setShowPartnerSearch(false);
-                setSearchQuery("");
-                setSearchResults([]);
-                if (searchTimeout) {
-                  clearTimeout(searchTimeout);
-                  setSearchTimeout(null);
-                }
+          <View style={{ flex: 1 }}>
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.outline,
               }}
-              style={{ position: "absolute", right: 16, top: 16 }}
-            />
-          </View>
-
-          <View style={styles.modalContent}>
-            <Surface style={{ padding: 12, borderRadius: 8, marginBottom: 16 }}>
-              <Text variant="bodySmall" style={{ marginBottom: 4 }}>
-                Your User ID:
+            >
+              <IconButton icon="arrow-left" onPress={handleClose} />
+              <Text variant="headlineMedium" style={{ flex: 1 }}>
+                Find Duo Partner
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}>
-                <Text variant="bodyLarge" selectable style={{ flex: 1 }}>
+            </View>
+
+            <ScrollView style={{ flex: 1, padding: 16 }}>
+              {/* Your User ID */}
+              <Surface
+                style={{ padding: 12, borderRadius: 8, marginBottom: 16 }}
+              >
+                <Text variant="bodySmall" style={{ marginBottom: 4 }}>
+                  Your User ID:
+                </Text>
+                <Text variant="bodyLarge" selectable>
                   {CURRENT_USER_ID}
                 </Text>
-                <IconButton
-                  icon="content-copy"
-                  size={20}
-                  onPress={() => {
-                    // User can long-press the ID text to copy it
-                  }}
-                />
-              </View>
-            </Surface>
+              </Surface>
 
-            <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
-              Enter your friend's User ID to send them a duo partner request.
-            </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+                Enter your friend's User ID to send them a duo partner request.
+              </Text>
 
-            <TextInput
-              label="Friend's User ID"
-              value={searchQuery}
-              onChangeText={(text) => {
-                setSearchQuery(text);
-                setSearchResults([]);
-              }}
-              mode="outlined"
-              style={styles.searchInput}
-              left={<TextInput.Icon icon="account-search" />}
-              placeholder="Paste their User ID here"
-              onSubmitEditing={() => handleSearchPartner(searchQuery)}
-            />
+              {/* Search Input - Using LOCAL state */}
+              <TextInput
+                label="Friend's User ID"
+                value={localSearchQuery}
+                onChangeText={(text) => {
+                  console.log("Typing:", text);
+                  setLocalSearchQuery(text);
+                  setLocalSearchResults([]);
+                }}
+                mode="outlined"
+                placeholder="Paste their User ID here"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{ marginBottom: 16 }}
+              />
 
-            <Button
-              mode="contained"
-              onPress={() => handleSearchPartner(searchQuery)}
-              disabled={!searchQuery.trim() || searching}
-              style={{ marginTop: 8, marginBottom: 16 }}
-            >
-              {searching ? "Searching..." : "Search"}
-            </Button>
+              {/* Search Button */}
+              <Button
+                mode="contained"
+                onPress={() => handleLocalSearch(localSearchQuery)}
+                disabled={!localSearchQuery.trim() || localSearching}
+                style={{ marginBottom: 16 }}
+              >
+                {localSearching ? "Searching..." : "Search"}
+              </Button>
 
-            {searching && (
-              <View style={styles.emptyState}>
-                <ActivityIndicator size="large" />
-                <Text>Searching...</Text>
-              </View>
-            )}
+              {/* Loading State */}
+              {localSearching && (
+                <View style={{ padding: 40, alignItems: "center" }}>
+                  <ActivityIndicator size="large" />
+                  <Text>Searching...</Text>
+                </View>
+              )}
 
-            {!searching && searchResults.length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={{ textAlign: "center" }}>
-                  Ask your friend for their User ID and paste it above, then
-                  click Search!
-                </Text>
-              </View>
-            )}
+              {/* Empty State */}
+              {!localSearching && localSearchQuery.length === 0 && (
+                <View style={{ padding: 40, alignItems: "center" }}>
+                  <Text style={{ textAlign: "center" }}>
+                    Ask your friend for their User ID and paste it above, then
+                    click Search!
+                  </Text>
+                </View>
+              )}
 
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Card style={styles.searchResultCard}>
+              {/* Search Results */}
+              {localSearchResults.map((item) => (
+                <Card key={item.id} style={{ marginBottom: 12 }}>
                   <Card.Content>
                     <View
                       style={{
@@ -771,15 +810,15 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                     </Button>
                   </Card.Content>
                 </Card>
-              )}
-            />
+              ))}
+            </ScrollView>
           </View>
-        </Modal>
-      </Portal>
+        </SafeAreaView>
+      </Modal>
     );
-  }, [showPartnerSearch, searchResults, searching, theme.colors.background]);
+  };
 
-  const PendingRequestsModal = useCallback(() => {
+  const PendingRequestsModal = () => {
     return (
       <Portal>
         <Modal
@@ -896,7 +935,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Modal>
       </Portal>
     );
-  }, [showPendingRequests, pendingRequests, theme.colors.background]);
+  };
 
   // View Mode
   if (!isEditing) {
@@ -1276,7 +1315,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         </Card>
 
         <SettingsDialog />
-        {TagPickerModal}
+        <TagPickerModal />
         <PartnerSearchModal />
         <PendingRequestsModal />
       </ScrollView>
@@ -1386,61 +1425,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
-        {/* Duo Partner Section in Edit Mode */}
-        <Card style={styles.card}>
-          <Card.Title
-            title="Your Duo Partner"
-            left={(props) => <IconButton icon="account-multiple" {...props} />}
-          />
-          <Card.Content>
-            {duoPartnerProfile ? (
-              <>
-                <Text variant="bodyLarge">
-                  Current partner: {duoPartnerProfile.name}
-                </Text>
-                <Button
-                  mode="outlined"
-                  icon="account-remove"
-                  onPress={handleRemovePartner}
-                  style={{ marginTop: 12 }}
-                  buttonColor={theme.colors.errorContainer}
-                >
-                  Remove Partner
-                </Button>
-              </>
-            ) : (
-              <>
-                <Text variant="bodyLarge">
-                  No duo partner yet. Find someone to team up with!
-                </Text>
-                <Button
-                  mode="contained"
-                  icon="account-search"
-                  onPress={() => setShowPartnerSearch(true)}
-                  style={{ marginTop: 12 }}
-                >
-                  Find Duo Partner
-                </Button>
-                {pendingRequests.length > 0 && (
-                  <Button
-                    mode="outlined"
-                    icon="bell"
-                    onPress={() => setShowPendingRequests(true)}
-                    style={{ marginTop: 8 }}
-                  >
-                    View {pendingRequests.length} Pending Request
-                    {pendingRequests.length !== 1 ? "s" : ""}
-                  </Button>
-                )}
-              </>
-            )}
-          </Card.Content>
-        </Card>
-
         <SettingsDialog />
-        {TagPickerModal}
-        <PartnerSearchModal />
-        <PendingRequestsModal />
+        <TagPickerModal />
       </ScrollView>
 
       {/* Fixed Bottom Buttons - Always Visible */}
