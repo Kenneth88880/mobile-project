@@ -109,7 +109,7 @@ export const getCurrentDuoPartner = async (userId) => {
 };
 
 /**
- * Check if a user has already rated another user
+ * Check if a user has already rated another user and get the rating
  */
 export const hasUserRatedProfile = async (raterId, ratedUserId) => {
   try {
@@ -119,10 +119,20 @@ export const hasUserRatedProfile = async (raterId, ratedUserId) => {
       .where('toUserId', '==', ratedUserId)
       .get();
     
-    return !ratingsSnapshot.empty;
+    if (!ratingsSnapshot.empty) {
+      const doc = ratingsSnapshot.docs[0];
+      return {
+        exists: true,
+        ratingId: doc.id,
+        rating: doc.data().rating,
+        ...doc.data()
+      };
+    }
+    
+    return { exists: false };
   } catch (error) {
     console.error('Error checking if user rated profile:', error);
-    return false;
+    return { exists: false };
   }
 };
 
@@ -379,18 +389,28 @@ export const deleteDuoLike = async (likeId) => {
 };
 
 /**
- * Save a rating for a user
+ * Save a rating for a user (creates new or updates existing)
  */
 export const saveRating = async (fromUserId, toUserId, rating) => {
   try {
-    // ✅ Check if user has already rated this profile
-    const alreadyRated = await hasUserRatedProfile(fromUserId, toUserId);
+    // Check if user has already rated this profile
+    const existingRating = await hasUserRatedProfile(fromUserId, toUserId);
     
-    if (alreadyRated) {
-      console.log(`User ${fromUserId} has already rated ${toUserId}`);
-      return false;
+    if (existingRating.exists) {
+      // Update existing rating
+      await firestore()
+        .collection("ratings")
+        .doc(existingRating.ratingId)
+        .update({
+          rating,
+          timestamp: firestore.FieldValue.serverTimestamp(),
+          updatedAt: new Date().toISOString(),
+        });
+      console.log(`Rating updated: ${fromUserId} -> ${toUserId}: ${rating} stars`);
+      return true;
     }
     
+    // Create new rating
     await firestore().collection("ratings").add({
       fromUserId,
       toUserId,
