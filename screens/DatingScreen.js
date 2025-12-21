@@ -31,6 +31,8 @@ import {
   deleteDuoLikeBetween,
   saveDuoSwipe,
   getUserProfile,
+  getDuoPartnerProfile,
+  checkDuoPreferenceMatch,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { getDistanceToProfile } from "../utils/locationUtils";
@@ -79,8 +81,75 @@ export default function DatingScreen({ isActive = true }) {
       const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
 
+      // Get all duo pairs (already excludes swiped/liked)
       const fetchedPairs = await getAllDuoPairs(currentUserId);
-      setDuoPairs(fetchedPairs || []); // ✅ Safety: default to empty array
+
+      // ✅ NEW: Filter by gender preferences if both users have genders set
+      let filteredPairs = fetchedPairs || [];
+
+      if (duo && duo.partnerId && currentUserProfile?.gender) {
+        try {
+          // Get partner's full profile with gender
+          const partnerProfile = await getDuoPartnerProfile(duo.partnerId);
+
+          if (partnerProfile?.gender) {
+            console.log("Filtering by gender preferences...");
+            console.log(
+              "Your preference:",
+              currentUserProfile.duoPreference?.interestedIn
+            );
+            console.log(
+              "Partner preference:",
+              partnerProfile.duoPreference?.interestedIn
+            );
+
+            // Filter pairs based on mutual gender preferences
+            filteredPairs = fetchedPairs.filter((pair) => {
+              const user1 = pair.user1Profile || pair.user1 || {};
+              const user2 = pair.user2Profile || pair.user2 || {};
+
+              // Skip if other duo doesn't have genders set
+              if (!user1.gender || !user2.gender) {
+                console.log(`Skipping duo ${pair.id} - missing gender info`);
+                return true; // Include them anyway if no gender set
+              }
+
+              // Check if preferences match
+              const preferencesMatch = checkDuoPreferenceMatch(
+                currentUserProfile,
+                partnerProfile,
+                user1,
+                user2
+              );
+
+              if (!preferencesMatch) {
+                console.log(
+                  `Filtered out duo ${pair.id} - preferences don't match`
+                );
+              }
+
+              return preferencesMatch;
+            });
+
+            console.log(
+              `Gender filtering: ${fetchedPairs.length} → ${filteredPairs.length} pairs`
+            );
+          } else {
+            console.log(
+              "Partner gender not set - showing all pairs without filtering"
+            );
+          }
+        } catch (error) {
+          console.error("Error loading partner profile for filtering:", error);
+          // On error, show all pairs without filtering
+        }
+      } else {
+        console.log(
+          "Gender not set for current user - showing all pairs without filtering"
+        );
+      }
+
+      setDuoPairs(filteredPairs);
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);

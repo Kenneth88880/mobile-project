@@ -9,7 +9,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
-  SafeAreaView, // ← ADD THIS
+  SafeAreaView,
 } from "react-native";
 import {
   Text,
@@ -32,8 +32,11 @@ import {
   getUserProfile,
   saveUserProfile,
   getAverageRating,
+  updateDuoPreference,
+  getDuoPartnerProfile,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
+import { DuoPreferenceComponent } from "../components/DuoPreferenceComponent";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
@@ -130,6 +133,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     latitude: null,
     longitude: null,
     showOnlineStatus: true,
+    gender: null,
+    duoPreference: null,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
@@ -199,7 +204,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         const partnerId = duoData.users.find((id) => id !== CURRENT_USER_ID);
 
         if (partnerId) {
-          const partnerProfile = await getUserProfile(partnerId);
+          // Use getDuoPartnerProfile to get partner with gender and preferences
+          const partnerProfile = await getDuoPartnerProfile(partnerId);
           if (partnerProfile) {
             const cleanedPartnerProfile = {
               ...partnerProfile,
@@ -240,6 +246,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           latitude: null,
           longitude: null,
           showOnlineStatus: true,
+          gender: null,
+          duoPreference: null,
         };
 
         // Save to Firestore
@@ -265,6 +273,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         latitude: userProfile.latitude || null,
         longitude: userProfile.longitude || null,
         showOnlineStatus: userProfile.showOnlineStatus !== false,
+        gender: userProfile.gender || null,
+        duoPreference: userProfile.duoPreference || null,
       };
 
       setProfile(cleanedProfile);
@@ -284,6 +294,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         latitude: null,
         longitude: null,
         showOnlineStatus: true,
+        gender: null,
+        duoPreference: null,
       });
 
       // Auto-switch to edit mode
@@ -325,6 +337,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       : currentTags;
     setProfile({ ...profile, tags: newTags });
   };
+
+  const [searching, setSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
 
   const handleSearchPartner = async (searchText) => {
     // Prevent search if already searching
@@ -485,6 +501,23 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     } catch (error) {
       console.error("Error signing out:", error);
       Alert.alert("Error", "Failed to sign out");
+    }
+  };
+
+  const handleUpdatePreference = async (newPreference) => {
+    try {
+      await updateDuoPreference(CURRENT_USER_ID, newPreference);
+
+      // Update local state
+      setProfile({
+        ...profile,
+        duoPreference: newPreference,
+      });
+
+      Alert.alert("Success", "Duo preferences updated!");
+    } catch (error) {
+      console.error("Error updating preference:", error);
+      throw error;
     }
   };
 
@@ -1152,6 +1185,33 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               <Text style={styles.description}>No description</Text>
             )}
 
+            {profile.gender && (
+              <>
+                <Divider style={styles.divider} />
+                <Text variant="titleMedium" style={styles.sectionTitle}>
+                  Gender
+                </Text>
+                <Chip
+                  style={{
+                    alignSelf: "flex-start",
+                    backgroundColor:
+                      profile.gender === "male"
+                        ? "#4A90E2"
+                        : profile.gender === "female"
+                        ? "#FF69B4"
+                        : "#9B59B6",
+                  }}
+                  textStyle={{ color: "#FFFFFF" }}
+                >
+                  {profile.gender === "male"
+                    ? "Male"
+                    : profile.gender === "female"
+                    ? "Female"
+                    : "Non-Binary"}
+                </Chip>
+              </>
+            )}
+
             {profile.tags && profile.tags.length > 0 && (
               <>
                 <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -1249,6 +1309,23 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                       </View>
                     )}
                 </TouchableOpacity>
+
+                {/* DUO GENDER PREFERENCES - Only show if both have genders */}
+                {profile.gender && duoPartnerProfile.gender && (
+                  <View style={{ marginTop: 16 }}>
+                    <DuoPreferenceComponent
+                      yourGender={profile.gender}
+                      partnerGender={duoPartnerProfile.gender}
+                      yourPreference={
+                        profile.duoPreference || { interestedIn: [] }
+                      }
+                      partnerPreference={
+                        duoPartnerProfile.duoPreference || { interestedIn: [] }
+                      }
+                      onUpdatePreference={handleUpdatePreference}
+                    />
+                  </View>
+                )}
 
                 <Button
                   mode="outlined"
@@ -1378,6 +1455,67 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               mode="outlined"
               style={styles.input}
             />
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Title title="Gender" />
+          <Card.Content>
+            <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+              Select your gender:
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              <Chip
+                selected={profile.gender === "male"}
+                onPress={() => setProfile({ ...profile, gender: "male" })}
+                style={{
+                  backgroundColor:
+                    profile.gender === "male" ? "#4A90E2" : undefined,
+                }}
+                textStyle={{
+                  color: profile.gender === "male" ? "#FFFFFF" : undefined,
+                }}
+              >
+                Male
+              </Chip>
+              <Chip
+                selected={profile.gender === "female"}
+                onPress={() => setProfile({ ...profile, gender: "female" })}
+                style={{
+                  backgroundColor:
+                    profile.gender === "female" ? "#FF69B4" : undefined,
+                }}
+                textStyle={{
+                  color: profile.gender === "female" ? "#FFFFFF" : undefined,
+                }}
+              >
+                Female
+              </Chip>
+              <Chip
+                selected={profile.gender === "non-binary"}
+                onPress={() => setProfile({ ...profile, gender: "non-binary" })}
+                style={{
+                  backgroundColor:
+                    profile.gender === "non-binary" ? "#9B59B6" : undefined,
+                }}
+                textStyle={{
+                  color:
+                    profile.gender === "non-binary" ? "#FFFFFF" : undefined,
+                }}
+              >
+                Non-Binary
+              </Chip>
+            </View>
+            {profile.gender && (
+              <Text variant="bodySmall" style={{ marginTop: 8, color: "#666" }}>
+                Selected:{" "}
+                {profile.gender === "male"
+                  ? "Male"
+                  : profile.gender === "female"
+                  ? "Female"
+                  : "Non-Binary"}
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
