@@ -2,6 +2,7 @@
 // React Native Firebase SDK - for production
 
 import firestore from "@react-native-firebase/firestore";
+import { generateGeohash } from "../utils/locationUtils";
 
 /**
  * Get a user's profile by userId
@@ -25,13 +26,23 @@ export const getUserProfile = async (userId) => {
 
 /**
  * Save/update a user's profile
+ * Automatically generates geohash if latitude/longitude are present
  */
 export const saveUserProfile = async (userId, data) => {
   try {
+    // Generate geohash if coordinates exist
+    const profileData = { ...data };
+    if (profileData.latitude && profileData.longitude) {
+      profileData.geohash = generateGeohash(
+        profileData.latitude,
+        profileData.longitude
+      );
+    }
+
     await firestore()
       .collection("profiles")
       .doc(userId)
-      .set(data, { merge: true });
+      .set(profileData, { merge: true });
     return true;
   } catch (error) {
     console.error("Error saving user profile:", error);
@@ -114,24 +125,24 @@ export const getCurrentDuoPartner = async (userId) => {
 export const hasUserRatedProfile = async (raterId, ratedUserId) => {
   try {
     const ratingsSnapshot = await firestore()
-      .collection('ratings')
-      .where('fromUserId', '==', raterId)
-      .where('toUserId', '==', ratedUserId)
+      .collection("ratings")
+      .where("fromUserId", "==", raterId)
+      .where("toUserId", "==", ratedUserId)
       .get();
-    
+
     if (!ratingsSnapshot.empty) {
       const doc = ratingsSnapshot.docs[0];
       return {
         exists: true,
         ratingId: doc.id,
         rating: doc.data().rating,
-        ...doc.data()
+        ...doc.data(),
       };
     }
-    
+
     return { exists: false };
   } catch (error) {
-    console.error('Error checking if user rated profile:', error);
+    console.error("Error checking if user rated profile:", error);
     return { exists: false };
   }
 };
@@ -395,7 +406,7 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
   try {
     // Check if user has already rated this profile
     const existingRating = await hasUserRatedProfile(fromUserId, toUserId);
-    
+
     if (existingRating.exists) {
       // Update existing rating
       await firestore()
@@ -406,10 +417,12 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
           timestamp: firestore.FieldValue.serverTimestamp(),
           updatedAt: new Date().toISOString(),
         });
-      console.log(`Rating updated: ${fromUserId} -> ${toUserId}: ${rating} stars`);
+      console.log(
+        `Rating updated: ${fromUserId} -> ${toUserId}: ${rating} stars`
+      );
       return true;
     }
-    
+
     // Create new rating
     await firestore().collection("ratings").add({
       fromUserId,
@@ -479,5 +492,99 @@ const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
   } catch (error) {
     console.error("❌ Error creating duo match:", error);
     return false;
+  }
+};
+
+/**
+ * Update max distance preference for a user -- server side rather than client side for scalability
+ */
+export const updateMaxDistance = async (userId, maxDistance) => {
+  try {
+    await firestore()
+      .collection("profiles")
+      .doc(userId)
+      .update({ maxDistance });
+    console.log(`Max distance updated to ${maxDistance}km for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating max distance:", error);
+    return false;
+  }
+};
+
+/**
+ * Update user location and geohash
+ */
+export const updateUserLocation = async (userId, latitude, longitude, city) => {
+  try {
+    const geohash = generateGeohash(latitude, longitude);
+
+    await firestore()
+      .collection("profiles")
+      .doc(userId)
+      .update({
+        latitude,
+        longitude,
+        city: city || "Unknown",
+        geohash,
+        lastActive: firestore.FieldValue.serverTimestamp(),
+      });
+
+    console.log(`Location updated for user ${userId}: ${city} (${geohash})`);
+    return true;
+  } catch (error) {
+    console.error("Error updating user location:", error);
+    return false;
+  }
+};
+
+/**
+ * Query profiles within distance using geohash bounds
+ * This is a server-side optimized query
+ */
+export const getProfilesWithinDistance = async (
+  centerLat,
+  centerLon,
+  radiusInKm,
+  excludeUserId
+) => {
+  try {
+    const { getGeohashQueryBounds } = require("../utils/locationUtils");
+    const bounds = getGeohashQueryBounds(centerLat, centerLon, radiusInKm);
+
+    const promises = [];
+    for (const bound of bounds) {
+      const q = firestore()
+        .collection("profiles")
+        .orderBy("geohash")
+        .startAt(bound[0])
+        .endAt(bound[1]);
+
+      promises.push(q.get());
+    }
+
+    const snapshots = await Promise.all(promises);
+    const profiles = [];
+    const seenIds = new Set();
+
+    for (const snap of snapshots) {
+      for (const doc of snap.docs) {
+        const profile = { userId: doc.id, ...doc.data() };
+
+        // Skip duplicates and excluded user
+        if (seenIds.has(doc.id) || doc.id === excludeUserId) {
+          continue;
+        }
+
+        seenIds.add(doc.id);
+        profiles.push(profile);
+      }
+    }
+
+    console.log(`Found ${profiles.length} profiles within ${radiusInKm}km`);
+    return profiles;
+  } catch (error) {
+    console.error("Error querying profiles by distance:", error);
+    return [];
   }
 };

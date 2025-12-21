@@ -37,6 +37,7 @@ import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
+import SettingsScreen from "./SettingsScreen";
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -149,7 +150,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       }
     };
   }, [searchTimeout]);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [showPendingRequests, setShowPendingRequests] = useState(false);
   const [viewingPartnerProfile, setViewingPartnerProfile] = useState(false);
@@ -511,45 +512,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       );
     }
     return stars;
-  };
-
-  const SettingsDialog = () => {
-    return (
-      <Portal>
-        <Dialog visible={showSettings} onDismiss={() => setShowSettings(false)}>
-          <Dialog.Title>Settings</Dialog.Title>
-          <Dialog.Content>
-            <List.Item
-              title="Dark Mode"
-              right={() => (
-                <Switch value={isDarkMode} onValueChange={toggleTheme} />
-              )}
-            />
-            <Divider style={{ marginVertical: 8 }} />
-            <List.Item
-              title="Show Online Status"
-              description="Others can see when you're active"
-              right={() => (
-                <Switch
-                  value={profile.showOnlineStatus}
-                  onValueChange={async (value) => {
-                    const newProfile = {
-                      ...profile,
-                      showOnlineStatus: value,
-                    };
-                    setProfile(newProfile);
-                    await saveUserProfile(CURRENT_USER_ID, newProfile);
-                  }}
-                />
-              )}
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowSettings(false)}>Close</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-    );
   };
 
   const TagPickerModal = () => {
@@ -1109,7 +1071,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           <View style={styles.headerButtons}>
             <IconButton
               icon="cog"
-              onPress={() => setShowSettings(true)}
+              onPress={() => setShowSettingsModal(true)}
               size={24}
             />
             <Button mode="contained" onPress={() => setIsEditing(true)}>
@@ -1178,36 +1140,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 </View>
               </>
             )}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Title
-            title="Privacy"
-            left={(props) => <IconButton icon="shield-account" {...props} />}
-          />
-          <Card.Content>
-            <List.Item
-              title="Show Online Status"
-              description={
-                profile.showOnlineStatus
-                  ? "Others can see when you're active"
-                  : "Your online status is hidden"
-              }
-              right={() => (
-                <Switch
-                  value={profile.showOnlineStatus}
-                  onValueChange={async (value) => {
-                    const newProfile = {
-                      ...profile,
-                      showOnlineStatus: value,
-                    };
-                    setProfile(newProfile);
-                    await saveUserProfile(CURRENT_USER_ID, newProfile);
-                  }}
-                />
-              )}
-            />
           </Card.Content>
         </Card>
 
@@ -1314,7 +1246,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
-        <SettingsDialog />
+        <SettingsScreen
+          isDarkMode={isDarkMode}
+          toggleTheme={toggleTheme}
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
         <TagPickerModal />
         <PartnerSearchModal />
         <PendingRequestsModal />
@@ -1425,7 +1362,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
-        <SettingsDialog />
+        <SettingsScreen
+          isDarkMode={isDarkMode}
+          toggleTheme={toggleTheme}
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
         <TagPickerModal />
       </ScrollView>
 
