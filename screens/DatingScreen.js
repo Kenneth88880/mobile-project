@@ -50,6 +50,8 @@ export default function DatingScreen({ isActive = true }) {
   const [swipeFeedback, setSwipeFeedback] = useState(null);
   const [currentUserLocation, setCurrentUserLocation] = useState(null);
   const [hasRatedUser, setHasRatedUser] = useState(false);
+  const [existingRating, setExistingRating] = useState(null);
+  const [hoveredStar, setHoveredStar] = useState(0);
 
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -131,15 +133,13 @@ export default function DatingScreen({ isActive = true }) {
       const profileId = profile.userId || profile.id;
       
       // ✅ Check if user has already rated this profile
-      const alreadyRated = await hasUserRatedProfile(currentUserId, profileId);
+      const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
       
-      if (alreadyRated) {
-        Alert.alert(
-          'Already Rated',
-          `You have already rated ${profile.name || 'this user'}. You can only rate someone once.`,
-          [{ text: 'OK' }]
-        );
-        return;
+      if (ratingCheck.exists) {
+        // User has already rated - allow them to edit
+        setExistingRating(ratingCheck.rating);
+      } else {
+        setExistingRating(null);
       }
       
       setRatingProfile(profile);
@@ -156,33 +156,26 @@ export default function DatingScreen({ isActive = true }) {
     const ratedUserId = ratingProfile.userId || ratingProfile.id;
     
     try {
-      // ✅ Double-check before submitting (safety measure)
-      const alreadyRated = await hasUserRatedProfile(currentUserId, ratedUserId);
+      // Submit the rating (will create or update)
+      const success = await saveRating(currentUserId, ratedUserId, rating);
       
-      if (alreadyRated) {
+      if (success) {
         Alert.alert(
-          'Already Rated',
-          'You have already rated this user.',
-          [{ text: 'OK' }]
+          'Success',
+          existingRating 
+            ? `You updated your rating to ${rating} stars!`
+            : `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
         );
+        
         setShowRatingModal(false);
         setRatingProfile(null);
-        return;
+        setExistingRating(null);
+        
+        // Update the hasRatedUser state so UI reflects the change
+        setHasRatedUser(true);
+      } else {
+        Alert.alert('Error', 'Failed to save rating. Please try again.');
       }
-      
-      // Submit the rating
-      await saveRating(currentUserId, ratedUserId, rating);
-      
-      Alert.alert(
-        'Success',
-        `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
-      );
-      
-      setShowRatingModal(false);
-      setRatingProfile(null);
-      
-      // Update the hasRatedUser state so UI reflects the change
-      setHasRatedUser(true);
     } catch (error) {
       console.error('Error submitting rating:', error);
       Alert.alert('Error', 'Failed to submit rating. Please try again.');
@@ -195,14 +188,21 @@ export default function DatingScreen({ isActive = true }) {
       if (selectedProfile) {
         try {
           const profileId = selectedProfile.userId || selectedProfile.id;
-          const alreadyRated = await hasUserRatedProfile(currentUserId, profileId);
-          setHasRatedUser(alreadyRated);
+          const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
+          setHasRatedUser(ratingCheck.exists);
+          if (ratingCheck.exists) {
+            setExistingRating(ratingCheck.rating);
+          } else {
+            setExistingRating(null);
+          }
         } catch (error) {
           console.error('Error checking rating status:', error);
           setHasRatedUser(false);
+          setExistingRating(null);
         }
       } else {
         setHasRatedUser(false);
+        setExistingRating(null);
       }
     };
     
@@ -370,26 +370,47 @@ export default function DatingScreen({ isActive = true }) {
       <View style={styles.modalOverlay}>
         <Card style={styles.ratingCard}>
           <Card.Title
-            title={`Rate ${ratingProfile.name || "User"}`}
-            subtitle="How would you rate this profile?"
+            title={existingRating ? `Edit Your Rating` : `Rate ${ratingProfile.name || "User"}`}
+            subtitle={existingRating 
+              ? `Current rating: ${existingRating} stars. Tap to change.`
+              : "How would you rate this profile?"
+            }
           />
           <Card.Content>
-            <View style={styles.ratingStars}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <IconButton
-                  key={star}
-                  icon="star"
-                  size={40}
-                  onPress={() => submitRating(star)}
-                />
-              ))}
+            <View style={styles.ratingStarsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => {
+                const isHighlighted = star <= (hoveredStar || existingRating || 0);
+                return (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => submitRating(star)}
+                    onPressIn={() => setHoveredStar(star)}
+                    onPressOut={() => setHoveredStar(0)}
+                    style={styles.starButton}
+                  >
+                    <Text style={[
+                      styles.starIcon,
+                      { color: isHighlighted ? '#FFD700' : '#E0E0E0' }
+                    ]}>
+                      ★
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
+            {hoveredStar > 0 && (
+              <Text style={{ textAlign: 'center', marginTop: 8, color: theme.colors.primary }}>
+                {hoveredStar} star{hoveredStar !== 1 ? 's' : ''}
+              </Text>
+            )}
           </Card.Content>
           <Card.Actions>
             <Button
               onPress={() => {
                 setShowRatingModal(false);
                 setRatingProfile(null);
+                setExistingRating(null);
+                setHoveredStar(0);
               }}
             >
               Cancel
@@ -480,9 +501,18 @@ export default function DatingScreen({ isActive = true }) {
         {hasRatedUser ? (
           <Card style={{ margin: 16, backgroundColor: theme.colors.surfaceVariant }}>
             <Card.Content>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <IconButton icon="check-circle" size={24} iconColor={theme.colors.primary} />
-                <Text variant="bodyLarge">You've already rated this user</Text>
+              <View style={{ alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <IconButton icon="star" size={24} iconColor="#FFD700" />
+                  <Text variant="bodyLarge">You rated this user {existingRating} stars</Text>
+                </View>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => handleRateProfile(selectedProfile)}
+                  style={{ marginTop: 8 }}
+                >
+                  Edit Rating
+                </Button>
               </View>
             </Card.Content>
           </Card>
@@ -816,9 +846,18 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
   },
-  ratingStars: {
+  ratingStarsContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 20,
+    gap: 8,
+  },
+  starButton: {
+    padding: 4,
+  },
+  starIcon: {
+    fontSize: 48,
+    fontWeight: "bold",
   },
 });
