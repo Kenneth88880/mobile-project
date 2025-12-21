@@ -1,7 +1,7 @@
 export default {
   expo: {
     name: "Doubly",
-    slug: "doubly",
+    slug: "doubly-yrvn0tmogrdrliugnun4w",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -45,7 +45,7 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: "094bfe3f-c9f2-4df3-af59-aef5b61ad64b",
+        projectId: "5d554221-bb9c-4245-884a-1b887d6673aa",
       },
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
       googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
