@@ -30,11 +30,15 @@ import {
   saveDuoLike,
   deleteDuoLikeBetween,
   saveDuoSwipe,
-  getUserProfile, 
+  getUserProfile,
   hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
-import { getDistanceToProfile } from "../utils/locationUtils";
+import {
+  getDistanceToProfile,
+  isWithinDistance,
+  calculateDistance,
+} from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 
 export default function DatingScreen({ isActive = true }) {
@@ -72,19 +76,51 @@ export default function DatingScreen({ isActive = true }) {
     setLoading(true);
     try {
       const currentUserProfile = await getUserProfile(currentUserId);
-      if (currentUserProfile?.latitude && currentUserProfile?.longitude) {
-        setCurrentUserLocation({
-          latitude: currentUserProfile.latitude,
-          longitude: currentUserProfile.longitude,
-          city: currentUserProfile.city || "Unknown",
-        });
+      const userLocation = {
+        latitude: currentUserProfile?.latitude,
+        longitude: currentUserProfile?.longitude,
+        city: currentUserProfile?.city || "Unknown",
+      };
+
+      if (userLocation.latitude && userLocation.longitude) {
+        setCurrentUserLocation(userLocation);
       }
 
       const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
 
       const fetchedPairs = await getAllDuoPairs(currentUserId);
-      setDuoPairs(fetchedPairs || []); // ✅ Safety: default to empty array
+
+      // ✅ NEW: Filter by distance if user has maxDistance preference set
+      let filteredPairs = fetchedPairs || [];
+      const maxDistance = currentUserProfile?.maxDistance || 200; // Default 200km if not set
+
+      if (userLocation.latitude && userLocation.longitude && maxDistance) {
+        filteredPairs = filteredPairs.filter((pair) => {
+          // Check if at least one member of the duo is within the max distance
+          const user1 = pair.user1Profile;
+          const user2 = pair.user2Profile;
+
+          const user1InRange =
+            user1?.latitude &&
+            user1?.longitude &&
+            isWithinDistance(userLocation, user1, maxDistance);
+
+          const user2InRange =
+            user2?.latitude &&
+            user2?.longitude &&
+            isWithinDistance(userLocation, user2, maxDistance);
+
+          // Include the duo if at least one member is within range
+          return user1InRange || user2InRange;
+        });
+
+        console.log(
+          `Filtered ${fetchedPairs.length} duos to ${filteredPairs.length} within ${maxDistance}km`
+        );
+      }
+
+      setDuoPairs(filteredPairs);
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);
@@ -128,57 +164,57 @@ export default function DatingScreen({ isActive = true }) {
 
   const handleRateProfile = async (profile) => {
     if (!profile) return; // ✅ Safety check
-    
+
     try {
       const profileId = profile.userId || profile.id;
-      
+
       // ✅ Check if user has already rated this profile
       const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
-      
+
       if (ratingCheck.exists) {
         // User has already rated - allow them to edit
         setExistingRating(ratingCheck.rating);
       } else {
         setExistingRating(null);
       }
-      
+
       setRatingProfile(profile);
       setShowRatingModal(true);
     } catch (error) {
-      console.error('Error checking rating status:', error);
-      Alert.alert('Error', 'Failed to check rating status. Please try again.');
+      console.error("Error checking rating status:", error);
+      Alert.alert("Error", "Failed to check rating status. Please try again.");
     }
   };
 
   const submitRating = async (rating) => {
     if (!ratingProfile) return;
-    
+
     const ratedUserId = ratingProfile.userId || ratingProfile.id;
-    
+
     try {
       // Submit the rating (will create or update)
       const success = await saveRating(currentUserId, ratedUserId, rating);
-      
+
       if (success) {
         Alert.alert(
-          'Success',
-          existingRating 
+          "Success",
+          existingRating
             ? `You updated your rating to ${rating} stars!`
-            : `You rated ${ratingProfile.name || 'this user'} ${rating} stars!`
+            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
         );
-        
+
         setShowRatingModal(false);
         setRatingProfile(null);
         setExistingRating(null);
-        
+
         // Update the hasRatedUser state so UI reflects the change
         setHasRatedUser(true);
       } else {
-        Alert.alert('Error', 'Failed to save rating. Please try again.');
+        Alert.alert("Error", "Failed to save rating. Please try again.");
       }
     } catch (error) {
-      console.error('Error submitting rating:', error);
-      Alert.alert('Error', 'Failed to submit rating. Please try again.');
+      console.error("Error submitting rating:", error);
+      Alert.alert("Error", "Failed to submit rating. Please try again.");
     }
   };
 
@@ -188,7 +224,10 @@ export default function DatingScreen({ isActive = true }) {
       if (selectedProfile) {
         try {
           const profileId = selectedProfile.userId || selectedProfile.id;
-          const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
+          const ratingCheck = await hasUserRatedProfile(
+            currentUserId,
+            profileId
+          );
           setHasRatedUser(ratingCheck.exists);
           if (ratingCheck.exists) {
             setExistingRating(ratingCheck.rating);
@@ -196,7 +235,7 @@ export default function DatingScreen({ isActive = true }) {
             setExistingRating(null);
           }
         } catch (error) {
-          console.error('Error checking rating status:', error);
+          console.error("Error checking rating status:", error);
           setHasRatedUser(false);
           setExistingRating(null);
         }
@@ -205,7 +244,7 @@ export default function DatingScreen({ isActive = true }) {
         setExistingRating(null);
       }
     };
-    
+
     checkRatingStatus();
   }, [selectedProfile, currentUserId, isActive]);
 
@@ -370,16 +409,22 @@ export default function DatingScreen({ isActive = true }) {
       <View style={styles.modalOverlay}>
         <Card style={styles.ratingCard}>
           <Card.Title
-            title={existingRating ? `Edit Your Rating` : `Rate ${ratingProfile.name || "User"}`}
-            subtitle={existingRating 
-              ? `Current rating: ${existingRating} stars. Tap to change.`
-              : "How would you rate this profile?"
+            title={
+              existingRating
+                ? `Edit Your Rating`
+                : `Rate ${ratingProfile.name || "User"}`
+            }
+            subtitle={
+              existingRating
+                ? `Current rating: ${existingRating} stars. Tap to change.`
+                : "How would you rate this profile?"
             }
           />
           <Card.Content>
             <View style={styles.ratingStarsContainer}>
               {[1, 2, 3, 4, 5].map((star) => {
-                const isHighlighted = star <= (hoveredStar || existingRating || 0);
+                const isHighlighted =
+                  star <= (hoveredStar || existingRating || 0);
                 return (
                   <TouchableOpacity
                     key={star}
@@ -388,10 +433,12 @@ export default function DatingScreen({ isActive = true }) {
                     onPressOut={() => setHoveredStar(0)}
                     style={styles.starButton}
                   >
-                    <Text style={[
-                      styles.starIcon,
-                      { color: isHighlighted ? '#FFD700' : '#E0E0E0' }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.starIcon,
+                        { color: isHighlighted ? "#FFD700" : "#E0E0E0" },
+                      ]}
+                    >
                       ★
                     </Text>
                   </TouchableOpacity>
@@ -399,8 +446,14 @@ export default function DatingScreen({ isActive = true }) {
               })}
             </View>
             {hoveredStar > 0 && (
-              <Text style={{ textAlign: 'center', marginTop: 8, color: theme.colors.primary }}>
-                {hoveredStar} star{hoveredStar !== 1 ? 's' : ''}
+              <Text
+                style={{
+                  textAlign: "center",
+                  marginTop: 8,
+                  color: theme.colors.primary,
+                }}
+              >
+                {hoveredStar} star{hoveredStar !== 1 ? "s" : ""}
               </Text>
             )}
           </Card.Content>
@@ -499,15 +552,21 @@ export default function DatingScreen({ isActive = true }) {
         />
 
         {hasRatedUser ? (
-          <Card style={{ margin: 16, backgroundColor: theme.colors.surfaceVariant }}>
+          <Card
+            style={{ margin: 16, backgroundColor: theme.colors.surfaceVariant }}
+          >
             <Card.Content>
-              <View style={{ alignItems: 'center', gap: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ alignItems: "center", gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <IconButton icon="star" size={24} iconColor="#FFD700" />
-                  <Text variant="bodyLarge">You rated this user {existingRating} stars</Text>
+                  <Text variant="bodyLarge">
+                    You rated this user {existingRating} stars
+                  </Text>
                 </View>
-                <Button 
-                  mode="outlined" 
+                <Button
+                  mode="outlined"
                   onPress={() => handleRateProfile(selectedProfile)}
                   style={{ marginTop: 8 }}
                 >
