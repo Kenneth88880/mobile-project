@@ -133,7 +133,7 @@ export const getAllDuoPairs = async (userId) => {
     const swipedDuoIds = swipesSnapshot.docs.map((doc) => doc.data().toDuoId);
     console.log("Already swiped duo IDs:", swipedDuoIds);
 
-    // ✅ FIX: Also get duo pairs that have been liked
+    // Get duo pairs that have been liked
     const likesSnapshot = await firestore()
       .collection("duoLikes")
       .where("fromDuoId", "==", currentDuo.duoId)
@@ -141,15 +141,6 @@ export const getAllDuoPairs = async (userId) => {
 
     const likedDuoIds = likesSnapshot.docs.map((doc) => doc.data().toDuoId);
     console.log("Already liked duo IDs:", likedDuoIds);
-    console.log(
-      "Like details:",
-      likesSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        toDuoId: doc.data().toDuoId,
-        status: doc.data().status,
-        acceptedBy: doc.data().acceptedBy?.length || 0,
-      }))
-    );
 
     // Combine both lists
     const excludedDuoIds = [...swipedDuoIds, ...likedDuoIds];
@@ -225,7 +216,7 @@ export const saveDuoLike = async (
   try {
     console.log("Saving duo like:", { fromDuoId, toDuoId });
 
-    // ✅ FIX: Pre-accept the sending duo since they initiated the like
+    // Pre-accept the sending duo since they initiated the like
     const acceptedBy = [fromUser1, fromUser2];
 
     await firestore().collection("duoLikes").add({
@@ -236,7 +227,7 @@ export const saveDuoLike = async (
       toUser1,
       toUser2,
       status: "pending",
-      acceptedBy, // ✅ Sending duo is pre-accepted
+      acceptedBy,
       timestamp: firestore.FieldValue.serverTimestamp(),
       createdAt: new Date().toISOString(),
     });
@@ -257,7 +248,7 @@ export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
     await firestore().collection("duoSwipes").add({
       fromDuoId,
       toDuoId,
-      action, // 'pass' or 'like'
+      action,
       timestamp: firestore.FieldValue.serverTimestamp(),
       createdAt: new Date().toISOString(),
     });
@@ -403,7 +394,7 @@ const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
     const profiles = await Promise.all(users.map((id) => getUserProfile(id)));
     const names = profiles.map((p) => p?.name || "User").join(", ");
 
-    // ✅ FIX: Create chat in 'chats' collection (where ChatScreen looks)
+    // Create chat in 'chats' collection
     await firestore()
       .collection("chats")
       .add({
@@ -434,4 +425,225 @@ const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
     console.error("❌ Error creating duo match:", error);
     return false;
   }
+};
+
+// ============================================
+// NEW GENDER PREFERENCE FUNCTIONS
+// ============================================
+
+/**
+ * Update user's gender in their profile
+ * @param {string} userId - The user's ID
+ * @param {string} gender - The gender ('male', 'female', or 'non-binary')
+ */
+export const updateUserGender = async (userId, gender) => {
+  try {
+    await firestore().collection("profiles").doc(userId).update({
+      gender,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`✅ Updated gender for user ${userId}: ${gender}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating user gender:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update user's duo preference
+ * @param {string} userId - The user's ID
+ * @param {Object} duoPreference - Object with interestedIn array
+ */
+export const updateDuoPreference = async (userId, duoPreference) => {
+  try {
+    await firestore().collection("profiles").doc(userId).update({
+      duoPreference,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`✅ Updated duo preference for user ${userId}:`, duoPreference);
+    return true;
+  } catch (error) {
+    console.error("Error updating duo preference:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get duo partner's profile including their gender and preferences
+ * @param {string} partnerId - The partner's user ID
+ * @returns {Object|null} Partner profile or null
+ */
+export const getDuoPartnerProfile = async (partnerId) => {
+  try {
+    const partnerDoc = await firestore()
+      .collection("profiles")
+      .doc(partnerId)
+      .get();
+
+    if (!partnerDoc.exists) {
+      return null;
+    }
+
+    return {
+      uid: partnerDoc.id,
+      userId: partnerDoc.id,
+      ...partnerDoc.data(),
+    };
+  } catch (error) {
+    console.error("Error getting duo partner profile:", error);
+    throw error;
+  }
+};
+
+/**
+ * Check if two duos match based on their gender preferences
+ * @param {Object} duo1User1 - First user of duo 1
+ * @param {Object} duo1User2 - Second user of duo 1
+ * @param {Object} duo2User1 - First user of duo 2
+ * @param {Object} duo2User2 - Second user of duo 2
+ * @returns {boolean} True if preferences match
+ */
+export const checkDuoPreferenceMatch = (
+  duo1User1,
+  duo1User2,
+  duo2User1,
+  duo2User2
+) => {
+  // Get preferences for both duos
+  const duo1Pref1 = duo1User1.duoPreference?.interestedIn || [];
+  const duo1Pref2 = duo1User2.duoPreference?.interestedIn || [];
+  const duo2Pref1 = duo2User1.duoPreference?.interestedIn || [];
+  const duo2Pref2 = duo2User2.duoPreference?.interestedIn || [];
+
+  // If no preferences set, match with everyone
+  const duo1InterestedInDuo2 =
+    (duo1Pref1.length === 0 ||
+      duo1Pref1.includes(duo2User1.gender) ||
+      duo1Pref1.includes(duo2User2.gender)) &&
+    (duo1Pref2.length === 0 ||
+      duo1Pref2.includes(duo2User1.gender) ||
+      duo1Pref2.includes(duo2User2.gender));
+
+  const duo2InterestedInDuo1 =
+    (duo2Pref1.length === 0 ||
+      duo2Pref1.includes(duo1User1.gender) ||
+      duo2Pref1.includes(duo1User2.gender)) &&
+    (duo2Pref2.length === 0 ||
+      duo2Pref2.includes(duo1User1.gender) ||
+      duo2Pref2.includes(duo1User2.gender));
+
+  // Both duos must be interested in each other
+  return duo1InterestedInDuo2 && duo2InterestedInDuo1;
+};
+
+/**
+ * Get potential matches for a duo, filtered by gender preferences
+ * @param {Object} currentUser - Current user profile
+ * @param {Object} duoPartner - Duo partner profile
+ * @param {number} maxDistance - Optional max distance in km
+ * @returns {Array} Array of potential match profiles
+ */
+export const getFilteredPotentialMatches = async (
+  currentUser,
+  duoPartner,
+  maxDistance
+) => {
+  try {
+    // First, get all users who have a duo partner
+    const usersSnapshot = await firestore()
+      .collection("profiles")
+      .where("duoPartnerId", "!=", null)
+      .get();
+
+    const potentialMatches = [];
+    const processedDuos = new Set();
+
+    for (const userDoc of usersSnapshot.docs) {
+      const user = { uid: userDoc.id, userId: userDoc.id, ...userDoc.data() };
+
+      // Skip current user and their partner
+      if (user.uid === currentUser.uid || user.uid === duoPartner.uid) {
+        continue;
+      }
+
+      // Skip if we've already processed this duo
+      const duoKey = [user.uid, user.duoPartnerId].sort().join("_");
+      if (processedDuos.has(duoKey)) {
+        continue;
+      }
+
+      // Get the other person in this duo
+      if (!user.duoPartnerId) continue;
+
+      const otherPartnerDoc = await firestore()
+        .collection("profiles")
+        .doc(user.duoPartnerId)
+        .get();
+
+      if (!otherPartnerDoc.exists) continue;
+
+      const otherPartner = {
+        uid: otherPartnerDoc.id,
+        userId: otherPartnerDoc.id,
+        ...otherPartnerDoc.data(),
+      };
+
+      // Check gender preference match
+      const preferencesMatch = checkDuoPreferenceMatch(
+        currentUser,
+        duoPartner,
+        user,
+        otherPartner
+      );
+
+      if (!preferencesMatch) {
+        continue;
+      }
+
+      // Optional: Check distance if location is available
+      if (maxDistance && currentUser.location && user.location) {
+        const distance = calculateDistance(
+          currentUser.location.latitude,
+          currentUser.location.longitude,
+          user.location.latitude,
+          user.location.longitude
+        );
+
+        if (distance > maxDistance) {
+          continue;
+        }
+      }
+
+      // Add both members of the matching duo
+      potentialMatches.push(user);
+      processedDuos.add(duoKey);
+    }
+
+    return potentialMatches;
+  } catch (error) {
+    console.error("Error getting filtered potential matches:", error);
+    throw error;
+  }
+};
+
+/**
+ * Calculate distance between two coordinates in kilometers
+ */
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the Earth in kilometers
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const toRadians = (degrees) => {
+  return degrees * (Math.PI / 180);
 };

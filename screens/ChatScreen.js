@@ -27,6 +27,8 @@ import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
 const getUserID = () => CURRENT_USER_ID;
 
+
+
 // Delete a specific chat
 const deleteChat = async (chatId) => {
   try {
