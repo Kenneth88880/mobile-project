@@ -61,5 +61,5 @@ stripeConfig.js
 # ui colours test
 colours/
 
-# map 
+# map
 services/googleMapsConfig.js
