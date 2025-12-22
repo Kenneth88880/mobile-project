@@ -1,6 +1,10 @@
 // locationTracker.js
 import * as Location from "expo-location";
-import { saveUserProfile, getUserProfile } from "../services/profileService";
+import {
+  saveUserProfile,
+  getUserProfile,
+  updateUserLocation
+} from "../services/profileService";
 // ✅ FIXED: Using React Native Firebase instead of web SDK
 import firestore from "@react-native-firebase/firestore";
 
@@ -65,6 +69,7 @@ class LocationTracker {
 
   /**
    * Update user's location and last active timestamp
+   * Automatically updates geohash for location-based queries
    */
   async updateLocationAndStatus() {
     if (!this.currentUserId) return;
@@ -93,25 +98,22 @@ class LocationTracker {
         console.error("Error getting city:", geocodeError);
       }
 
-      // Get current profile
-      const currentProfile = await getUserProfile(this.currentUserId);
+      // Update location with geohash (updateUserLocation handles geohash generation)
+      await updateUserLocation(this.currentUserId, latitude, longitude, city);
 
+      // Also update isOnline status
+      const currentProfile = await getUserProfile(this.currentUserId);
       if (currentProfile) {
-        // Update location and last active time
         await saveUserProfile(this.currentUserId, {
           ...currentProfile,
-          latitude,
-          longitude,
-          city,
-          lastActive: new Date().toISOString(), // ISO string for easy parsing
-          isOnline: true, // User is currently active
+          isOnline: true,
         });
-
-        this.lastUpdateTime = new Date();
-        console.log(
-          `Location updated for user ${this.currentUserId}: ${city} (${latitude}, ${longitude})`
-        );
       }
+
+      this.lastUpdateTime = new Date();
+      console.log(
+        `Location and geohash updated for user ${this.currentUserId}: ${city} (${latitude}, ${longitude})`
+      );
     } catch (error) {
       console.error("Error updating location and status:", error);
     }
