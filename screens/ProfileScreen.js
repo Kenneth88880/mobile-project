@@ -351,10 +351,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     setProfile({ ...profile, tags: newTags });
   };
 
-  const [searching, setSearching] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-
   const handleSearchPartner = async (searchText) => {
     // Prevent search if already searching
     if (searching) {

@@ -156,8 +156,10 @@ export default function DatingScreen({ isActive = true }) {
       } else {
         console.log(
           "Gender not set for current user - showing all pairs without filtering"
+        );
+      }
+
       // ✅ NEW: Filter by distance if user has maxDistance preference set
-      let filteredPairs = fetchedPairs || [];
       const maxDistance = currentUserProfile?.maxDistance || 200; // Default 200km if not set
 
       if (userLocation.latitude && userLocation.longitude && maxDistance) {
