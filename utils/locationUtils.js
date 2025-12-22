@@ -1,5 +1,6 @@
 // locationUtils.js
 import * as Location from 'expo-location';
+import { geohashForLocation, geohashQueryBounds, distanceBetween } from 'geofire-common';
 
 /**
  * Calculate distance between two coordinates using the Haversine formula
@@ -140,4 +141,80 @@ export const getDistanceToProfile = (userLocation, profileLocation) => {
   
   // Otherwise show distance
   return `📍 ${formatDistance(distance)}`;
+};
+
+/**
+ * Generate geohash for a location
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {string} geohash string
+ */
+export const generateGeohash = (latitude, longitude) => {
+  if (!latitude || !longitude) {
+    return null;
+  }
+  return geohashForLocation([latitude, longitude]);
+};
+
+/**
+ * Get geohash query bounds for a given center point and radius
+ * @param {number} latitude - Center latitude
+ * @param {number} longitude - Center longitude
+ * @param {number} radiusInKm - Radius in kilometers
+ * @returns {Array} Array of [start, end] bound pairs for querying
+ */
+export const getGeohashQueryBounds = (latitude, longitude, radiusInKm) => {
+  if (!latitude || !longitude || !radiusInKm) {
+    return [];
+  }
+
+  const radiusInM = radiusInKm * 1000; // Convert to meters
+  const center = [latitude, longitude];
+
+  return geohashQueryBounds(center, radiusInM);
+};
+
+/**
+ * Check if a profile is within the maximum distance
+ * @param {object} userLocation - {latitude, longitude}
+ * @param {object} profileLocation - {latitude, longitude}
+ * @param {number} maxDistanceKm - Maximum distance in kilometers
+ * @returns {boolean} true if within range
+ */
+export const isWithinDistance = (userLocation, profileLocation, maxDistanceKm) => {
+  if (!userLocation?.latitude || !userLocation?.longitude ||
+      !profileLocation?.latitude || !profileLocation?.longitude) {
+    return false;
+  }
+
+  const distance = calculateDistance(
+    userLocation.latitude,
+    userLocation.longitude,
+    profileLocation.latitude,
+    profileLocation.longitude
+  );
+
+  return distance <= maxDistanceKm;
+};
+
+/**
+ * Filter profiles by distance using geohash
+ * This is a client-side filter to be used after fetching from Firestore
+ * @param {Array} profiles - Array of profile objects
+ * @param {object} userLocation - {latitude, longitude}
+ * @param {number} maxDistanceKm - Maximum distance in kilometers
+ * @returns {Array} Filtered profiles within distance
+ */
+export const filterProfilesByDistance = (profiles, userLocation, maxDistanceKm) => {
+  if (!profiles || !userLocation?.latitude || !userLocation?.longitude) {
+    return profiles || [];
+  }
+
+  return profiles.filter(profile => {
+    if (!profile.latitude || !profile.longitude) {
+      return false; // Exclude profiles without location
+    }
+
+    return isWithinDistance(userLocation, profile, maxDistanceKm);
+  });
 };
