@@ -46,9 +46,6 @@ firebaseConfig.js
 # stripe api keys (DO NOT KEEP)
 stripeConfig.js
 
-# google maps api keys for Explore tab (DO NOT KEEP)
-googleMapsConfig.js
-
 # GOOGLE stuff
 GoogleService-Info.plist
 google-services.json
@@ -60,9 +57,6 @@ stripeConfig.js
 
 # ui colours test
 colours/
-
-# map
-services/googleMapsConfig.js
 
 # .env containing api keys
 .env
