@@ -63,3 +63,6 @@ colours/
 
 # map
 services/googleMapsConfig.js
+
+# .env containing api keys
+.env
