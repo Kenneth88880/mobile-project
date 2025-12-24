@@ -32,11 +32,9 @@ import {
   getUserProfile,
   saveUserProfile,
   getAverageRating,
-  updateDuoPreference,
   getDuoPartnerProfile,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
-import { DuoPreferenceComponent } from "../components/DuoPreferenceComponent";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
@@ -135,7 +133,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     longitude: null,
     showOnlineStatus: true,
     gender: null,
-    duoPreference: null,
+    genderPreference: [], // Array of genders user is interested in: ['male', 'female', 'non-binary']
   });
   const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
@@ -146,6 +144,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -260,7 +259,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           longitude: null,
           showOnlineStatus: true,
           gender: null,
-          duoPreference: null,
+          genderPreference: [],
         };
 
         // Save to Firestore
@@ -271,6 +270,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
         // Auto-switch to edit mode so user can fill it in
         setIsEditing(true);
+        setProfileLoaded(true);
         return;
       }
 
@@ -287,11 +287,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         longitude: userProfile.longitude || null,
         showOnlineStatus: userProfile.showOnlineStatus !== false,
         gender: userProfile.gender || null,
-        duoPreference: userProfile.duoPreference || null,
+        genderPreference: Array.isArray(userProfile.genderPreference)
+          ? userProfile.genderPreference
+          : [],
       };
 
       setProfile(cleanedProfile);
       await loadDuo();
+      setProfileLoaded(true);
     } catch (error) {
       console.error("Error loading profile:", error);
 
@@ -308,11 +311,12 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         longitude: null,
         showOnlineStatus: true,
         gender: null,
-        duoPreference: null,
+        genderPreference: [],
       });
 
       // Auto-switch to edit mode
       setIsEditing(true);
+      setProfileLoaded(true);
     }
   };
 
@@ -324,6 +328,15 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     if (!profile.age.trim() || isNaN(profile.age)) {
       Alert.alert("Error", "Please enter a valid age");
+      return;
+    }
+
+    // Check for at least one photo
+    if (!profile.photos || profile.photos.length === 0) {
+      Alert.alert(
+        "Photo Required",
+        "Please add at least one photo to your profile. This helps other duos know who they're matching with!"
+      );
       return;
     }
 
@@ -513,23 +526,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     }
   };
 
-  const handleUpdatePreference = async (newPreference) => {
-    try {
-      await updateDuoPreference(CURRENT_USER_ID, newPreference);
-
-      // Update local state
-      setProfile({
-        ...profile,
-        duoPreference: newPreference,
-      });
-
-      Alert.alert("Success", "Duo preferences updated!");
-    } catch (error) {
-      console.error("Error updating preference:", error);
-      throw error;
-    }
-  };
-
   const renderStars = (rating) => {
     const stars = [];
     const fullStars = Math.floor(parseFloat(rating));
@@ -544,6 +540,32 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   };
 
   const TagPickerModal = () => {
+    // Local state for tags - prevents modal from closing on each selection
+    const [localTags, setLocalTags] = useState([]);
+
+    // Initialize local tags when modal opens
+    useEffect(() => {
+      if (showTagPicker) {
+        setLocalTags(Array.isArray(profile.tags) ? [...profile.tags] : []);
+      }
+    }, [showTagPicker]);
+
+    const toggleLocalTag = (tag) => {
+      const currentTags = localTags;
+      const newTags = currentTags.includes(tag)
+        ? currentTags.filter((t) => t !== tag)
+        : currentTags.length < 5
+        ? [...currentTags, tag]
+        : currentTags;
+      setLocalTags(newTags);
+    };
+
+    const handleDone = () => {
+      // Update the actual profile with selected tags
+      setProfile({ ...profile, tags: localTags });
+      setShowTagPicker(false);
+    };
+
     return (
       <Portal>
         <Modal
@@ -556,8 +578,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         >
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">
-              Select Tags (
-              {Array.isArray(profile.tags) ? profile.tags.length : 0}/5)
+              Select Tags ({localTags.length}/5)
             </Text>
             <Text variant="bodyMedium" style={{ marginTop: 8 }}>
               Choose up to 5 interests
@@ -569,16 +590,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               {AVAILABLE_TAGS.map((tag) => (
                 <Chip
                   key={tag}
-                  selected={
-                    Array.isArray(profile.tags) && profile.tags.includes(tag)
-                  }
-                  onPress={() => toggleTag(tag)}
+                  selected={localTags.includes(tag)}
+                  onPress={() => toggleLocalTag(tag)}
                   style={styles.tagChip}
-                  disabled={
-                    !Array.isArray(profile.tags)
-                      ? false
-                      : profile.tags.length >= 5 && !profile.tags.includes(tag)
-                  }
+                  disabled={localTags.length >= 5 && !localTags.includes(tag)}
                 >
                   {tag}
                 </Chip>
@@ -589,7 +604,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           <View style={styles.modalFooter}>
             <Button
               mode="contained"
-              onPress={() => setShowTagPicker(false)}
+              onPress={handleDone}
               style={styles.fullWidthButton}
             >
               Done
@@ -1131,6 +1146,42 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
+        {/* Warning if user has no photos */}
+        {profileLoaded && (!profile.photos || profile.photos.length === 0) && (
+          <Card
+            style={[
+              styles.card,
+              {
+                borderColor: "#ff6b6b",
+                borderWidth: 2,
+                backgroundColor: "#fff5f5",
+              },
+            ]}
+          >
+            <Card.Content>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
+                <Text
+                  variant="titleMedium"
+                  style={{ color: "#ff6b6b", fontWeight: "bold" }}
+                >
+                  Photo Required
+                </Text>
+              </View>
+              <Text style={{ color: "#666" }}>
+                You need at least one photo to appear in the dating feed. Add
+                photos to your profile to start matching with other duos!
+              </Text>
+            </Card.Content>
+          </Card>
+        )}
+
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="headlineSmall">
@@ -1250,22 +1301,44 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                     )}
                 </TouchableOpacity>
 
-                {/* DUO GENDER PREFERENCES - Only show if both have genders */}
-                {profile.gender && duoPartnerProfile.gender && (
-                  <View style={{ marginTop: 16 }}>
-                    <DuoPreferenceComponent
-                      yourGender={profile.gender}
-                      partnerGender={duoPartnerProfile.gender}
-                      yourPreference={
-                        profile.duoPreference || { interestedIn: [] }
-                      }
-                      partnerPreference={
-                        duoPartnerProfile.duoPreference || { interestedIn: [] }
-                      }
-                      onUpdatePreference={handleUpdatePreference}
-                    />
-                  </View>
-                )}
+                {/* Warning if duo partner has no photos */}
+                {profileLoaded &&
+                  (!duoPartnerProfile.photos ||
+                    duoPartnerProfile.photos.length === 0) && (
+                    <Card
+                      style={{
+                        marginTop: 12,
+                        borderColor: "#ff9800",
+                        borderWidth: 2,
+                        backgroundColor: "#fff8e1",
+                      }}
+                    >
+                      <Card.Content>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text style={{ fontSize: 24, marginRight: 8 }}>
+                            ⚠️
+                          </Text>
+                          <Text
+                            variant="titleMedium"
+                            style={{ color: "#ff9800", fontWeight: "bold" }}
+                          >
+                            Partner Needs Photos
+                          </Text>
+                        </View>
+                        <Text style={{ color: "#666" }}>
+                          Your duo partner needs to add at least one photo for
+                          your duo to appear in the dating feed. Ask them to
+                          update their profile!
+                        </Text>
+                      </Card.Content>
+                    </Card>
+                  )}
 
                 <Button
                   mode="outlined"
@@ -1418,7 +1491,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                     profile.gender === "male" ? "#4A90E2" : undefined,
                 }}
                 textStyle={{
-                  color: profile.gender === "male" ? "#FFFFFF" : undefined,
+                  color:
+                    profile.gender === "male"
+                      ? "#FFFFFF"
+                      : theme.colors.onSurface,
                 }}
               >
                 Male
@@ -1431,7 +1507,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                     profile.gender === "female" ? "#FF69B4" : undefined,
                 }}
                 textStyle={{
-                  color: profile.gender === "female" ? "#FFFFFF" : undefined,
+                  color:
+                    profile.gender === "female"
+                      ? "#FFFFFF"
+                      : theme.colors.onSurface,
                 }}
               >
                 Female
@@ -1445,7 +1524,9 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 }}
                 textStyle={{
                   color:
-                    profile.gender === "non-binary" ? "#FFFFFF" : undefined,
+                    profile.gender === "non-binary"
+                      ? "#FFFFFF"
+                      : theme.colors.onSurface,
                 }}
               >
                 Non-Binary
@@ -1506,7 +1587,16 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       </ScrollView>
 
       {/* Fixed Bottom Buttons - Always Visible */}
-      <Surface style={styles.bottomButtons} elevation={4}>
+      <Surface
+        style={[
+          styles.bottomButtons,
+          {
+            backgroundColor: theme.colors.surface,
+            borderTopColor: theme.colors.outline,
+          },
+        ]}
+        elevation={4}
+      >
         <Button
           mode="outlined"
           onPress={() => {
@@ -1647,9 +1737,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     padding: 16,
-    backgroundColor: "white",
     borderTopWidth: 1,
-    borderTopColor: "#e0e0e0",
   },
   bottomButton: {
     flex: 1,
