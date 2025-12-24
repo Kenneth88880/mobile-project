@@ -240,8 +240,77 @@ export default function RequestsScreen({ isActive = true }) {
     );
   };
 
-  const handleProfileClick = (profile) => {
-    setSelectedProfile(profile);
+  const handleProfileClick = async (profile) => {
+    if (!profile) {
+      console.log("No profile provided to handleProfileClick");
+      return;
+    }
+
+    try {
+      // Get user ID from various possible fields
+      const userId =
+        profile.userId ||
+        profile.id ||
+        profile.fromUser1Id ||
+        profile.fromUser2Id;
+
+      if (!userId) {
+        console.error("Profile has no userId:", profile);
+        Alert.alert(
+          "Error",
+          "Could not identify user. Profile data may be incomplete."
+        );
+        return;
+      }
+
+      console.log("Fetching full profile for:", userId);
+      console.log("Profile object:", {
+        name: profile.name,
+        hasUserId: !!profile.userId,
+        hasId: !!profile.id,
+        hasPhotos: !!profile.photos,
+        photoCount: profile.photos?.length || 0,
+      });
+
+      // Fetch the full profile to ensure we have all data including photos
+      const fullProfile = await getUserProfile(userId);
+
+      if (fullProfile) {
+        console.log("Full profile loaded:", {
+          name: fullProfile.name,
+          userId: fullProfile.userId,
+          photoCount: fullProfile.photos?.length || 0,
+          photos: fullProfile.photos,
+        });
+
+        setSelectedProfile({
+          ...profile,
+          ...fullProfile,
+          // Ensure userId is set
+          userId: fullProfile.userId || userId,
+          id: fullProfile.userId || userId,
+          // Ensure photos are included
+          photos: fullProfile.photos || profile.photos || [],
+        });
+      } else {
+        console.log("Could not load full profile, using existing profile data");
+        // Fallback to existing profile data
+        setSelectedProfile({
+          ...profile,
+          userId: userId,
+          id: userId,
+          photos: profile.photos || [],
+        });
+      }
+    } catch (error) {
+      console.error("Error loading full profile:", error);
+      // Fallback to existing profile data
+      setSelectedProfile({
+        ...profile,
+        photos: profile.photos || [],
+      });
+    }
+
     setCurrentImageIndex(0);
   };
 
@@ -399,6 +468,15 @@ export default function RequestsScreen({ isActive = true }) {
       ? selectedProfile.photos[currentImageIndex]
       : null;
 
+    console.log("Rendering profile view:", {
+      name: selectedProfile.name,
+      hasPhotos,
+      photoCount: selectedProfile.photos?.length || 0,
+      currentPhoto: currentPhoto ? "URL present" : "NO URL",
+      currentImageIndex,
+      actualPhotoURL: currentPhoto ? currentPhoto.substring(0, 100) : "NONE",
+    });
+
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -413,12 +491,29 @@ export default function RequestsScreen({ isActive = true }) {
         </Surface>
 
         <ScrollView showsVerticalScrollIndicator={false}>
-          <Card style={styles.profileCard}>
+          <Card style={styles.profileImageCard}>
             {currentPhoto ? (
-              <Card.Cover
-                source={{ uri: currentPhoto }}
-                style={styles.profileCover}
-              />
+              <View style={styles.profileCover}>
+                <Image
+                  key={currentPhoto}
+                  source={{ uri: currentPhoto }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                  onLoad={() => {
+                    console.log(
+                      "✅ Image loaded successfully:",
+                      currentPhoto.substring(0, 50) + "..."
+                    );
+                  }}
+                  onError={(error) => {
+                    console.error(
+                      "❌ Image load error:",
+                      error.nativeEvent?.error
+                    );
+                    console.log("Failed to load image URL:", currentPhoto);
+                  }}
+                />
+              </View>
             ) : (
               <View style={styles.noPhotoContainer}>
                 <ProfilePhoto size={120} />
@@ -882,6 +977,11 @@ const styles = StyleSheet.create({
   },
   profileCover: {
     height: 400,
+    backgroundColor: "#f0f0f0", // Light gray background to see if container renders
+  },
+  profileImageCard: {
+    marginBottom: 0,
+    overflow: "hidden",
   },
   noPhotoContainer: {
     height: 400,
