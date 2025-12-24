@@ -6,6 +6,7 @@ import {
   Animated,
   Alert,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
