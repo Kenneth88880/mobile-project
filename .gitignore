@@ -47,7 +47,7 @@ firebaseConfig.js
 stripeConfig.js
 
 # GOOGLE stuff
-GoogleService-Info.plist
+#GoogleService-Info.plist
 google-services.json
 
 #eas.json
