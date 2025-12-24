@@ -27,6 +27,7 @@ export default function SettingsScreen({
   const theme = useTheme();
   const [maxDistance, setMaxDistance] = useState(50); // Default 50km
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
+  const [genderPreference, setGenderPreference] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
@@ -41,6 +42,11 @@ export default function SettingsScreen({
         setProfile(userProfile);
         setMaxDistance(userProfile.maxDistance || 50);
         setShowOnlineStatus(userProfile.showOnlineStatus !== false);
+        setGenderPreference(
+          Array.isArray(userProfile.genderPreference)
+            ? userProfile.genderPreference
+            : []
+        );
       }
     } catch (error) {
       console.error("Error loading settings:", error);
@@ -73,6 +79,35 @@ export default function SettingsScreen({
     } catch (error) {
       console.error("Error updating online status:", error);
       Alert.alert("Error", "Failed to update online status");
+    }
+  };
+
+  const toggleGenderPreference = async (gender) => {
+    try {
+      if (!profile) return;
+
+      const currentPreferences = genderPreference || [];
+      let newPreferences;
+
+      if (currentPreferences.includes(gender)) {
+        // Remove the gender
+        newPreferences = currentPreferences.filter((g) => g !== gender);
+      } else {
+        // Add the gender
+        newPreferences = [...currentPreferences, gender];
+      }
+
+      const updatedProfile = {
+        ...profile,
+        genderPreference: newPreferences,
+      };
+
+      await saveUserProfile(CURRENT_USER_ID, updatedProfile);
+      setProfile(updatedProfile);
+      setGenderPreference(newPreferences);
+    } catch (error) {
+      console.error("Error updating gender preference:", error);
+      Alert.alert("Error", "Failed to update gender preference");
     }
   };
 
@@ -157,6 +192,62 @@ export default function SettingsScreen({
                 </Text>
               </View>
             </View>
+          </Card.Content>
+        </Card>
+
+        {/* Gender Preferences */}
+        <Card style={styles.card}>
+          <Card.Title
+            title="Gender Preference"
+            left={(props) => (
+              <IconButton icon="gender-male-female" {...props} />
+            )}
+          />
+          <Card.Content>
+            <Text variant="bodyMedium" style={styles.preferenceDescription}>
+              Select which genders you're interested in matching with:
+            </Text>
+
+            <View style={styles.preferenceOptions}>
+              <List.Item
+                title="Male"
+                right={() => (
+                  <Switch
+                    value={genderPreference.includes("male")}
+                    onValueChange={() => toggleGenderPreference("male")}
+                  />
+                )}
+              />
+              <Divider />
+              <List.Item
+                title="Female"
+                right={() => (
+                  <Switch
+                    value={genderPreference.includes("female")}
+                    onValueChange={() => toggleGenderPreference("female")}
+                  />
+                )}
+              />
+              <Divider />
+              <List.Item
+                title="Non-Binary"
+                right={() => (
+                  <Switch
+                    value={genderPreference.includes("non-binary")}
+                    onValueChange={() => toggleGenderPreference("non-binary")}
+                  />
+                )}
+              />
+            </View>
+
+            {genderPreference.length === 0 && (
+              <Text
+                variant="bodySmall"
+                style={[styles.infoText, { marginTop: 12, color: "#ff6b6b" }]}
+              >
+                ⚠️ Please select at least one gender preference to see matches
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
@@ -269,6 +360,13 @@ const styles = StyleSheet.create({
   },
   sliderLabel: {
     color: "#999",
+  },
+  preferenceDescription: {
+    marginBottom: 12,
+    color: "#666",
+  },
+  preferenceOptions: {
+    marginTop: 8,
   },
   infoText: {
     textAlign: "center",
