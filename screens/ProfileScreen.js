@@ -159,6 +159,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [showPendingRequests, setShowPendingRequests] = useState(false);
   const [viewingPartnerProfile, setViewingPartnerProfile] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [viewingRequesterProfile, setViewingRequesterProfile] = useState(null); // For viewing request profiles
+  const [requesterImageIndex, setRequesterImageIndex] = useState(0); // For requester profile carousel
 
   useEffect(() => {
     loadProfile();
@@ -846,6 +848,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
             />
           </View>
 
+          <Text
+            variant="bodySmall"
+            style={{
+              paddingHorizontal: 16,
+              paddingBottom: 8,
+              fontStyle: "italic",
+              opacity: 0.7,
+            }}
+          >
+            Tap on a request to view their full profile
+          </Text>
+
           <ScrollView style={styles.modalContent}>
             {pendingRequests.length === 0 ? (
               <View style={styles.emptyState}>
@@ -853,7 +867,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </View>
             ) : (
               pendingRequests.map((request) => (
-                <Card key={request.id} style={styles.requestCard}>
+                <Card
+                  key={request.id}
+                  style={styles.requestCard}
+                  onPress={() => {
+                    setViewingRequesterProfile(request.requesterProfile);
+                    setRequesterImageIndex(0);
+                  }}
+                >
                   <Card.Content>
                     <View
                       style={{
@@ -938,6 +959,199 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               ))
             )}
           </ScrollView>
+        </Modal>
+      </Portal>
+    );
+  };
+
+  // Requester Profile Viewing Modal
+  const RequesterProfileModal = () => {
+    if (!viewingRequesterProfile) return null;
+
+    const hasPhotos =
+      viewingRequesterProfile.photos &&
+      viewingRequesterProfile.photos.length > 0;
+
+    return (
+      <Portal>
+        <Modal
+          visible={viewingRequesterProfile !== null}
+          onDismiss={() => {
+            setViewingRequesterProfile(null);
+            setRequesterImageIndex(0);
+          }}
+          contentContainerStyle={[
+            styles.modalContainer,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <SafeAreaView style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+              <Text variant="headlineMedium">
+                {viewingRequesterProfile.name}'s Profile
+              </Text>
+              <IconButton
+                icon="close"
+                onPress={() => {
+                  setViewingRequesterProfile(null);
+                  setRequesterImageIndex(0);
+                }}
+                style={{ position: "absolute", right: 16, top: 16 }}
+              />
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {/* Photos Section */}
+              {hasPhotos ? (
+                <Card style={styles.imageCard}>
+                  <Card.Cover
+                    source={{
+                      uri: viewingRequesterProfile.photos[requesterImageIndex],
+                    }}
+                    style={styles.cardCover}
+                  />
+                  {viewingRequesterProfile.photos.length > 1 && (
+                    <View style={styles.imageNavigation}>
+                      <IconButton
+                        icon="chevron-left"
+                        onPress={() =>
+                          setRequesterImageIndex((prev) =>
+                            prev === 0
+                              ? viewingRequesterProfile.photos.length - 1
+                              : prev - 1
+                          )
+                        }
+                        iconColor="white"
+                        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                      />
+                      <View style={styles.dotsContainer}>
+                        {viewingRequesterProfile.photos.map((_, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.dot,
+                              index === requesterImageIndex && styles.activeDot,
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      <IconButton
+                        icon="chevron-right"
+                        onPress={() =>
+                          setRequesterImageIndex((prev) =>
+                            prev === viewingRequesterProfile.photos.length - 1
+                              ? 0
+                              : prev + 1
+                          )
+                        }
+                        iconColor="white"
+                        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                      />
+                    </View>
+                  )}
+                </Card>
+              ) : (
+                <Card style={styles.imageCard}>
+                  <View
+                    style={[
+                      styles.cardCover,
+                      {
+                        justifyContent: "center",
+                        alignItems: "center",
+                        backgroundColor: theme.colors.surfaceVariant,
+                      },
+                    ]}
+                  >
+                    <Avatar.Icon size={80} icon="account" />
+                    <Text style={{ marginTop: 8 }}>No photos</Text>
+                  </View>
+                </Card>
+              )}
+
+              {/* Profile Info */}
+              <Card style={styles.card}>
+                <Card.Content>
+                  <Text variant="headlineSmall">
+                    {viewingRequesterProfile.name},{" "}
+                    {viewingRequesterProfile.age || "?"}
+                  </Text>
+
+                  {viewingRequesterProfile.city && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 8,
+                      }}
+                    >
+                      <IconButton
+                        icon="map-marker"
+                        size={16}
+                        style={{ margin: 0 }}
+                      />
+                      <Text variant="bodyMedium">
+                        {viewingRequesterProfile.city}
+                      </Text>
+                    </View>
+                  )}
+
+                  <Divider style={styles.divider} />
+
+                  {viewingRequesterProfile.description ? (
+                    <Text style={styles.description}>
+                      {viewingRequesterProfile.description}
+                    </Text>
+                  ) : (
+                    <Text style={styles.description}>No description</Text>
+                  )}
+
+                  {viewingRequesterProfile.gender && (
+                    <>
+                      <Divider style={styles.divider} />
+                      <Text variant="titleMedium" style={styles.sectionTitle}>
+                        Gender
+                      </Text>
+                      <Chip
+                        style={{
+                          alignSelf: "flex-start",
+                          backgroundColor:
+                            viewingRequesterProfile.gender === "male"
+                              ? "#4A90E2"
+                              : viewingRequesterProfile.gender === "female"
+                              ? "#FF69B4"
+                              : "#9B59B6",
+                        }}
+                        textStyle={{ color: "#FFFFFF" }}
+                      >
+                        {viewingRequesterProfile.gender === "male"
+                          ? "Male"
+                          : viewingRequesterProfile.gender === "female"
+                          ? "Female"
+                          : "Non-Binary"}
+                      </Chip>
+                    </>
+                  )}
+
+                  {viewingRequesterProfile.tags &&
+                    viewingRequesterProfile.tags.length > 0 && (
+                      <>
+                        <Divider style={styles.divider} />
+                        <Text variant="titleMedium" style={styles.sectionTitle}>
+                          Interests
+                        </Text>
+                        <View style={styles.tagsDisplay}>
+                          {viewingRequesterProfile.tags.map((tag, index) => (
+                            <Chip key={index} style={styles.tagDisplay}>
+                              {tag}
+                            </Chip>
+                          ))}
+                        </View>
+                      </>
+                    )}
+                </Card.Content>
+              </Card>
+            </ScrollView>
+          </SafeAreaView>
         </Modal>
       </Portal>
     );
@@ -1401,6 +1615,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         <TagPickerModal />
         <PartnerSearchModal />
         <PendingRequestsModal />
+        <RequesterProfileModal />
       </ScrollView>
     );
   }
