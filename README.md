@@ -13,7 +13,6 @@
 ## Things in progress
 
 - bug fixes in chat appearance
-- bug fixes in star system (in home screen and appearance)
 
 ## Things that are done mostly
 

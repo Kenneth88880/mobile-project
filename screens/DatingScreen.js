@@ -67,7 +67,6 @@ export default function DatingScreen({ isActive = true }) {
 
   const currentUserId = CURRENT_USER_ID;
 
-  // ✅ FIX: Reload data when component becomes active
   // This prevents swiped duos from reappearing when navigating between tabs
   useEffect(() => {
     if (isActive) {
