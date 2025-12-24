@@ -20,7 +20,7 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-// ✅ FIXED: Using React Native Firebase instead of web SDK
+// FIXED: Using React Native Firebase instead of web SDK
 import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
@@ -85,7 +85,6 @@ export default function RequestsScreen({ isActive = true }) {
 
     console.log("Setting up duo likes listener for duoId:", currentDuo.duoId);
 
-    // ✅ FIXED: Using React Native Firebase syntax
     const unsubscribe = firestore()
       .collection("duoLikes")
       .where("toDuoId", "==", currentDuo.duoId)
@@ -99,7 +98,7 @@ export default function RequestsScreen({ isActive = true }) {
             const likeData = doc.data();
             console.log("Processing like:", doc.id, likeData);
 
-            // ✅ Better logging for debugging
+            // Better logging for debugging
             console.log("Fetching profiles for:", {
               fromUser1: likeData.fromUser1,
               fromUser2: likeData.fromUser2,
@@ -124,7 +123,7 @@ export default function RequestsScreen({ isActive = true }) {
                 toDuoId: likeData.toDuoId,
                 user1: user1Profile,
                 user2: user2Profile,
-                // ✅ FIX: Store original user IDs for acceptance checking
+                // Store original user IDs for acceptance checking
                 fromUser1Id: likeData.fromUser1,
                 fromUser2Id: likeData.fromUser2,
                 acceptedBy: likeData.acceptedBy || [],
@@ -157,7 +156,7 @@ export default function RequestsScreen({ isActive = true }) {
     };
   }, [currentDuo]);
 
-  // ✅ Check rating status when viewing a profile OR when component becomes active
+  // Check rating status when viewing a profile OR when component becomes active
   useEffect(() => {
     const checkRatingStatus = async () => {
       if (selectedProfile) {
@@ -271,7 +270,7 @@ export default function RequestsScreen({ isActive = true }) {
     try {
       const profileId = profile.userId || profile.id;
 
-      // ✅ Check if user has already rated this profile
+      // Check if user has already rated this profile
       const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
 
       if (ratingCheck.exists) {
@@ -463,7 +462,7 @@ export default function RequestsScreen({ isActive = true }) {
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
                     {(() => {
-                      // ✅ FIX: Handle tags being string, array, or undefined
+                      // FIX: Handle tags being string, array, or undefined
                       let tagsArray = [];
                       if (typeof selectedProfile.tags === "string") {
                         tagsArray = selectedProfile.tags
@@ -594,7 +593,7 @@ export default function RequestsScreen({ isActive = true }) {
           />
         ) : (
           duoLikes.map((like) => {
-            // ✅ FIX: Use the stored original user IDs from duoLikes document
+            // FIX: Use the stored original user IDs from duoLikes document
             const fromUser1Accepted =
               like.acceptedBy?.includes(like.fromUser1Id) || false;
             const fromUser2Accepted =
@@ -611,7 +610,7 @@ export default function RequestsScreen({ isActive = true }) {
             const allAccepted =
               sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
 
-            // ✅ Debug logging for acceptance tracking
+            // Debug logging for acceptance tracking
             console.log("Rendering like card:", {
               likeId: like.id,
               user1: like.user1?.name,
@@ -628,7 +627,7 @@ export default function RequestsScreen({ isActive = true }) {
               acceptedBy: like.acceptedBy,
             });
 
-            // ✅ Debug: Check if profiles exist
+            // Debug: Check if profiles exist
             console.log("Profile check:", {
               hasUser1: !!like.user1,
               hasUser2: !!like.user2,
