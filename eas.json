@@ -11,7 +11,6 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "GOOGLE_SERVICES_PLIST": "@GOOGLE_SERVICES_PLIST",
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
       }
@@ -19,7 +18,6 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "GOOGLE_SERVICES_PLIST": "@GOOGLE_SERVICES_PLIST",
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
       }
@@ -27,8 +25,5 @@
   },
   "submit": {
     "production": {}
-  },
-  "hooks": {
-    "postinstall": "./eas-hooks/postinstall.sh"
   }
 }
