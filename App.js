@@ -24,7 +24,7 @@ import CheckoutScreen from "./screens/PaymentScreen";
 import Constants from "expo-constants";
 const STRIPE_PUBLISHABLE_KEY =
   Constants.expoConfig?.extra?.stripePublishableKey;
-import SignInScreen from "./screens/SigninScreen";
+import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
 
 export default function App() {
