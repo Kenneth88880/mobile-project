@@ -181,8 +181,23 @@ export const getAllDuoPairs = async (userId) => {
     const likedDuoIds = likesSnapshot.docs.map((doc) => doc.data().toDuoId);
     console.log("Already liked duo IDs:", likedDuoIds);
 
-    // Combine both lists
-    const excludedDuoIds = [...swipedDuoIds, ...likedDuoIds];
+    // ✅ FIX BUG #1: Also get likes FROM other duos TO you
+    const receivedLikesSnapshot = await firestore()
+      .collection("duoLikes")
+      .where("toDuoId", "==", currentDuo.duoId)
+      .get();
+
+    const duosWhoLikedYou = receivedLikesSnapshot.docs.map(
+      (doc) => doc.data().fromDuoId
+    );
+    console.log("Duos who liked you:", duosWhoLikedYou);
+
+    // Combine all lists - exclude duos you've liked AND duos who've liked you
+    const excludedDuoIds = [
+      ...swipedDuoIds,
+      ...likedDuoIds,
+      ...duosWhoLikedYou,
+    ];
     console.log("Total excluded duo IDs:", excludedDuoIds);
 
     // Get all active duo pairs, excluding own duo and already interacted with
@@ -220,6 +235,19 @@ export const getAllDuoPairs = async (userId) => {
       const user2Profile = await getUserProfile(users[1]);
 
       if (user1Profile && user2Profile) {
+        // ✅ Check if both users have at least one photo
+        const user1HasPhoto =
+          user1Profile.photos && user1Profile.photos.length > 0;
+        const user2HasPhoto =
+          user2Profile.photos && user2Profile.photos.length > 0;
+
+        if (!user1HasPhoto || !user2HasPhoto) {
+          console.log(
+            `Skipping duo ${duoId} - missing photos (user1: ${user1HasPhoto}, user2: ${user2HasPhoto})`
+          );
+          continue;
+        }
+
         console.log(
           `✅ Including duo ${duoId}: ${user1Profile.name} + ${user2Profile.name}`
         );

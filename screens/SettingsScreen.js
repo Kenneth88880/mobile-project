@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert, Modal } from "react-native";
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  Modal,
+  SafeAreaView,
+} from "react-native";
 import {
   Text,
   Card,
@@ -113,11 +120,11 @@ export default function SettingsScreen({
 
   if (loading) {
     const loadingContent = (
-      <View
+      <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <Text>Loading settings...</Text>
-      </View>
+      </SafeAreaView>
     );
 
     return onClose ? (
@@ -130,7 +137,7 @@ export default function SettingsScreen({
   }
 
   const settingsContent = (
-    <View
+    <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <Surface style={styles.header} elevation={2}>
@@ -304,7 +311,7 @@ export default function SettingsScreen({
           </Card.Content>
         </Card>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 
   return onClose ? (
