@@ -4,7 +4,7 @@ export default {
   expo: {
     name: "Doubly",
     slug: "doubly-yrvn0tmogrdrliugnun4w",
-    version: "1.0.0",
+    version: "1.0.2",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",

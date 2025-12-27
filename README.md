@@ -13,7 +13,6 @@
 
 - Create a welcome experience for users to add their info
 - bug fixes in chat appearance
-- bug fixes in star system (in home screen and appearance)
 
 ## Things that are done mostly
 

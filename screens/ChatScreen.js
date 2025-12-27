@@ -19,15 +19,18 @@ import {
   useTheme,
   Divider,
   Icon,
+  Portal,
+  Modal,
+  Card,
+  Button,
+  Chip,
 } from "react-native-paper";
-import firestore from '@react-native-firebase/firestore';
+import firestore from "@react-native-firebase/firestore";
 import { getUserProfile } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
 const getUserID = () => CURRENT_USER_ID;
-
-
 
 // Delete a specific chat
 const deleteChat = async (chatId) => {
@@ -37,12 +40,12 @@ const deleteChat = async (chatId) => {
       .doc(chatId)
       .collection("messages")
       .get();
-    
+
     const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
       msgDoc.ref.delete()
     );
     await Promise.all(deleteMessagesPromises);
-    
+
     await firestore().collection("chats").doc(chatId).delete();
     return true;
   } catch (error) {
@@ -103,7 +106,10 @@ function ChatListScreen({ onChatSelect }) {
 
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
-            if (data.participants && data.participants.includes(currentUserId)) {
+            if (
+              data.participants &&
+              data.participants.includes(currentUserId)
+            ) {
               chatsList.push({
                 id: docSnap.id,
                 ...data,
@@ -329,6 +335,9 @@ function IndividualChatScreen({ chat, onBack }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [userProfiles, setUserProfiles] = useState({});
+  const [showParticipants, setShowParticipants] = useState(false); // ✅ FIX BUG #4
+  const [viewingProfile, setViewingProfile] = useState(null); // For viewing participant profiles
+  const [profileImageIndex, setProfileImageIndex] = useState(0); // For profile image carousel
 
   useEffect(() => {
     if (!chat?.id) return;
@@ -436,7 +445,9 @@ function IndividualChatScreen({ chat, onBack }) {
 
   if (!chat) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <Text>No chat selected</Text>
       </View>
     );
@@ -450,8 +461,15 @@ function IndividualChatScreen({ chat, onBack }) {
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
-        <Text variant="titleLarge">{chat.groupName || "Chat"}</Text>
-        <View style={styles.headerSpacer} />
+        <Text variant="titleLarge" style={{ flex: 1 }}>
+          {chat.groupName || "Chat"}
+        </Text>
+        {/* ✅ FIX BUG #4: Add button to view participants */}
+        <IconButton
+          icon="account-multiple"
+          onPress={() => setShowParticipants(true)}
+          tooltip="View Participants"
+        />
       </Surface>
 
       <FlatList
@@ -553,6 +571,298 @@ function IndividualChatScreen({ chat, onBack }) {
           disabled={!inputText.trim()}
         />
       </Surface>
+
+      {/* ✅ FIX BUG #4: Participants Modal */}
+      <Portal>
+        <Modal
+          visible={showParticipants}
+          onDismiss={() => setShowParticipants(false)}
+          contentContainerStyle={{
+            backgroundColor: theme.colors.background,
+            padding: 20,
+            margin: 20,
+            borderRadius: 8,
+          }}
+        >
+          <Card>
+            <Card.Title title="Chat Participants" />
+            <Card.Content>
+              <Text
+                variant="bodySmall"
+                style={{ marginBottom: 12, fontStyle: "italic", opacity: 0.7 }}
+              >
+                Tap on a participant to view their full profile
+              </Text>
+              {chat.participants && chat.participants.length > 0 ? (
+                chat.participants.map((participantId) => {
+                  const profile = userProfiles[participantId];
+                  if (!profile) return null;
+
+                  return (
+                    <List.Item
+                      key={participantId}
+                      title={profile.name || "Unknown"}
+                      description={profile.city || "No location"}
+                      left={() => (
+                        <ProfilePhoto uri={profile.photos?.[0]} size={48} />
+                      )}
+                      style={{ paddingVertical: 8 }}
+                      onPress={() => {
+                        setViewingProfile(profile);
+                        setProfileImageIndex(0);
+                        setShowParticipants(false);
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <Text>No participants found</Text>
+              )}
+            </Card.Content>
+            <Card.Actions>
+              <Button onPress={() => setShowParticipants(false)}>Close</Button>
+            </Card.Actions>
+          </Card>
+        </Modal>
+      </Portal>
+
+      {/* Profile Viewing Modal */}
+      <Portal>
+        <Modal
+          visible={viewingProfile !== null}
+          onDismiss={() => {
+            setViewingProfile(null);
+            setProfileImageIndex(0);
+          }}
+          contentContainerStyle={{
+            backgroundColor: theme.colors.background,
+            margin: 20,
+            borderRadius: 8,
+            maxHeight: "90%",
+          }}
+        >
+          {viewingProfile && (
+            <View>
+              {/* Header with close button */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.outline,
+                }}
+              >
+                <Text variant="titleLarge">
+                  {viewingProfile.name}'s Profile
+                </Text>
+                <IconButton
+                  icon="close"
+                  onPress={() => {
+                    setViewingProfile(null);
+                    setProfileImageIndex(0);
+                  }}
+                />
+              </View>
+
+              {/* Scrollable content */}
+              <View style={{ maxHeight: 600 }}>
+                <FlatList
+                  data={[{ key: "profile" }]}
+                  renderItem={() => (
+                    <View style={{ padding: 16 }}>
+                      {/* Photos */}
+                      {viewingProfile.photos &&
+                      viewingProfile.photos.length > 0 ? (
+                        <Card style={{ marginBottom: 16 }}>
+                          <Card.Cover
+                            source={{
+                              uri: viewingProfile.photos[profileImageIndex],
+                            }}
+                            style={{ height: 300 }}
+                          />
+                          {viewingProfile.photos.length > 1 && (
+                            <View
+                              style={{
+                                position: "absolute",
+                                bottom: 16,
+                                left: 0,
+                                right: 0,
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                paddingHorizontal: 8,
+                              }}
+                            >
+                              <IconButton
+                                icon="chevron-left"
+                                iconColor="white"
+                                onPress={() =>
+                                  setProfileImageIndex((prev) =>
+                                    prev === 0
+                                      ? viewingProfile.photos.length - 1
+                                      : prev - 1
+                                  )
+                                }
+                                style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                              />
+                              <View style={{ flexDirection: "row", gap: 8 }}>
+                                {viewingProfile.photos.map((_, index) => (
+                                  <View
+                                    key={index}
+                                    style={{
+                                      width:
+                                        index === profileImageIndex ? 10 : 8,
+                                      height:
+                                        index === profileImageIndex ? 10 : 8,
+                                      borderRadius:
+                                        index === profileImageIndex ? 5 : 4,
+                                      backgroundColor:
+                                        index === profileImageIndex
+                                          ? "white"
+                                          : "rgba(255, 255, 255, 0.5)",
+                                    }}
+                                  />
+                                ))}
+                              </View>
+                              <IconButton
+                                icon="chevron-right"
+                                iconColor="white"
+                                onPress={() =>
+                                  setProfileImageIndex((prev) =>
+                                    prev === viewingProfile.photos.length - 1
+                                      ? 0
+                                      : prev + 1
+                                  )
+                                }
+                                style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+                              />
+                            </View>
+                          )}
+                        </Card>
+                      ) : (
+                        <Card
+                          style={{
+                            marginBottom: 16,
+                            height: 300,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Avatar.Icon size={80} icon="account" />
+                          <Text style={{ marginTop: 8 }}>No photos</Text>
+                        </Card>
+                      )}
+
+                      {/* Basic Info */}
+                      <Card style={{ marginBottom: 16 }}>
+                        <Card.Content>
+                          <Text variant="headlineSmall">
+                            {viewingProfile.name}, {viewingProfile.age || "?"}
+                          </Text>
+
+                          {viewingProfile.city && (
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginTop: 8,
+                              }}
+                            >
+                              <Icon source="map-marker" size={16} />
+                              <Text
+                                variant="bodyMedium"
+                                style={{ marginLeft: 4 }}
+                              >
+                                {viewingProfile.city}
+                              </Text>
+                            </View>
+                          )}
+
+                          {viewingProfile.gender && (
+                            <View style={{ marginTop: 12 }}>
+                              <Text
+                                variant="titleSmall"
+                                style={{ marginBottom: 4 }}
+                              >
+                                Gender
+                              </Text>
+                              <View>
+                                <Chip
+                                  style={{
+                                    alignSelf: "flex-start",
+                                    backgroundColor:
+                                      viewingProfile.gender === "male"
+                                        ? "#4A90E2"
+                                        : viewingProfile.gender === "female"
+                                        ? "#FF69B4"
+                                        : "#9B59B6",
+                                  }}
+                                  textStyle={{ color: "#FFFFFF" }}
+                                >
+                                  {viewingProfile.gender === "male"
+                                    ? "Male"
+                                    : viewingProfile.gender === "female"
+                                    ? "Female"
+                                    : "Non-Binary"}
+                                </Chip>
+                              </View>
+                            </View>
+                          )}
+
+                          {viewingProfile.description && (
+                            <View style={{ marginTop: 16 }}>
+                              <Text
+                                variant="titleSmall"
+                                style={{ marginBottom: 4 }}
+                              >
+                                About
+                              </Text>
+                              <Text
+                                variant="bodyMedium"
+                                style={{ lineHeight: 22 }}
+                              >
+                                {viewingProfile.description}
+                              </Text>
+                            </View>
+                          )}
+
+                          {viewingProfile.tags &&
+                            viewingProfile.tags.length > 0 && (
+                              <View style={{ marginTop: 16 }}>
+                                <Text
+                                  variant="titleSmall"
+                                  style={{ marginBottom: 8 }}
+                                >
+                                  Interests
+                                </Text>
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    flexWrap: "wrap",
+                                    gap: 8,
+                                  }}
+                                >
+                                  {viewingProfile.tags.map((tag, index) => (
+                                    <Chip key={index} compact>
+                                      {tag}
+                                    </Chip>
+                                  ))}
+                                </View>
+                              </View>
+                            )}
+                        </Card.Content>
+                      </Card>
+                    </View>
+                  )}
+                  keyExtractor={(item) => item.key}
+                />
+              </View>
+            </View>
+          )}
+        </Modal>
+      </Portal>
     </KeyboardAvoidingView>
   );
 }
@@ -641,8 +951,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     padding: 8,
     gap: 8,
+    minHeight: 56, // Minimum height for single line
   },
   textInput: {
     flex: 1,
+    maxHeight: 120, // ✅ FIX BUG #3: Limit height to prevent avatar cutoff
   },
 });
