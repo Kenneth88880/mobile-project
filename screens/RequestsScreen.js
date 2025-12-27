@@ -20,7 +20,7 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-// ✅ FIXED: Using React Native Firebase instead of web SDK
+// FIXED: Using React Native Firebase instead of web SDK
 import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
@@ -29,6 +29,7 @@ import {
   getUserProfile,
   saveDuoSwipe,
   saveRating,
+  hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
@@ -46,6 +47,10 @@ export default function RequestsScreen({ isActive = true }) {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingProfile, setRatingProfile] = useState(null);
+  const [hasRatedUser, setHasRatedUser] = useState(false);
+  const [existingRating, setExistingRating] = useState(null);
+  const [hoveredStar, setHoveredStar] = useState(0);
 
   const currentUserId = CURRENT_USER_ID;
 
@@ -80,7 +85,6 @@ export default function RequestsScreen({ isActive = true }) {
 
     console.log("Setting up duo likes listener for duoId:", currentDuo.duoId);
 
-    // ✅ FIXED: Using React Native Firebase syntax
     const unsubscribe = firestore()
       .collection("duoLikes")
       .where("toDuoId", "==", currentDuo.duoId)
@@ -94,7 +98,7 @@ export default function RequestsScreen({ isActive = true }) {
             const likeData = doc.data();
             console.log("Processing like:", doc.id, likeData);
 
-            // ✅ Better logging for debugging
+            // Better logging for debugging
             console.log("Fetching profiles for:", {
               fromUser1: likeData.fromUser1,
               fromUser2: likeData.fromUser2,
@@ -119,7 +123,7 @@ export default function RequestsScreen({ isActive = true }) {
                 toDuoId: likeData.toDuoId,
                 user1: user1Profile,
                 user2: user2Profile,
-                // ✅ FIX: Store original user IDs for acceptance checking
+                // Store original user IDs for acceptance checking
                 fromUser1Id: likeData.fromUser1,
                 fromUser2Id: likeData.fromUser2,
                 acceptedBy: likeData.acceptedBy || [],
@@ -151,6 +155,36 @@ export default function RequestsScreen({ isActive = true }) {
       unsubscribe();
     };
   }, [currentDuo]);
+
+  // Check rating status when viewing a profile OR when component becomes active
+  useEffect(() => {
+    const checkRatingStatus = async () => {
+      if (selectedProfile) {
+        try {
+          const profileId = selectedProfile.userId || selectedProfile.id;
+          const ratingCheck = await hasUserRatedProfile(
+            currentUserId,
+            profileId
+          );
+          setHasRatedUser(ratingCheck.exists);
+          if (ratingCheck.exists) {
+            setExistingRating(ratingCheck.rating);
+          } else {
+            setExistingRating(null);
+          }
+        } catch (error) {
+          console.error("Error checking rating status:", error);
+          setHasRatedUser(false);
+          setExistingRating(null);
+        }
+      } else {
+        setHasRatedUser(false);
+        setExistingRating(null);
+      }
+    };
+
+    checkRatingStatus();
+  }, [selectedProfile, currentUserId, isActive]);
 
   const loadData = async () => {
     await loadDuoPartner();
@@ -206,8 +240,77 @@ export default function RequestsScreen({ isActive = true }) {
     );
   };
 
-  const handleProfileClick = (profile) => {
-    setSelectedProfile(profile);
+  const handleProfileClick = async (profile) => {
+    if (!profile) {
+      console.log("No profile provided to handleProfileClick");
+      return;
+    }
+
+    try {
+      // Get user ID from various possible fields
+      const userId =
+        profile.userId ||
+        profile.id ||
+        profile.fromUser1Id ||
+        profile.fromUser2Id;
+
+      if (!userId) {
+        console.error("Profile has no userId:", profile);
+        Alert.alert(
+          "Error",
+          "Could not identify user. Profile data may be incomplete."
+        );
+        return;
+      }
+
+      console.log("Fetching full profile for:", userId);
+      console.log("Profile object:", {
+        name: profile.name,
+        hasUserId: !!profile.userId,
+        hasId: !!profile.id,
+        hasPhotos: !!profile.photos,
+        photoCount: profile.photos?.length || 0,
+      });
+
+      // Fetch the full profile to ensure we have all data including photos
+      const fullProfile = await getUserProfile(userId);
+
+      if (fullProfile) {
+        console.log("Full profile loaded:", {
+          name: fullProfile.name,
+          userId: fullProfile.userId,
+          photoCount: fullProfile.photos?.length || 0,
+          photos: fullProfile.photos,
+        });
+
+        setSelectedProfile({
+          ...profile,
+          ...fullProfile,
+          // Ensure userId is set
+          userId: fullProfile.userId || userId,
+          id: fullProfile.userId || userId,
+          // Ensure photos are included
+          photos: fullProfile.photos || profile.photos || [],
+        });
+      } else {
+        console.log("Could not load full profile, using existing profile data");
+        // Fallback to existing profile data
+        setSelectedProfile({
+          ...profile,
+          userId: userId,
+          id: userId,
+          photos: profile.photos || [],
+        });
+      }
+    } catch (error) {
+      console.error("Error loading full profile:", error);
+      // Fallback to existing profile data
+      setSelectedProfile({
+        ...profile,
+        photos: profile.photos || [],
+      });
+    }
+
     setCurrentImageIndex(0);
   };
 
@@ -230,51 +333,129 @@ export default function RequestsScreen({ isActive = true }) {
     }
   };
 
-  const handleRateProfile = () => {
-    setShowRatingModal(true);
+  const handleRateProfile = async (profile) => {
+    if (!profile) return;
+
+    try {
+      const profileId = profile.userId || profile.id;
+
+      // Check if user has already rated this profile
+      const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
+
+      if (ratingCheck.exists) {
+        // User has already rated - allow them to edit
+        setExistingRating(ratingCheck.rating);
+      } else {
+        setExistingRating(null);
+      }
+
+      setRatingProfile(profile);
+      setShowRatingModal(true);
+    } catch (error) {
+      console.error("Error checking rating status:", error);
+      Alert.alert("Error", "Failed to check rating status. Please try again.");
+    }
   };
 
   const submitRating = async (rating) => {
-    if (selectedProfile) {
-      await saveRating(currentUserId, selectedProfile.userId, rating);
-      Alert.alert(
-        "Success",
-        `You rated ${selectedProfile.name} ${rating} stars!`
-      );
-      setShowRatingModal(false);
+    if (!ratingProfile) return;
+
+    const ratedUserId = ratingProfile.userId || ratingProfile.id;
+
+    try {
+      // Submit the rating (will create or update)
+      const success = await saveRating(currentUserId, ratedUserId, rating);
+
+      if (success) {
+        Alert.alert(
+          "Success",
+          existingRating
+            ? `You updated your rating to ${rating} stars!`
+            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
+        );
+
+        setShowRatingModal(false);
+        setRatingProfile(null);
+        setExistingRating(null);
+
+        // Update the hasRatedUser state so UI reflects the change
+        setHasRatedUser(true);
+      } else {
+        Alert.alert("Error", "Failed to save rating. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      Alert.alert("Error", "Failed to submit rating. Please try again.");
     }
   };
 
   // Rating Modal
-  if (showRatingModal && selectedProfile) {
+  if (showRatingModal && ratingProfile) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Surface style={styles.modalSurface} elevation={4}>
-          <Card style={styles.ratingCard}>
-            <Card.Title
-              title={`Rate ${selectedProfile.name}`}
-              subtitle="How would you rate this profile?"
-            />
-            <Card.Content>
-              <View style={styles.ratingStars}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <IconButton
+      <View style={styles.modalOverlay}>
+        <Card style={styles.ratingCard}>
+          <Card.Title
+            title={
+              existingRating
+                ? `Edit Your Rating`
+                : `Rate ${ratingProfile.name || "User"}`
+            }
+            subtitle={
+              existingRating
+                ? `Current rating: ${existingRating} stars. Tap to change.`
+                : "How would you rate this profile?"
+            }
+          />
+          <Card.Content>
+            <View style={styles.ratingStarsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => {
+                const isHighlighted =
+                  star <= (hoveredStar || existingRating || 0);
+                return (
+                  <TouchableOpacity
                     key={star}
-                    icon="star"
-                    size={48}
-                    iconColor="#FFD700"
                     onPress={() => submitRating(star)}
-                  />
-                ))}
-              </View>
-            </Card.Content>
-            <Card.Actions>
-              <Button onPress={() => setShowRatingModal(false)}>Cancel</Button>
-            </Card.Actions>
-          </Card>
-        </Surface>
+                    onPressIn={() => setHoveredStar(star)}
+                    onPressOut={() => setHoveredStar(0)}
+                    style={styles.starButton}
+                  >
+                    <Text
+                      style={[
+                        styles.starIcon,
+                        { color: isHighlighted ? "#FFD700" : "#E0E0E0" },
+                      ]}
+                    >
+                      ★
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {hoveredStar > 0 && (
+              <Text
+                style={{
+                  textAlign: "center",
+                  marginTop: 8,
+                  color: theme.colors.primary,
+                }}
+              >
+                {hoveredStar} star{hoveredStar !== 1 ? "s" : ""}
+              </Text>
+            )}
+          </Card.Content>
+          <Card.Actions>
+            <Button
+              onPress={() => {
+                setShowRatingModal(false);
+                setRatingProfile(null);
+                setExistingRating(null);
+                setHoveredStar(0);
+              }}
+            >
+              Cancel
+            </Button>
+          </Card.Actions>
+        </Card>
       </View>
     );
   }
@@ -287,6 +468,15 @@ export default function RequestsScreen({ isActive = true }) {
       ? selectedProfile.photos[currentImageIndex]
       : null;
 
+    console.log("Rendering profile view:", {
+      name: selectedProfile.name,
+      hasPhotos,
+      photoCount: selectedProfile.photos?.length || 0,
+      currentPhoto: currentPhoto ? "URL present" : "NO URL",
+      currentImageIndex,
+      actualPhotoURL: currentPhoto ? currentPhoto.substring(0, 100) : "NONE",
+    });
+
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -297,16 +487,33 @@ export default function RequestsScreen({ isActive = true }) {
             onPress={() => setSelectedProfile(null)}
           />
           <Text variant="titleLarge">Profile</Text>
-          <IconButton icon="star" onPress={handleRateProfile} />
+          <View style={{ width: 48 }} />
         </Surface>
 
         <ScrollView showsVerticalScrollIndicator={false}>
-          <Card style={styles.profileCard}>
+          <Card style={styles.profileImageCard}>
             {currentPhoto ? (
-              <Card.Cover
-                source={{ uri: currentPhoto }}
-                style={styles.profileCover}
-              />
+              <View style={styles.profileCover}>
+                <Image
+                  key={currentPhoto}
+                  source={{ uri: currentPhoto }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="cover"
+                  onLoad={() => {
+                    console.log(
+                      "✅ Image loaded successfully:",
+                      currentPhoto.substring(0, 50) + "..."
+                    );
+                  }}
+                  onError={(error) => {
+                    console.error(
+                      "❌ Image load error:",
+                      error.nativeEvent?.error
+                    );
+                    console.log("Failed to load image URL:", currentPhoto);
+                  }}
+                />
+              </View>
             ) : (
               <View style={styles.noPhotoContainer}>
                 <ProfilePhoto size={120} />
@@ -350,7 +557,7 @@ export default function RequestsScreen({ isActive = true }) {
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
                     {(() => {
-                      // ✅ FIX: Handle tags being string, array, or undefined
+                      // FIX: Handle tags being string, array, or undefined
                       let tagsArray = [];
                       if (typeof selectedProfile.tags === "string") {
                         tagsArray = selectedProfile.tags
@@ -371,6 +578,48 @@ export default function RequestsScreen({ isActive = true }) {
               )}
             </Card.Content>
           </Card>
+
+          {hasRatedUser ? (
+            <Card
+              style={{
+                margin: 16,
+                backgroundColor: theme.colors.surfaceVariant,
+              }}
+            >
+              <Card.Content>
+                <View style={{ alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <IconButton icon="star" size={24} iconColor="#FFD700" />
+                    <Text variant="bodyLarge">
+                      You rated this user {existingRating} stars
+                    </Text>
+                  </View>
+                  <Button
+                    mode="outlined"
+                    onPress={() => handleRateProfile(selectedProfile)}
+                    style={{ marginTop: 8 }}
+                  >
+                    Edit Rating
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          ) : (
+            <Button
+              mode="contained"
+              icon="star"
+              onPress={() => handleRateProfile(selectedProfile)}
+              style={styles.rateButton}
+            >
+              Rate Profile
+            </Button>
+          )}
         </ScrollView>
       </View>
     );
@@ -439,7 +688,7 @@ export default function RequestsScreen({ isActive = true }) {
           />
         ) : (
           duoLikes.map((like) => {
-            // ✅ FIX: Use the stored original user IDs from duoLikes document
+            // FIX: Use the stored original user IDs from duoLikes document
             const fromUser1Accepted =
               like.acceptedBy?.includes(like.fromUser1Id) || false;
             const fromUser2Accepted =
@@ -456,7 +705,7 @@ export default function RequestsScreen({ isActive = true }) {
             const allAccepted =
               sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
 
-            // ✅ Debug logging for acceptance tracking
+            // Debug logging for acceptance tracking
             console.log("Rendering like card:", {
               likeId: like.id,
               user1: like.user1?.name,
@@ -473,7 +722,7 @@ export default function RequestsScreen({ isActive = true }) {
               acceptedBy: like.acceptedBy,
             });
 
-            // ✅ Debug: Check if profiles exist
+            // Debug: Check if profiles exist
             console.log("Profile check:", {
               hasUser1: !!like.user1,
               hasUser2: !!like.user2,
@@ -701,27 +950,38 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.7,
   },
-  modalSurface: {
+  modalOverlay: {
     flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
     padding: 20,
   },
   ratingCard: {
-    width: "100%",
     maxWidth: 400,
+    alignSelf: "center",
+    width: "100%",
   },
-  ratingStars: {
+  ratingStarsContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 20,
+    gap: 8,
   },
-  profileCard: {
-    marginBottom: 16,
+  starButton: {
+    padding: 4,
+  },
+  starIcon: {
+    fontSize: 48,
+    fontWeight: "bold",
   },
   profileCover: {
     height: 400,
+    backgroundColor: "#f0f0f0", // Light gray background to see if container renders
+  },
+  profileImageCard: {
+    marginBottom: 0,
+    overflow: "hidden",
   },
   noPhotoContainer: {
     height: 400,
@@ -773,5 +1033,8 @@ const styles = StyleSheet.create({
   tag: {
     marginRight: 4,
     marginBottom: 4,
+  },
+  rateButton: {
+    margin: 16,
   },
 });
