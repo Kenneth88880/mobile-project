@@ -5,13 +5,13 @@
 - Report bug system
 - Explore system, calander, maps, planning
 - Add report system
-- Create a welcome experience for users to add their info
 - add way to change group chat name
 - add way to see group chat members
 - connect chat with explore screen to send and plan
 
 ## Things in progress
 
+- Create a welcome experience for users to add their info
 - bug fixes in chat appearance
 - bug fixes in star system (in home screen and appearance)
 
