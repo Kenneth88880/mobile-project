@@ -1,231 +1,357 @@
+// components/PhotoPicker.js
 import React, { useState } from "react";
 import {
   View,
-  Image,
   ScrollView,
-  StyleSheet,
+  Image,
+  TouchableOpacity,
   Alert,
-  StatusBar,
   ActivityIndicator,
+  StyleSheet,
+  Dimensions,
 } from "react-native";
-import { Text, IconButton, Surface, useTheme } from "react-native-paper";
+import { IconButton, Text, useTheme } from "react-native-paper";
 import * as ImagePicker from "expo-image-picker";
-// ✅ FIXED: Using React Native Firebase Storage
-import storage from "@react-native-firebase/storage";
-import { CURRENT_USER_ID } from "../services/UserConfig";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import {
+  uploadProfilePhoto,
+  deleteProfilePhoto,
+} from "../services/photoService";
 
-export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
+const SCREEN_WIDTH = Dimensions.get("window").width;
+// 3 columns × 2 rows layout (like Instagram)
+const PHOTO_MARGIN = 4; // Smaller margin for 3-column layout
+const PHOTO_WIDTH = (SCREEN_WIDTH - 48) / 3 - PHOTO_MARGIN * 4; // 3 photos per row
+const PHOTO_HEIGHT = PHOTO_WIDTH * 1.33; // 4:3 aspect ratio
+
+// Maximum dimensions for uploaded images
+const MAX_WIDTH = 1920;
+const MAX_HEIGHT = 1080;
+
+// Allowed image formats
+const ALLOWED_FORMATS = ["jpeg", "jpg", "png", "webp"];
+
+export default function PhotoPicker({
+  photos = [],
+  onPhotosChange,
+  maxPhotos = 6,
+}) {
   const theme = useTheme();
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingIndex, setUploadingIndex] = useState(null);
 
-  const uploadImageToStorage = async (uri) => {
+  /**
+   * Validate image format
+   */
+  const validateImageFormat = (uri) => {
+    const extension = uri.split(".").pop().toLowerCase();
+    return ALLOWED_FORMATS.includes(extension);
+  };
+
+  /**
+   * Compress and resize image to max 1080p
+   * Also ensures proper aspect ratio (minimum 3:4, maximum 4:3)
+   */
+  const processImage = async (imageUri) => {
     try {
-      // Validate URI
-      if (!uri || uri.trim() === "") {
-        throw new Error("Invalid image URI");
-      }
-
-      // ✅ NEW FOLDER STRUCTURE: profile_photos/{userId}/{filename}
-      const filename = `${Date.now()}.jpg`;
-      const storagePath = `profile_photos/${CURRENT_USER_ID}/${filename}`;
-
-      console.log("Uploading from:", uri);
-      console.log("Uploading to:", storagePath);
-
-      // Upload to Firebase Storage using React Native Firebase
-      const reference = storage().ref(storagePath);
-      await reference.putFile(uri);
-
-      // Get download URL
-      const downloadURL = await reference.getDownloadURL();
-      console.log("Upload complete! URL:", downloadURL);
-
-      return downloadURL;
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      throw new Error(error.message || "Upload failed. Please try again.");
-    }
-  };
-
-  const pickImage = async () => {
-    // Hide status bar before opening picker
-    StatusBar.setHidden(true);
-
-    // Request permission
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== "granted") {
-      StatusBar.setHidden(false);
-      Alert.alert(
-        "Permission Required",
-        "Sorry, we need camera roll permissions to upload photos!"
-      );
-      return;
-    }
-
-    // Check if already at max photos
-    if (photos.length >= maxPhotos) {
-      StatusBar.setHidden(false);
-      Alert.alert(
-        "Max Photos Reached",
-        `You can only upload up to ${maxPhotos} photos.`
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [9, 16], // Much taller - full phone screen ratio
-      quality: 0.8,
-    });
-
-    // Show status bar again
-    StatusBar.setHidden(false);
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const localUri = result.assets[0].uri;
-
-      // Show uploading state
-      setUploading(true);
-      setUploadProgress(0);
-
-      try {
-        // Upload to Firebase Storage
-        const downloadURL = await uploadImageToStorage(localUri);
-
-        // Add the Firebase Storage URL to photos
-        const updatedPhotos = [...photos, downloadURL];
-        onPhotosChange(updatedPhotos);
-
-        Alert.alert("Success", "Photo uploaded successfully!");
-      } catch (error) {
-        console.error("Upload error:", error);
-        Alert.alert(
-          "Upload Failed",
-          error.message || "Failed to upload photo. Please try again."
+      // Get image dimensions using React Native Image API
+      const { width, height } = await new Promise((resolve, reject) => {
+        Image.getSize(
+          imageUri,
+          (width, height) => resolve({ width, height }),
+          (error) => reject(error)
         );
-      } finally {
-        setUploading(false);
-        setUploadProgress(0);
+      });
+
+      console.log(`Original dimensions: ${width}x${height}`);
+
+      // Calculate aspect ratio
+      const aspectRatio = width / height;
+
+      // Enforce aspect ratio limits (3:4 to 4:3)
+      // This prevents extremely wide or tall images
+      const MIN_ASPECT = 0.75; // 3:4 portrait
+      const MAX_ASPECT = 1.33; // 4:3 landscape
+
+      let cropActions = [];
+
+      if (aspectRatio < MIN_ASPECT) {
+        // Too tall - crop height
+        const newHeight = width / MIN_ASPECT;
+        const cropY = (height - newHeight) / 2;
+        cropActions.push({
+          crop: {
+            originX: 0,
+            originY: cropY,
+            width: width,
+            height: newHeight,
+          },
+        });
+        height = newHeight;
+        console.log(`Image too tall, cropping to ${width}x${newHeight}`);
+      } else if (aspectRatio > MAX_ASPECT) {
+        // Too wide - crop width
+        const newWidth = height * MAX_ASPECT;
+        const cropX = (width - newWidth) / 2;
+        cropActions.push({
+          crop: {
+            originX: cropX,
+            originY: 0,
+            width: newWidth,
+            height: height,
+          },
+        });
+        width = newWidth;
+        console.log(`Image too wide, cropping to ${newWidth}x${height}`);
       }
+
+      // Calculate resize dimensions to max 1080p
+      let resizeWidth = width;
+      let resizeHeight = height;
+
+      if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+        const widthRatio = MAX_WIDTH / width;
+        const heightRatio = MAX_HEIGHT / height;
+        const ratio = Math.min(widthRatio, heightRatio);
+
+        resizeWidth = Math.round(width * ratio);
+        resizeHeight = Math.round(height * ratio);
+
+        console.log(`Resizing to ${resizeWidth}x${resizeHeight}`);
+      }
+
+      // Apply manipulations
+      const actions = [
+        ...cropActions,
+        {
+          resize: {
+            width: resizeWidth,
+            height: resizeHeight,
+          },
+        },
+      ];
+
+      const manipulatedImage = await manipulateAsync(imageUri, actions, {
+        compress: 0.8, // High quality but compressed
+        format: SaveFormat.JPEG, // Always convert to JPEG for consistency
+      });
+
+      // Check final size
+      console.log(`Processed dimensions: ${resizeWidth}x${resizeHeight}`);
+
+      return manipulatedImage.uri;
+    } catch (error) {
+      console.error("Error processing image:", error);
+      throw error;
     }
   };
 
-  const removePhoto = (indexToRemove) => {
+  /**
+   * Handle picking an image from gallery
+   */
+  const pickImage = async () => {
+    try {
+      // Check if we've reached max photos
+      if (photos.length >= maxPhotos) {
+        Alert.alert(
+          "Maximum Photos Reached",
+          `You can only upload up to ${maxPhotos} photos.`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Request permission
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library to upload photos.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4], // Suggest 3:4 aspect ratio
+        quality: 1,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const imageUri = result.assets[0].uri;
+
+      // Validate format
+      if (!validateImageFormat(imageUri)) {
+        Alert.alert(
+          "Invalid Format",
+          `Please select a valid image format (${ALLOWED_FORMATS.join(
+            ", "
+          ).toUpperCase()}).`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      setUploading(true);
+      setUploadingIndex(photos.length);
+
+      // Process image (resize, compress, enforce aspect ratio)
+      const processedUri = await processImage(imageUri);
+
+      // Upload to Firebase Storage
+      const downloadUrl = await uploadProfilePhoto(processedUri);
+
+      // Add to photos array
+      const updatedPhotos = [...photos, downloadUrl];
+      onPhotosChange(updatedPhotos);
+
+      Alert.alert("Success", "Photo uploaded successfully!", [{ text: "OK" }]);
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert(
+        "Upload Failed",
+        "There was an error uploading your photo. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setUploading(false);
+      setUploadingIndex(null);
+    }
+  };
+
+  /**
+   * Handle removing a photo
+   */
+  const removePhoto = async (index) => {
     Alert.alert("Remove Photo", "Are you sure you want to remove this photo?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Remove",
         style: "destructive",
         onPress: async () => {
-          const photoToRemove = photos[indexToRemove];
-
-          // Try to delete from Firebase Storage (only if it's a Firebase URL)
           try {
-            // Check if it's a Firebase Storage URL
-            if (
-              photoToRemove &&
-              photoToRemove.includes("firebasestorage.googleapis.com")
-            ) {
-              // Extract the path from the URL
-              // Example URL: https://firebasestorage.googleapis.com/v0/b/PROJECT/o/profile_photos%2FUSER_ID%2F123.jpg?token=...
-              const urlParts = photoToRemove.split("/o/")[1];
-              if (urlParts) {
-                const pathPart = urlParts.split("?")[0];
-                const filePath = decodeURIComponent(pathPart);
+            const photoUrl = photos[index];
 
-                // Delete using React Native Firebase
-                const reference = storage().ref(filePath);
-                await reference.delete();
-                console.log("Deleted from Firebase Storage:", photoToRemove);
-              }
-            } else {
-              console.log(
-                "Skipping Firebase delete - not a Firebase URL:",
-                photoToRemove
-              );
-            }
+            // Delete from Firebase Storage
+            await deleteProfilePhoto(photoUrl);
+
+            // Remove from array
+            const updatedPhotos = photos.filter((_, i) => i !== index);
+            onPhotosChange(updatedPhotos);
           } catch (error) {
-            console.log(
-              "Could not delete from storage (this is OK for local files):",
-              error.message
-            );
-            // Continue anyway - remove from array even if Firebase delete fails
+            console.error("Error removing photo:", error);
+            Alert.alert("Error", "Failed to remove photo. Please try again.");
           }
-
-          // Remove from photos array
-          const updatedPhotos = photos.filter(
-            (_, index) => index !== indexToRemove
-          );
-          onPhotosChange(updatedPhotos);
         },
       },
     ]);
   };
 
+  /**
+   * Render photo grid
+   */
+  const renderPhotoGrid = () => {
+    const photoSlots = Array(maxPhotos).fill(null);
+
+    return (
+      <View style={styles.photoGrid}>
+        {photoSlots.map((_, index) => {
+          const hasPhoto = index < photos.length;
+          const isUploading = uploading && uploadingIndex === index;
+          const isNextSlot = index === photos.length;
+
+          return (
+            <View key={index} style={styles.photoSlot}>
+              {hasPhoto ? (
+                // Show uploaded photo with remove button
+                <View style={styles.photoContainer}>
+                  <Image
+                    source={{ uri: photos[index] }}
+                    style={styles.photo}
+                    resizeMode="cover"
+                  />
+                  <IconButton
+                    icon="close-circle"
+                    size={24}
+                    iconColor="#fff"
+                    style={styles.removeButton}
+                    onPress={() => removePhoto(index)}
+                  />
+                </View>
+              ) : isUploading ? (
+                // Show uploading indicator
+                <View
+                  style={[
+                    styles.emptySlot,
+                    { backgroundColor: theme.colors.surfaceVariant },
+                  ]}
+                >
+                  <ActivityIndicator
+                    size="large"
+                    color={theme.colors.primary}
+                  />
+                  <Text variant="bodySmall" style={{ marginTop: 8 }}>
+                    Uploading...
+                  </Text>
+                </View>
+              ) : isNextSlot ? (
+                // Show "Add Photo" button for next available slot
+                <TouchableOpacity
+                  style={[
+                    styles.emptySlot,
+                    { borderColor: theme.colors.outline },
+                  ]}
+                  onPress={pickImage}
+                  disabled={uploading}
+                >
+                  <IconButton
+                    icon="camera-plus"
+                    size={32}
+                    iconColor={theme.colors.primary}
+                  />
+                  <Text
+                    variant="bodySmall"
+                    style={{ color: theme.colors.onSurfaceVariant }}
+                  >
+                    Add Photo
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                // Show empty slot (no icon, just border)
+                <View
+                  style={[
+                    styles.emptySlot,
+                    {
+                      borderColor: theme.colors.surfaceVariant,
+                      backgroundColor: theme.colors.surface,
+                    },
+                  ]}
+                />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.scroll}
+      {renderPhotoGrid()}
+      <Text
+        variant="bodySmall"
+        style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}
       >
-        {photos.map((uri, index) => (
-          <Surface key={index} style={styles.photoContainer} elevation={2}>
-            <Image source={{ uri }} style={styles.image} />
-            <IconButton
-              icon="close-circle"
-              size={24}
-              iconColor="white"
-              style={styles.removeButton}
-              onPress={() => removePhoto(index)}
-            />
-          </Surface>
-        ))}
-
-        {photos.length < maxPhotos && (
-          <Surface
-            style={[
-              styles.addPhotoButton,
-              { borderColor: theme.colors.primary },
-            ]}
-            elevation={1}
-          >
-            {uploading ? (
-              <View style={styles.uploadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text
-                  variant="bodySmall"
-                  style={{ marginTop: 8, color: theme.colors.primary }}
-                >
-                  Uploading...
-                </Text>
-              </View>
-            ) : (
-              <>
-                <IconButton
-                  icon="plus"
-                  size={40}
-                  iconColor={theme.colors.primary}
-                  onPress={pickImage}
-                />
-                <Text
-                  variant="bodySmall"
-                  style={{ color: theme.colors.primary }}
-                >
-                  Add Photo
-                </Text>
-              </>
-            )}
-          </Surface>
-        )}
-      </ScrollView>
-
-      <Text variant="bodySmall" style={styles.photoCount}>
-        {photos.length} / {maxPhotos} photos
-        {uploading && " (Uploading...)"}
+        • Upload up to {maxPhotos} photos{"\n"}• Supported formats: JPG, PNG,
+        WebP{"\n"}• Images will be resized to max 1080p{"\n"}• Extreme aspect
+        ratios will be cropped
       </Text>
     </View>
   );
@@ -233,48 +359,48 @@ export default function PhotoPicker({ photos, onPhotosChange, maxPhotos = 6 }) {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 10,
+    width: "100%",
   },
-  scroll: {
-    marginBottom: 10,
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -PHOTO_MARGIN, // Negative margin to offset photoSlot margins
   },
-  scrollContent: {
-    paddingRight: 10,
+  photoSlot: {
+    width: PHOTO_WIDTH,
+    height: PHOTO_HEIGHT,
+    margin: PHOTO_MARGIN, // Margin around each photo slot
   },
   photoContainer: {
+    width: "100%",
+    height: "100%",
     position: "relative",
-    marginRight: 10,
-    borderRadius: 10,
-    overflow: "hidden",
   },
-  image: {
-    width: 120,
-    height: 160,
-    borderRadius: 10,
+  photo: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
   },
   removeButton: {
     position: "absolute",
-    top: 0,
-    right: 0,
-    margin: 0,
+    top: -8,
+    right: -8,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
+    margin: 0,
   },
-  addPhotoButton: {
-    width: 120,
-    height: 160,
-    borderRadius: 10,
+  emptySlot: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
     borderWidth: 2,
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "transparent",
   },
-  uploadingContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  photoCount: {
-    textAlign: "center",
-    opacity: 0.7,
+  infoText: {
+    marginTop: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: "italic",
   },
 });
