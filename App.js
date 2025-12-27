@@ -24,13 +24,15 @@ import CheckoutScreen from "./screens/PaymentScreen";
 import Constants from "expo-constants";
 const STRIPE_PUBLISHABLE_KEY =
   Constants.expoConfig?.extra?.stripePublishableKey;
-import SigninScreen from "./screens/SigninScreen";
+import SignInScreen from "./screens/SigninScreen";
+import SignUpScreen from "./screens/SignUpScreen";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [user, setUser] = useState(null);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
 
   useEffect(() => {
     // ✅ FIXED: React Native Firebase auth listener
@@ -153,7 +155,11 @@ export default function App() {
   } else {
     return (
       <PaperProvider theme={theme}>
-        <SigninScreen />
+        {showRegister ? (
+          <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+        ) : (
+          <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+        )}
       </PaperProvider>
     );
   }

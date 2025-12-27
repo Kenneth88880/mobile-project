@@ -1,32 +1,43 @@
-import {
-  StyleSheet,
-  View,
-  KeyboardAvoidingView,
-  Text,
-  TouchableOpacity,
-} from "react-native";
+import { StyleSheet, View, KeyboardAvoidingView, Text, TouchableOpacity } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
+import TOSPopup from "../components/TOSPopup";
 // ✅ FIXED: Use React Native Firebase
 import auth from "@react-native-firebase/auth";
 
-const SignInScreen = ({ onNavigateToRegister }) => {
+const SignUpScreen = ({ onNavigateToSignIn }) => {
   const theme = useTheme();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [isTOSVisible, setTOSVisible] = React.useState(false);
 
-  // handles sign in
-  const handleSignIn = () => {
+  const handleRegisterPress = () => {
+    setTOSVisible(true);
+  };
+
+  const handleAcceptTOS = () => {
+    handleRegister();
+    setTOSVisible(false);
+  };
+
+  const handleDeclineTOS = () => {
+    setTOSVisible(false);
+  };
+
+  // handles sign up
+  const handleRegister = () => {
     auth()
-      .signInWithEmailAndPassword(email, password)
+      .createUserWithEmailAndPassword(email, password)
       .then((userCredential) => {
-        console.log("Logged in with:", userCredential.user.email);
+        const user = userCredential.user;
+        console.log("Registered with:", user.email);
+        alert("Please Click the Edit Button to set up your profile!");
       })
       .catch((error) => {
         const errorCode = error.code;
         const errorMessage = error.message;
-        alert("Login failed: " + errorMessage);
         console.log(errorCode + errorMessage);
+        alert("Sign up failed: " + errorMessage);
       });
   };
 
@@ -35,8 +46,14 @@ const SignInScreen = ({ onNavigateToRegister }) => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior="padding"
     >
+      <TOSPopup
+        visible={isTOSVisible}
+        onAccept={handleAcceptTOS}
+        onDecline={handleDeclineTOS}
+      />
+
       <Text style={[styles.title, { color: theme.colors.primary }]}>
-        Sign In
+        Sign Up
       </Text>
 
       <View style={styles.inputContainer}>
@@ -60,24 +77,21 @@ const SignInScreen = ({ onNavigateToRegister }) => {
       </View>
 
       <View style={styles.buttonContainer}>
-        <Button mode="contained" onPress={handleSignIn} style={styles.button}>
-          Login
+        <Button mode="contained" onPress={handleRegisterPress} style={styles.button}>
+          Register
         </Button>
       </View>
 
-      <TouchableOpacity
-        onPress={onNavigateToRegister}
-        style={styles.linkContainer}
-      >
+      <TouchableOpacity onPress={onNavigateToSignIn} style={styles.linkContainer}>
         <Text style={[styles.linkText, { color: theme.colors.primary }]}>
-          New to Doubly? Create an account
+          Already have an account? Back to login
         </Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
 
-export default SignInScreen;
+export default SignUpScreen;
 
 const styles = StyleSheet.create({
   container: {
