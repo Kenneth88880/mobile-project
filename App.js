@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 // ✅ FIXED: Using React Native Firebase instead of web SDK
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -36,6 +37,22 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
+
+  // Load theme preference on app start
+  useEffect(() => {
+    loadThemePreference();
+  }, []);
+
+  const loadThemePreference = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem("theme");
+      if (savedTheme !== null) {
+        setIsDarkMode(savedTheme === "dark");
+      }
+    } catch (error) {
+      console.error("Error loading theme preference:", error);
+    }
+  };
 
   useEffect(() => {
     let profileUnsubscribe = null;
@@ -143,8 +160,14 @@ export default function App() {
     [isDarkMode]
   );
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
+  const toggleTheme = async () => {
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    try {
+      await AsyncStorage.setItem("theme", newTheme ? "dark" : "light");
+    } catch (error) {
+      console.error("Error saving theme preference:", error);
+    }
   };
 
   const routes = [
