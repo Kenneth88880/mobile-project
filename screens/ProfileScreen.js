@@ -138,6 +138,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     gender: null,
     genderPreference: [],
   });
+  const [originalAge, setOriginalAge] = useState(""); // Store original age to prevent changes
+  const [originalName, setOriginalName] = useState(""); // Store original name to prevent changes
 
   const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
@@ -288,6 +290,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       };
 
       setProfile(cleanedProfile);
+      setOriginalAge(userProfile.age || ""); // Store original age
+      setOriginalName(userProfile.name || ""); // Store original name
       await loadDuo();
       setProfileLoaded(true);
     } catch (error) {
@@ -323,7 +327,14 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         return;
       }
 
-      await saveUserProfile(CURRENT_USER_ID, profile);
+      // Use original age and name if they were previously set to prevent changes
+      const profileToSave = {
+        ...profile,
+        name: originalName || profile.name, // Always use original name if it exists
+        age: originalAge || profile.age, // Always use original age if it exists
+      };
+
+      await saveUserProfile(CURRENT_USER_ID, profileToSave);
       setIsEditing(false);
       Alert.alert("Success", "Profile saved successfully!");
       loadRating();
@@ -1487,7 +1498,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               onChangeText={(text) => setProfile({ ...profile, name: text })}
               mode="outlined"
               style={styles.input}
+              disabled={!!profile.name}
+              right={
+                profile.name ? (
+                  <TextInput.Icon icon="lock" disabled />
+                ) : null
+              }
             />
+            {profile.name && (
+              <Text
+                variant="bodySmall"
+                style={{ marginTop: -8, marginBottom: 8, fontStyle: "italic", opacity: 0.7 }}
+              >
+                Name cannot be changed once set
+              </Text>
+            )}
             <TextInput
               label="Age"
               value={profile.age}
@@ -1495,7 +1520,21 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               keyboardType="numeric"
               mode="outlined"
               style={styles.input}
+              disabled={!!profile.age}
+              right={
+                profile.age ? (
+                  <TextInput.Icon icon="lock" disabled />
+                ) : null
+              }
             />
+            {profile.age && (
+              <Text
+                variant="bodySmall"
+                style={{ marginTop: -8, marginBottom: 8, fontStyle: "italic", opacity: 0.7 }}
+              >
+                Age cannot be changed once set
+              </Text>
+            )}
             <TextInput
               label="About Me"
               value={profile.description}

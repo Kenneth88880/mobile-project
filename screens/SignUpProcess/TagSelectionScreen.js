@@ -1,0 +1,240 @@
+import React, { useState } from "react";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+} from "react-native";
+import { Text, Chip, Button, useTheme, Surface, IconButton } from "react-native-paper";
+
+// Same tags as in ProfileScreen
+const AVAILABLE_TAGS = [
+  "🎨 Art",
+  "🔭 Astronomy",
+  "🏖️ Beach",
+  "🍹 Beach Bars",
+  "🍺 Beer",
+  "🎲 Board Games",
+  "🎳 Bowling",
+  "🍔 Burgers",
+  "🏕️ Camping",
+  "💼 Career Focused",
+  "🎠 Carnivals",
+  "🐱 Cat Lover",
+  "😌 Chill Vibes",
+  "🌆 City Life",
+  "☕ Coffee",
+  "🍹 Cocktails",
+  "🍳 Cooking",
+  "🏞️ Country Life",
+  "🚴 Cycling",
+  "🎯 Darts",
+  "🍰 Desserts",
+  "🐶 Dog Lover",
+  "🌅 Early Bird",
+  "👨‍👩‍👧‍👦 Family Oriented",
+  "🎪 Festivals",
+  "🎣 Fishing",
+  "🏋️ Fitness",
+  "🎮 Gaming",
+  "🏌️ Golf",
+  "🥗 Healthy Eating",
+  "🌋 Hiking",
+  "🏡 Homebody",
+  "🏠 Homeowner",
+  "🎤 Karaoke",
+  "🚣 Kayaking",
+  "🪁 Kite Flying",
+  "🎸 Live Music",
+  "🗻 Mountain Climbing",
+  "🎬 Movies",
+  "🎵 Music",
+  "🌿 Nature",
+  "🌙 Night Owl",
+  "🌃 Nightlife",
+  "🌊 Ocean Views",
+  "🎉 Party",
+  "🐾 Pet Lover",
+  "📸 Photography",
+  "🍕 Pizza",
+  "🎱 Pool/Billiards",
+  "🧩 Puzzles",
+  "📚 Reading",
+  "🚗 Road Trips",
+  "🧗 Rock Climbing",
+  "🏃 Running",
+  "⛵ Sailing",
+  "🤿 Scuba Diving",
+  "⛷️ Skiing",
+  "🛹 Skateboarding",
+  "🏂 Snowboarding",
+  "🎿 Snowshoeing",
+  "⚽ Sports",
+  "🌌 Stargazing",
+  "🎓 Student Life",
+  "🏖️ Sunbathing",
+  "🏄 Surfing",
+  "🍣 Sushi",
+  "🏊 Swimming",
+  "🌮 Tacos",
+  "🎭 Theater",
+  "🎢 Theme Parks",
+  "✈️ Travel",
+  "🥑 Vegan",
+  "🌱 Vegetarian",
+  "🍷 Wine",
+  "🧘 Yoga",
+];
+
+const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
+  const theme = useTheme();
+  const [selectedTags, setSelectedTags] = useState(initialTags);
+
+  const toggleTag = (tag) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter((t) => t !== tag));
+    } else {
+      if (selectedTags.length >= 5) {
+        alert("You can select up to 5 tags maximum");
+        return;
+      }
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
+  const handleNext = () => {
+    if (selectedTags.length < 3) {
+      alert("Please select at least 3 tags");
+      return;
+    }
+    onNext(selectedTags);
+  };
+
+  const canContinue = selectedTags.length >= 3 && selectedTags.length <= 5;
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      {onBack && (
+        <View style={styles.backButton}>
+          <IconButton
+            icon="arrow-left"
+            size={24}
+            onPress={onBack}
+            iconColor={theme.colors.primary}
+          />
+        </View>
+      )}
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: theme.colors.primary }]}>
+          Pick your interests
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+          Select at least 3, up to 5 tags
+        </Text>
+        <Surface style={[styles.counterCard, { backgroundColor: theme.colors.secondaryContainer }]}>
+          <Text style={[styles.counterText, { color: theme.colors.onSecondaryContainer }]}>
+            {selectedTags.length} / 5 selected
+            {selectedTags.length < 3 && (
+              <Text style={{ fontSize: 14 }}> (minimum 3)</Text>
+            )}
+          </Text>
+        </Surface>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.tagsGrid}>
+          {AVAILABLE_TAGS.map((tag, index) => (
+            <Chip
+              key={index}
+              selected={selectedTags.includes(tag)}
+              onPress={() => toggleTag(tag)}
+              style={styles.tagChip}
+              mode={selectedTags.includes(tag) ? "flat" : "outlined"}
+            >
+              {tag}
+            </Chip>
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outline }]}>
+        <Button
+          mode="contained"
+          onPress={handleNext}
+          style={styles.button}
+          disabled={!canContinue}
+        >
+          Continue
+        </Button>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+export default TagSelectionScreen;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  backButton: {
+    position: "absolute",
+    top: 40,
+    left: 10,
+    zIndex: 10,
+  },
+  header: {
+    padding: 20,
+    paddingTop: 10,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  counterCard: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  tagsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+  },
+  tagChip: {
+    marginRight: 4,
+    marginBottom: 4,
+  },
+  footer: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  button: {
+    marginVertical: 5,
+  },
+});
