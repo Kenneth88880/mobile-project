@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
 // ✅ FIXED: Using React Native Firebase instead of web SDK
 import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
@@ -33,31 +34,109 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isNewUser, setIsNewUser] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [profileComplete, setProfileComplete] = useState(false);
+  const [checkingProfile, setCheckingProfile] = useState(true);
 
   useEffect(() => {
+    let profileUnsubscribe = null;
+
     // ✅ FIXED: React Native Firebase auth listener
-    const unsubscribe = auth().onAuthStateChanged((user) => {
+    const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
       console.log("Auth state changed:", user ? user.uid : "null");
       setUser(user);
       if (user) {
         const { creationTime, lastSignInTime } = user.metadata;
         setIsNewUser(creationTime === lastSignInTime);
         setCurrentUserId(user.uid);
+
+        // Check if profile is complete initially
+        await checkProfileComplete(user.uid);
+
+        // Listen for profile changes in real-time
+        profileUnsubscribe = firestore()
+          .collection("profiles")
+          .doc(user.uid)
+          .onSnapshot((doc) => {
+            if (doc.exists) {
+              const profileData = doc.data();
+              // Safely check if profile is complete
+              const isComplete = !!(
+                profileData &&
+                profileData.name &&
+                profileData.age &&
+                profileData.gender &&
+                Array.isArray(profileData.genderPreference) &&
+                profileData.genderPreference.length > 0 &&
+                Array.isArray(profileData.photos) &&
+                profileData.photos.length > 0 &&
+                Array.isArray(profileData.tags) &&
+                profileData.tags.length >= 3
+              );
+              setProfileComplete(isComplete);
+              setCheckingProfile(false);
+            } else {
+              setProfileComplete(false);
+              setCheckingProfile(false);
+            }
+          }, (error) => {
+            console.error("Error listening to profile changes:", error);
+            setProfileComplete(false);
+            setCheckingProfile(false);
+          });
       } else {
         setCurrentUserId(null);
+        setProfileComplete(false);
+        setCheckingProfile(false);
+
+        // Unsubscribe from profile listener if user logs out
+        if (profileUnsubscribe) {
+          profileUnsubscribe();
+          profileUnsubscribe = null;
+        }
       }
     });
 
-    return unsubscribe;
+    return () => {
+      authUnsubscribe();
+      if (profileUnsubscribe) {
+        profileUnsubscribe();
+      }
+    };
   }, []);
 
-  // new users get put into the profile screen first
-  useEffect(() => {
-    if (isNewUser) {
-      console.log("New user detected, redirecting to profile setup.");
-      setActiveTab("profile");
+  const checkProfileComplete = async (userId) => {
+    try {
+      setCheckingProfile(true);
+      const profileDoc = await firestore().collection("profiles").doc(userId).get();
+
+      if (profileDoc.exists) {
+        const profileData = profileDoc.data();
+        // Profile is complete if it has name, age, gender, genderPreference, photos, and tags
+        const isComplete = !!(
+          profileData &&
+          profileData.name &&
+          profileData.age &&
+          profileData.gender &&
+          Array.isArray(profileData.genderPreference) &&
+          profileData.genderPreference.length > 0 &&
+          Array.isArray(profileData.photos) &&
+          profileData.photos.length > 0 &&
+          Array.isArray(profileData.tags) &&
+          profileData.tags.length >= 3
+        );
+        setProfileComplete(isComplete);
+      } else {
+        setProfileComplete(false);
+      }
+    } catch (error) {
+      console.error("Error checking profile:", error);
+      setProfileComplete(false);
+    } finally {
+      setCheckingProfile(false);
     }
-  }, [isNewUser]);
+  };
+
+  // Removed old isNewUser logic - now handled by profile completion check
 
   const theme = useMemo(
     () => (isDarkMode ? darkTheme : lightTheme),
@@ -120,7 +199,34 @@ export default function App() {
     ),
   });
 
-  if (user) {
+  // Show loading while checking profile
+  if (checkingProfile) {
+    return (
+      <PaperProvider theme={theme}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          {/* You can add a loading spinner here if desired */}
+        </View>
+      </PaperProvider>
+    );
+  }
+
+  // If user is authenticated but profile is not complete, show SignUpScreen
+  if (user && !profileComplete) {
+    return (
+      <PaperProvider theme={theme}>
+        <SignUpScreen
+          isInSignupFlow={true}
+          onNavigateToSignIn={() => {
+            // Don't allow navigation to sign in if already signed up
+            // User must complete the signup process
+          }}
+        />
+      </PaperProvider>
+    );
+  }
+
+  // If user is authenticated and profile is complete, show main app
+  if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
@@ -152,17 +258,18 @@ export default function App() {
         </StripeProvider>
       </PaperProvider>
     );
-  } else {
-    return (
-      <PaperProvider theme={theme}>
-        {showRegister ? (
-          <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-        ) : (
-          <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-        )}
-      </PaperProvider>
-    );
   }
+
+  // If no user, show sign in/sign up screens
+  return (
+    <PaperProvider theme={theme}>
+      {showRegister ? (
+        <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+      ) : (
+        <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+      )}
+    </PaperProvider>
+  );
 }
 
 const styles = StyleSheet.create({

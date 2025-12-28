@@ -364,6 +364,7 @@ const styles = StyleSheet.create({
   photoGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "center",
     marginHorizontal: -PHOTO_MARGIN, // Negative margin to offset photoSlot margins
   },
   photoSlot: {
