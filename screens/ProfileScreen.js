@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   StyleSheet,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import {
   Text,
@@ -636,109 +638,116 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       animationType="slide"
       onRequestClose={() => setShowPartnerSearch(false)}
     >
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        {/* Header */}
-        <View style={styles.modalHeader}>
-          <Text variant="headlineMedium">Find a Duo Partner</Text>
-          <IconButton
-            icon="close"
-            onPress={() => {
-              setShowPartnerSearch(false);
-              setSearchQuery("");
-              setSearchResults([]);
-            }}
-          />
-        </View>
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: theme.colors.background }}
+        >
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <Text variant="headlineMedium">Find a Duo Partner</Text>
+            <IconButton
+              icon="close"
+              onPress={() => {
+                setShowPartnerSearch(false);
+                setSearchQuery("");
+                setSearchResults([]);
+              }}
+            />
+          </View>
 
-        <View style={styles.modalContent}>
-          {/* Instructions */}
-          <Card style={{ marginBottom: 16 }}>
-            <Card.Content>
-              <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
-                To add a duo partner:
-              </Text>
-              <Text variant="bodySmall" style={{ lineHeight: 20 }}>
-                1. Ask your friend to share their User ID{"\n"}
-                2. Paste their User ID below{"\n"}
-                3. Send them a partner request
-              </Text>
-            </Card.Content>
-          </Card>
-
-          <Card
-            style={{
-              marginBottom: 16,
-              backgroundColor: theme.colors.primaryContainer,
-            }}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 15, paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
           >
-            <Card.Content>
-              <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                Your User ID:
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 3000);
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: theme.colors.surface,
-                  borderRadius: 8,
-                  padding: 12,
-                }}
-              >
-                <Text
-                  variant="bodyMedium"
-                  style={{
-                    fontFamily: "monospace",
-                    flex: 1,
-                  }}
-                  selectable={true}
-                >
-                  {CURRENT_USER_ID}
+            {/* Instructions */}
+            <Card style={{ marginBottom: 16 }}>
+              <Card.Content>
+                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
+                  To add a duo partner:
                 </Text>
-                <IconButton
-                  icon={copied ? "check" : "content-copy"}
-                  size={20}
-                  iconColor={copied ? "#4CAF50" : theme.colors.primary}
-                />
-              </TouchableOpacity>
-              <Text
-                variant="bodySmall"
-                style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}
-              >
-                Tap to copy
-              </Text>
-            </Card.Content>
-          </Card>
+                <Text variant="bodySmall" style={{ lineHeight: 20 }}>
+                  1. Ask your friend to share their User ID{"\n"}
+                  2. Paste their User ID below{"\n"}
+                  3. Send them a partner request
+                </Text>
+              </Card.Content>
+            </Card>
 
-          {/* Search Input */}
-          <TextInput
-            label="Enter Partner's User ID"
-            value={searchQuery}
-            onChangeText={handleSearchChange}
-            mode="outlined"
-            style={styles.searchInput}
-            left={<TextInput.Icon icon="account-search" />}
-            right={
-              searching ? (
-                <TextInput.Icon icon={() => <ActivityIndicator />} />
-              ) : null
-            }
-            placeholder="Paste your friend's User ID here"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            keyboardType="default"
-            textContentType="none"
-            selectTextOnFocus={true}
-          />
+            <Card
+              style={{
+                marginBottom: 16,
+                backgroundColor: theme.colors.primaryContainer,
+              }}
+            >
+              <Card.Content>
+                <Text variant="titleSmall" style={{ marginBottom: 8 }}>
+                  Your User ID:
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 3000);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: theme.colors.surface,
+                    borderRadius: 8,
+                    padding: 12,
+                  }}
+                >
+                  <Text
+                    variant="bodyMedium"
+                    style={{
+                      fontFamily: "monospace",
+                      flex: 1,
+                    }}
+                    selectable={true}
+                  >
+                    {CURRENT_USER_ID}
+                  </Text>
+                  <IconButton
+                    icon={copied ? "check" : "content-copy"}
+                    size={20}
+                    iconColor={copied ? "#4CAF50" : theme.colors.primary}
+                  />
+                </TouchableOpacity>
+                <Text
+                  variant="bodySmall"
+                  style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}
+                >
+                  Tap to copy
+                </Text>
+              </Card.Content>
+            </Card>
 
-          {/* Search Results */}
-          <ScrollView>
+            {/* Search Input */}
+            <TextInput
+              label="Enter Partner's User ID"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              mode="outlined"
+              style={styles.searchInput}
+              left={<TextInput.Icon icon="account-search" />}
+              right={
+                searching ? (
+                  <TextInput.Icon icon={() => <ActivityIndicator />} />
+                ) : null
+              }
+              placeholder="Paste your friend's User ID here"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              keyboardType="default"
+              textContentType="none"
+              selectTextOnFocus={true}
+            />
+
+            {/* Search Results */}
             {searchResults.length === 0 && searchQuery.length >= 10 ? (
               <View style={styles.emptyState}>
                 <Text>No user found with this ID</Text>
@@ -799,8 +808,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               ))
             )}
           </ScrollView>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
