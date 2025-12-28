@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -29,6 +30,7 @@ import firestore from "@react-native-firebase/firestore";
 import { getUserProfile } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
+import { launchImageLibrary } from "react-native-image-picker";
 
 const getUserID = () => CURRENT_USER_ID;
 
@@ -86,6 +88,36 @@ const reportChat = async (chatId, reportingUserId) => {
     return false;
   } catch (error) {
     console.error("Error reporting chat:", error);
+    return false;
+  }
+};
+
+// Update chat name
+const updateChatName = async (chatId, newName) => {
+  try {
+    await firestore().collection("chats").doc(chatId).update({
+      groupName: newName,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error updating chat name:", error);
+    return false;
+  }
+};
+
+// Update chat picture
+const updateChatPicture = async (chatId, imageUri) => {
+  try {
+    // In a real app, you'd upload to Firebase Storage first
+    // For now, we'll just store the URI
+    await firestore().collection("chats").doc(chatId).update({
+      groupPhoto: imageUri,
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error updating chat picture:", error);
     return false;
   }
 };
@@ -249,7 +281,11 @@ function ChatListScreen({ onChatSelect }) {
         descriptionNumberOfLines={1}
         left={() =>
           isGroup ? (
-            <Avatar.Icon size={48} icon="account-group" />
+            item.groupPhoto ? (
+              <Avatar.Image size={48} source={{ uri: item.groupPhoto }} />
+            ) : (
+              <Avatar.Icon size={48} icon="account-group" />
+            )
           ) : (
             <Avatar.Image
               size={48}
@@ -335,9 +371,14 @@ function IndividualChatScreen({ chat, onBack }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [userProfiles, setUserProfiles] = useState({});
-  const [showParticipants, setShowParticipants] = useState(false); // ✅ FIX BUG #4
-  const [viewingProfile, setViewingProfile] = useState(null); // For viewing participant profiles
-  const [profileImageIndex, setProfileImageIndex] = useState(0); // For profile image carousel
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState(null);
+  const [profileImageIndex, setProfileImageIndex] = useState(0);
+  
+  // New states for editing group info
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingName, setEditingName] = useState("");
+  const [currentChat, setCurrentChat] = useState(chat);
 
   useEffect(() => {
     if (!chat?.id) return;
@@ -400,6 +441,83 @@ function IndividualChatScreen({ chat, onBack }) {
     loadOtherUsers();
   }, [chat]);
 
+  // Listen for chat updates
+  useEffect(() => {
+    if (!chat?.id) return;
+
+    const unsubscribe = firestore()
+      .collection("chats")
+      .doc(chat.id)
+      .onSnapshot((doc) => {
+        if (doc.exists) {
+          setCurrentChat({ id: doc.id, ...doc.data() });
+        }
+      });
+
+    return () => unsubscribe();
+  }, [chat?.id]);
+
+  const handleEditGroupInfo = () => {
+    setEditingName(currentChat.groupName || "");
+    setShowEditModal(true);
+  };
+
+  const handleSaveGroupName = async () => {
+    if (!editingName.trim()) {
+      Alert.alert("Error", "Group name cannot be empty");
+      return;
+    }
+
+    const success = await updateChatName(chat.id, editingName.trim());
+    if (success) {
+      setShowEditModal(false);
+      Alert.alert("Success", "Group name updated!");
+    } else {
+      Alert.alert("Error", "Failed to update group name");
+    }
+  };
+
+  const handleChangeGroupPicture = () => {
+    launchImageLibrary(
+      {
+        mediaType: "photo",
+        quality: 0.8,
+        maxWidth: 1000,
+        maxHeight: 1000,
+      },
+      async (response) => {
+        if (response.didCancel) {
+          return;
+        }
+
+        if (response.errorCode) {
+          Alert.alert("Error", "Failed to select image");
+          return;
+        }
+
+        if (response.assets && response.assets[0]) {
+          const imageUri = response.assets[0].uri;
+          const success = await updateChatPicture(chat.id, imageUri);
+          
+          if (success) {
+            Alert.alert("Success", "Group picture updated!");
+          } else {
+            Alert.alert("Error", "Failed to update group picture");
+          }
+        }
+      }
+    );
+  };
+
+  // ✅ NEW: Handle profile picture click
+  const handleProfilePicturePress = (userId) => {
+    const profile = userProfiles[userId];
+    if (profile) {
+      setViewingProfile(profile);
+      setProfileImageIndex(0);
+    }
+  };
+
   const onSend = useCallback(async () => {
     if (!chat?.id || !inputText.trim()) return;
 
@@ -461,10 +579,33 @@ function IndividualChatScreen({ chat, onBack }) {
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
-        <Text variant="titleLarge" style={{ flex: 1 }}>
-          {chat.groupName || "Chat"}
+        
+        {/* Group photo - tappable to change */}
+        {currentChat.isGroupChat && (
+          <IconButton
+            onPress={handleChangeGroupPicture}
+            style={{ marginRight: 8 }}
+          >
+            {currentChat.groupPhoto ? (
+              <Avatar.Image size={36} source={{ uri: currentChat.groupPhoto }} />
+            ) : (
+              <Avatar.Icon size={36} icon="account-group" />
+            )}
+          </IconButton>
+        )}
+        
+        {/* Group name - tappable to edit */}
+        <Text 
+          variant="titleLarge" 
+          style={{ flex: 1 }}
+          onPress={currentChat.isGroupChat ? handleEditGroupInfo : undefined}
+        >
+          {currentChat.groupName || "Chat"}
+          {currentChat.isGroupChat && (
+            <Icon source="pencil" size={16} color={theme.colors.primary} />
+          )}
         </Text>
-        {/* ✅ FIX BUG #4: Add button to view participants */}
+        
         <IconButton
           icon="account-multiple"
           onPress={() => setShowParticipants(true)}
@@ -482,12 +623,20 @@ function IndividualChatScreen({ chat, onBack }) {
             <View
               style={[styles.messageRow, isMyMessage && styles.myMessageRow]}
             >
+              {/* ✅ UPDATED: Make profile photo tappable with name label above */}
               {!isMyMessage && (
-                <ProfilePhoto
-                  uri={senderProfile?.photos?.[0]}
-                  size={32}
-                  style={styles.messageAvatar}
-                />
+                <View style={styles.avatarContainer}>
+                  <Text variant="labelSmall" style={styles.avatarName}>
+                    {senderProfile?.name || "Unknown"}
+                  </Text>
+                  <TouchableOpacity onPress={() => handleProfilePicturePress(item.user._id)}>
+                    <ProfilePhoto
+                      uri={senderProfile?.photos?.[0]}
+                      size={32}
+                      style={styles.messageAvatar}
+                    />
+                  </TouchableOpacity>
+                </View>
               )}
 
               <Surface
@@ -503,12 +652,6 @@ function IndividualChatScreen({ chat, onBack }) {
                 ]}
                 elevation={1}
               >
-                {!isMyMessage && chat.isGroupChat && senderProfile && (
-                  <Text variant="labelSmall" style={styles.senderName}>
-                    {senderProfile.name}
-                  </Text>
-                )}
-
                 <Text
                   variant="bodyMedium"
                   style={{
@@ -538,12 +681,20 @@ function IndividualChatScreen({ chat, onBack }) {
                 </Text>
               </Surface>
 
+              {/* ✅ UPDATED: Make own profile photo tappable with name label above */}
               {isMyMessage && userProfiles[currentUserId] && (
-                <ProfilePhoto
-                  uri={userProfiles[currentUserId].photos?.[0]}
-                  size={32}
-                  style={styles.messageAvatar}
-                />
+                <View style={styles.avatarContainer}>
+                  <Text variant="labelSmall" style={styles.avatarName}>
+                    {userProfiles[currentUserId].name || "You"}
+                  </Text>
+                  <TouchableOpacity onPress={() => handleProfilePicturePress(currentUserId)}>
+                    <ProfilePhoto
+                      uri={userProfiles[currentUserId].photos?.[0]}
+                      size={32}
+                      style={styles.messageAvatar}
+                    />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           );
@@ -572,7 +723,54 @@ function IndividualChatScreen({ chat, onBack }) {
         />
       </Surface>
 
-      {/* ✅ FIX BUG #4: Participants Modal */}
+      {/* Edit Group Info Modal */}
+      <Portal>
+        <Modal
+          visible={showEditModal}
+          onDismiss={() => setShowEditModal(false)}
+          contentContainerStyle={{
+            backgroundColor: theme.colors.background,
+            padding: 20,
+            margin: 20,
+            borderRadius: 8,
+          }}
+        >
+          <Card>
+            <Card.Title title="Edit Group Info" />
+            <Card.Content>
+              <View style={{ alignItems: "center", marginBottom: 16 }}>
+                {currentChat.groupPhoto ? (
+                  <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
+                ) : (
+                  <Avatar.Icon size={80} icon="account-group" />
+                )}
+                <Button 
+                  mode="text" 
+                  onPress={handleChangeGroupPicture}
+                  style={{ marginTop: 8 }}
+                >
+                  Change Picture
+                </Button>
+              </View>
+              
+              <TextInput
+                mode="outlined"
+                label="Group Name"
+                value={editingName}
+                onChangeText={setEditingName}
+                maxLength={50}
+                style={{ marginTop: 8 }}
+              />
+            </Card.Content>
+            <Card.Actions>
+              <Button onPress={() => setShowEditModal(false)}>Cancel</Button>
+              <Button onPress={handleSaveGroupName}>Save</Button>
+            </Card.Actions>
+          </Card>
+        </Modal>
+      </Portal>
+
+      {/* Participants Modal */}
       <Portal>
         <Modal
           visible={showParticipants}
@@ -643,7 +841,6 @@ function IndividualChatScreen({ chat, onBack }) {
         >
           {viewingProfile && (
             <View>
-              {/* Header with close button */}
               <View
                 style={{
                   flexDirection: "row",
@@ -666,13 +863,11 @@ function IndividualChatScreen({ chat, onBack }) {
                 />
               </View>
 
-              {/* Scrollable content */}
               <View style={{ maxHeight: 600 }}>
                 <FlatList
                   data={[{ key: "profile" }]}
                   renderItem={() => (
                     <View style={{ padding: 16 }}>
-                      {/* Photos */}
                       {viewingProfile.photos &&
                       viewingProfile.photos.length > 0 ? (
                         <Card style={{ marginBottom: 16 }}>
@@ -755,7 +950,6 @@ function IndividualChatScreen({ chat, onBack }) {
                         </Card>
                       )}
 
-                      {/* Basic Info */}
                       <Card style={{ marginBottom: 16 }}>
                         <Card.Content>
                           <Text variant="headlineSmall">
