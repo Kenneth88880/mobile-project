@@ -94,7 +94,6 @@ export default function DatingScreen({ isActive = true }) {
       // Get all duo pairs (already excludes swiped/liked)
       const fetchedPairs = await getAllDuoPairs(currentUserId);
 
-      // ✅ NEW: Filter by gender preferences if both users have genders set
       let filteredPairs = fetchedPairs || [];
 
       if (duo && duo.partnerId && currentUserProfile?.gender) {
@@ -159,7 +158,7 @@ export default function DatingScreen({ isActive = true }) {
         );
       }
 
-      // ✅ NEW: Filter by distance if user has maxDistance preference set
+      // NEW: Filter by distance if user has maxDistance preference set
       const maxDistance = currentUserProfile?.maxDistance || 200; // Default 200km if not set
 
       if (userLocation.latitude && userLocation.longitude && maxDistance) {
@@ -199,7 +198,7 @@ export default function DatingScreen({ isActive = true }) {
   };
 
   const handleProfileClick = async (profile) => {
-    if (!profile) return; // ✅ Safety check
+    if (!profile) return; // Safety check
 
     try {
       const fullProfile = await getUserProfile(profile.userId || profile.id);
@@ -230,12 +229,12 @@ export default function DatingScreen({ isActive = true }) {
   };
 
   const handleRateProfile = async (profile) => {
-    if (!profile) return; // ✅ Safety check
+    if (!profile) return; // Safety check
 
     try {
       const profileId = profile.userId || profile.id;
 
-      // ✅ Check if user has already rated this profile
+      // Check if user has already rated this profile
       const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
 
       if (ratingCheck.exists) {
@@ -285,7 +284,7 @@ export default function DatingScreen({ isActive = true }) {
     }
   };
 
-  // ✅ Check rating status when viewing a profile OR when component becomes active
+  // Check rating status when viewing a profile OR when component becomes active
   useEffect(() => {
     const checkRatingStatus = async () => {
       if (selectedProfile) {
@@ -450,13 +449,13 @@ export default function DatingScreen({ isActive = true }) {
 
   const currentDuoPair = duoPairs[currentPairIndex];
 
-  // ✅ SAFETY: Get profiles safely with fallbacks
+  // SAFETY: Get profiles safely with fallbacks
   const topProfile =
     currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
   const bottomProfile =
     currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
 
-  // ✅ SAFETY: Get photo URLs safely
+  // SAFETY: Get photo URLs safely
   const topPhoto =
     topProfile?.photos?.[0] ||
     "https://via.placeholder.com/400x300?text=No+Photo";
@@ -464,7 +463,7 @@ export default function DatingScreen({ isActive = true }) {
     bottomProfile?.photos?.[0] ||
     "https://via.placeholder.com/400x300?text=No+Photo";
 
-  // ✅ SAFETY: Get names and ages safely
+  // SAFETY: Get names and ages safely
   const topName = topProfile?.name || "Unknown";
   const topAge = topProfile?.age || "?";
   const bottomName = bottomProfile?.name || "Unknown";
@@ -543,7 +542,7 @@ export default function DatingScreen({ isActive = true }) {
 
   // Single Profile View
   if (selectedProfile) {
-    // ✅ SAFETY: Safe access to profile data
+    // SAFETY: Safe access to profile data
     const profilePhotos = selectedProfile?.photos || [];
     const profileName = selectedProfile?.name || "Unknown";
     const profileAge = selectedProfile?.age || "?";
