@@ -11,8 +11,8 @@
 
 - Create a welcome experience for users to add their info
 - bug fixes in chat appearance
-- add way to change group chat name
-- add way to see group chat members
+- way to change group chat name
+- way to see group chat members
 
 ## Things that are done mostly
 
