@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import {
   Text,
@@ -27,6 +28,7 @@ import {
   Chip,
 } from "react-native-paper";
 import firestore from "@react-native-firebase/firestore";
+import storage from "@react-native-firebase/storage";
 import { getUserProfile } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
@@ -106,15 +108,34 @@ const updateChatName = async (chatId, newName) => {
   }
 };
 
+// Upload image to Firebase Storage and return URL
+const uploadImageToStorage = async (imageUri, chatId) => {
+  try {
+    const filename = `chat_pictures/${chatId}_${Date.now()}.jpg`;
+    const reference = storage().ref(filename);
+    
+    await reference.putFile(imageUri);
+    const downloadURL = await reference.getDownloadURL();
+    
+    return downloadURL;
+  } catch (error) {
+    console.error("Error uploading image:", error);
+    throw error;
+  }
+};
+
 // Update chat picture
 const updateChatPicture = async (chatId, imageUri) => {
   try {
-    // In a real app, you'd upload to Firebase Storage first
-    // For now, we'll just store the URI
+    // Upload image to Firebase Storage
+    const downloadURL = await uploadImageToStorage(imageUri, chatId);
+    
+    // Update Firestore with the download URL
     await firestore().collection("chats").doc(chatId).update({
-      groupPhoto: imageUri,
+      groupPhoto: downloadURL,
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
+    
     return true;
   } catch (error) {
     console.error("Error updating chat picture:", error);
@@ -374,6 +395,7 @@ function IndividualChatScreen({ chat, onBack }) {
   const [showParticipants, setShowParticipants] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [profileImageIndex, setProfileImageIndex] = useState(0);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // New states for editing group info
   const [showEditModal, setShowEditModal] = useState(false);
@@ -477,39 +499,53 @@ function IndividualChatScreen({ chat, onBack }) {
     }
   };
 
-  const handleChangeGroupPicture = () => {
-    launchImageLibrary(
-      {
-        mediaType: "photo",
-        quality: 0.8,
-        maxWidth: 1000,
-        maxHeight: 1000,
-      },
-      async (response) => {
-        if (response.didCancel) {
-          return;
-        }
+  const handleChangeGroupPicture = async () => {
+    try {
+      launchImageLibrary(
+        {
+          mediaType: "photo",
+          quality: 0.8,
+          maxWidth: 1000,
+          maxHeight: 1000,
+        },
+        async (response) => {
+          if (response.didCancel) {
+            console.log("User cancelled image picker");
+            return;
+          }
 
-        if (response.errorCode) {
-          Alert.alert("Error", "Failed to select image");
-          return;
-        }
+          if (response.errorCode) {
+            console.log("ImagePicker Error: ", response.errorMessage);
+            Alert.alert("Error", "Failed to select image");
+            return;
+          }
 
-        if (response.assets && response.assets[0]) {
-          const imageUri = response.assets[0].uri;
-          const success = await updateChatPicture(chat.id, imageUri);
-          
-          if (success) {
-            Alert.alert("Success", "Group picture updated!");
-          } else {
-            Alert.alert("Error", "Failed to update group picture");
+          if (response.assets && response.assets[0]) {
+            const imageUri = response.assets[0].uri;
+            console.log("Selected image URI:", imageUri);
+            
+            setUploadingImage(true);
+            
+            const success = await updateChatPicture(chat.id, imageUri);
+            
+            setUploadingImage(false);
+            
+            if (success) {
+              Alert.alert("Success", "Group picture updated!");
+            } else {
+              Alert.alert("Error", "Failed to update group picture");
+            }
           }
         }
-      }
-    );
+      );
+    } catch (error) {
+      console.error("Error in handleChangeGroupPicture:", error);
+      setUploadingImage(false);
+      Alert.alert("Error", "An error occurred while selecting the image");
+    }
   };
 
-  // ✅ NEW: Handle profile picture click
+  // Handle profile picture click
   const handleProfilePicturePress = (userId) => {
     const profile = userProfiles[userId];
     if (profile) {
@@ -582,29 +618,36 @@ function IndividualChatScreen({ chat, onBack }) {
         
         {/* Group photo - tappable to change */}
         {currentChat.isGroupChat && (
-          <IconButton
+          <TouchableOpacity
             onPress={handleChangeGroupPicture}
+            disabled={uploadingImage}
             style={{ marginRight: 8 }}
           >
-            {currentChat.groupPhoto ? (
+            {uploadingImage ? (
+              <View style={styles.avatarContainer}>
+                <ActivityIndicator size={36} />
+              </View>
+            ) : currentChat.groupPhoto ? (
               <Avatar.Image size={36} source={{ uri: currentChat.groupPhoto }} />
             ) : (
               <Avatar.Icon size={36} icon="account-group" />
             )}
-          </IconButton>
+          </TouchableOpacity>
         )}
         
         {/* Group name - tappable to edit */}
-        <Text 
-          variant="titleLarge" 
-          style={{ flex: 1 }}
+        <TouchableOpacity
           onPress={currentChat.isGroupChat ? handleEditGroupInfo : undefined}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+          disabled={!currentChat.isGroupChat}
         >
-          {currentChat.groupName || "Chat"}
+          <Text variant="titleLarge" style={{ flex: 1 }}>
+            {currentChat.groupName || "Chat"}
+          </Text>
           {currentChat.isGroupChat && (
             <Icon source="pencil" size={16} color={theme.colors.primary} />
           )}
-        </Text>
+        </TouchableOpacity>
         
         <IconButton
           icon="account-multiple"
@@ -623,9 +666,8 @@ function IndividualChatScreen({ chat, onBack }) {
             <View
               style={[styles.messageRow, isMyMessage && styles.myMessageRow]}
             >
-              {/* ✅ UPDATED: Make profile photo tappable with name label above */}
               {!isMyMessage && (
-                <View style={styles.avatarContainer}>
+                <View style={styles.avatarWrapper}>
                   <Text variant="labelSmall" style={styles.avatarName}>
                     {senderProfile?.name || "Unknown"}
                   </Text>
@@ -681,9 +723,8 @@ function IndividualChatScreen({ chat, onBack }) {
                 </Text>
               </Surface>
 
-              {/* ✅ UPDATED: Make own profile photo tappable with name label above */}
               {isMyMessage && userProfiles[currentUserId] && (
-                <View style={styles.avatarContainer}>
+                <View style={styles.avatarWrapper}>
                   <Text variant="labelSmall" style={styles.avatarName}>
                     {userProfiles[currentUserId].name || "You"}
                   </Text>
@@ -738,20 +779,27 @@ function IndividualChatScreen({ chat, onBack }) {
           <Card>
             <Card.Title title="Edit Group Info" />
             <Card.Content>
-              <View style={{ alignItems: "center", marginBottom: 16 }}>
-                {currentChat.groupPhoto ? (
+              <TouchableOpacity
+                onPress={handleChangeGroupPicture}
+                disabled={uploadingImage}
+                style={{ alignItems: "center", marginBottom: 16 }}
+              >
+                {uploadingImage ? (
+                  <View style={styles.uploadingContainer}>
+                    <ActivityIndicator size="large" />
+                  </View>
+                ) : currentChat.groupPhoto ? (
                   <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
                 ) : (
                   <Avatar.Icon size={80} icon="account-group" />
                 )}
-                <Button 
-                  mode="text" 
-                  onPress={handleChangeGroupPicture}
-                  style={{ marginTop: 8 }}
+                <Text 
+                  variant="labelLarge"
+                  style={{ marginTop: 8, color: uploadingImage ? '#999' : theme.colors.primary }}
                 >
-                  Change Picture
-                </Button>
-              </View>
+                  {uploadingImage ? "Uploading..." : "Tap to Change Picture"}
+                </Text>
+              </TouchableOpacity>
               
               <TextInput
                 mode="outlined"
