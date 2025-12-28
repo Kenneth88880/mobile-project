@@ -211,8 +211,6 @@ export default function PhotoPicker({
       // Add to photos array
       const updatedPhotos = [...photos, downloadUrl];
       onPhotosChange(updatedPhotos);
-
-      Alert.alert("Success", "Photo uploaded successfully!", [{ text: "OK" }]);
     } catch (error) {
       console.error("Error picking image:", error);
       Alert.alert(
