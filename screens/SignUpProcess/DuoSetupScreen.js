@@ -6,6 +6,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -21,6 +22,7 @@ import { CURRENT_USER_ID } from "../../services/UserConfig";
 const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
   const theme = useTheme();
   const [friendCode, setFriendCode] = useState("");
+  const [copied, setCopied] = useState(false);
   const userCode = CURRENT_USER_ID || "Loading...";
 
   const handleNext = () => {
@@ -93,7 +95,11 @@ const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
                 Share this code with your friend
               </Text>
 
-              <View
+              <TouchableOpacity
+                onPress={() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 3000);
+                }}
                 style={[
                   styles.codeContainer,
                   { backgroundColor: theme.colors.surface },
@@ -105,7 +111,12 @@ const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
                 >
                   {userCode}
                 </Text>
-              </View>
+                <IconButton
+                  icon={copied ? "check" : "content-copy"}
+                  size={20}
+                  iconColor={copied ? "#4CAF50" : theme.colors.primary}
+                />
+              </TouchableOpacity>
 
               <Text
                 style={[
@@ -113,7 +124,7 @@ const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
                   { color: theme.colors.onPrimaryContainer },
                 ]}
               >
-                Long-press to select and copy
+                Tap to copy
               </Text>
             </Card.Content>
           </Card>
