@@ -158,6 +158,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [viewingRequesterProfile, setViewingRequesterProfile] = useState(null);
   const [requesterImageIndex, setRequesterImageIndex] = useState(0);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -336,7 +337,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
       await saveUserProfile(CURRENT_USER_ID, profileToSave);
       setIsEditing(false);
-      Alert.alert("Success", "Profile saved successfully!");
       loadRating();
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -679,11 +679,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  Alert.alert(
-                    "User ID Copied!",
-                    `Your User ID (${CURRENT_USER_ID}) has been copied. Share it with your friend so they can add you as a partner.`,
-                    [{ text: "OK" }]
-                  );
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 3000);
                 }}
                 style={{
                   flexDirection: "row",
@@ -704,16 +701,16 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                   {CURRENT_USER_ID}
                 </Text>
                 <IconButton
-                  icon="content-copy"
+                  icon={copied ? "check" : "content-copy"}
                   size={20}
-                  iconColor={theme.colors.primary}
+                  iconColor={copied ? "#4CAF50" : theme.colors.primary}
                 />
               </TouchableOpacity>
               <Text
                 variant="bodySmall"
                 style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}
               >
-                Tap to copy • Long-press to select • Share with your friend
+                Tap to copy
               </Text>
             </Card.Content>
           </Card>
@@ -1500,15 +1497,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               style={styles.input}
               disabled={!!profile.name}
               right={
-                profile.name ? (
-                  <TextInput.Icon icon="lock" disabled />
-                ) : null
+                profile.name ? <TextInput.Icon icon="lock" disabled /> : null
               }
             />
             {profile.name && (
               <Text
                 variant="bodySmall"
-                style={{ marginTop: -8, marginBottom: 8, fontStyle: "italic", opacity: 0.7 }}
+                style={{
+                  marginTop: -8,
+                  marginBottom: 8,
+                  fontStyle: "italic",
+                  opacity: 0.7,
+                }}
               >
                 Name cannot be changed once set
               </Text>
@@ -1522,15 +1522,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               style={styles.input}
               disabled={!!profile.age}
               right={
-                profile.age ? (
-                  <TextInput.Icon icon="lock" disabled />
-                ) : null
+                profile.age ? <TextInput.Icon icon="lock" disabled /> : null
               }
             />
             {profile.age && (
               <Text
                 variant="bodySmall"
-                style={{ marginTop: -8, marginBottom: 8, fontStyle: "italic", opacity: 0.7 }}
+                style={{
+                  marginTop: -8,
+                  marginBottom: 8,
+                  fontStyle: "italic",
+                  opacity: 0.7,
+                }}
               >
                 Age cannot be changed once set
               </Text>
