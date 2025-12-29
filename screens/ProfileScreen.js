@@ -578,6 +578,16 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      Alert.alert("Signed Out", "You have been successfully signed out");
+    } catch (error) {
+      console.error("Error signing out:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
+  };
+
   // Helper to render stars
   const renderStars = (average) => {
     const rating = parseFloat(average);
