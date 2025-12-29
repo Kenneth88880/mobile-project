@@ -2,7 +2,6 @@
 
 ## Things to do before release
 
-- Report bug system
 - Explore system, calander, maps, planning
 - Add report system
 - connect chat with explore screen to send and plan
@@ -13,6 +12,7 @@
 - bug fixes in chat appearance
 - way to change group chat name
 - way to see group chat members
+- Report bug system
 
 ## Things that are done mostly
 
