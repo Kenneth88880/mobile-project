@@ -19,16 +19,13 @@ import {
 } from "../services/photoService";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-// 3 columns × 2 rows layout (like Instagram)
-const PHOTO_MARGIN = 4; // Smaller margin for 3-column layout
-const PHOTO_WIDTH = (SCREEN_WIDTH - 48) / 3 - PHOTO_MARGIN * 4; // 3 photos per row
-const PHOTO_HEIGHT = PHOTO_WIDTH * 1.33; // 4:3 aspect ratio
+const PHOTO_MARGIN = 4;
+const PHOTO_WIDTH = (SCREEN_WIDTH - 48) / 3 - PHOTO_MARGIN * 4;
+const PHOTO_HEIGHT = PHOTO_WIDTH * 1.33;
 
-// Maximum dimensions for uploaded images
 const MAX_WIDTH = 1920;
 const MAX_HEIGHT = 1080;
 
-// Allowed image formats
 const ALLOWED_FORMATS = ["jpeg", "jpg", "png", "webp"];
 
 export default function PhotoPicker({
@@ -40,22 +37,19 @@ export default function PhotoPicker({
   const [uploading, setUploading] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState(null);
 
-  /**
-   * Validate image format
-   */
   const validateImageFormat = (uri) => {
     const extension = uri.split(".").pop().toLowerCase();
     return ALLOWED_FORMATS.includes(extension);
   };
 
   /**
-   * Compress and resize image to max 1080p
-   * Also ensures proper aspect ratio (minimum 3:4, maximum 4:3)
+   * ✅ FIXED: Compress and resize image to max 1080p
+   * Now using let variables instead of trying to modify read-only properties
    */
   const processImage = async (imageUri) => {
     try {
       // Get image dimensions using React Native Image API
-      const { width, height } = await new Promise((resolve, reject) => {
+      const dimensions = await new Promise((resolve, reject) => {
         Image.getSize(
           imageUri,
           (width, height) => resolve({ width, height }),
@@ -63,13 +57,15 @@ export default function PhotoPicker({
         );
       });
 
+      // ✅ Use mutable variables instead of modifying the read-only object
+      let width = dimensions.width;
+      let height = dimensions.height;
+
       console.log(`Original dimensions: ${width}x${height}`);
 
       // Calculate aspect ratio
       const aspectRatio = width / height;
 
-      // Enforce aspect ratio limits (3:4 to 4:3)
-      // This prevents extremely wide or tall images
       const MIN_ASPECT = 0.75; // 3:4 portrait
       const MAX_ASPECT = 1.33; // 4:3 landscape
 
@@ -87,7 +83,7 @@ export default function PhotoPicker({
             height: newHeight,
           },
         });
-        height = newHeight;
+        height = newHeight; // ✅ Now this works because height is a mutable variable
         console.log(`Image too tall, cropping to ${width}x${newHeight}`);
       } else if (aspectRatio > MAX_ASPECT) {
         // Too wide - crop width
@@ -101,7 +97,7 @@ export default function PhotoPicker({
             height: height,
           },
         });
-        width = newWidth;
+        width = newWidth; // ✅ Now this works because width is a mutable variable
         console.log(`Image too wide, cropping to ${newWidth}x${height}`);
       }
 
@@ -132,11 +128,10 @@ export default function PhotoPicker({
       ];
 
       const manipulatedImage = await manipulateAsync(imageUri, actions, {
-        compress: 0.8, // High quality but compressed
-        format: SaveFormat.JPEG, // Always convert to JPEG for consistency
+        compress: 0.8,
+        format: SaveFormat.JPEG,
       });
 
-      // Check final size
       console.log(`Processed dimensions: ${resizeWidth}x${resizeHeight}`);
 
       return manipulatedImage.uri;
@@ -146,12 +141,8 @@ export default function PhotoPicker({
     }
   };
 
-  /**
-   * Handle picking an image from gallery
-   */
   const pickImage = async () => {
     try {
-      // Check if we've reached max photos
       if (photos.length >= maxPhotos) {
         Alert.alert(
           "Maximum Photos Reached",
@@ -161,7 +152,6 @@ export default function PhotoPicker({
         return;
       }
 
-      // Request permission
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
@@ -173,11 +163,10 @@ export default function PhotoPicker({
         return;
       }
 
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [3, 4], // Suggest 3:4 aspect ratio
+        aspect: [3, 4],
         quality: 1,
       });
 
@@ -187,7 +176,6 @@ export default function PhotoPicker({
 
       const imageUri = result.assets[0].uri;
 
-      // Validate format
       if (!validateImageFormat(imageUri)) {
         Alert.alert(
           "Invalid Format",
@@ -202,13 +190,9 @@ export default function PhotoPicker({
       setUploading(true);
       setUploadingIndex(photos.length);
 
-      // Process image (resize, compress, enforce aspect ratio)
       const processedUri = await processImage(imageUri);
-
-      // Upload to Firebase Storage
       const downloadUrl = await uploadProfilePhoto(processedUri);
 
-      // Add to photos array
       const updatedPhotos = [...photos, downloadUrl];
       onPhotosChange(updatedPhotos);
     } catch (error) {
@@ -224,9 +208,6 @@ export default function PhotoPicker({
     }
   };
 
-  /**
-   * Handle removing a photo
-   */
   const removePhoto = async (index) => {
     Alert.alert("Remove Photo", "Are you sure you want to remove this photo?", [
       { text: "Cancel", style: "cancel" },
@@ -236,11 +217,8 @@ export default function PhotoPicker({
         onPress: async () => {
           try {
             const photoUrl = photos[index];
-
-            // Delete from Firebase Storage
             await deleteProfilePhoto(photoUrl);
 
-            // Remove from array
             const updatedPhotos = photos.filter((_, i) => i !== index);
             onPhotosChange(updatedPhotos);
           } catch (error) {
@@ -252,9 +230,6 @@ export default function PhotoPicker({
     ]);
   };
 
-  /**
-   * Render photo grid
-   */
   const renderPhotoGrid = () => {
     const photoSlots = Array(maxPhotos).fill(null);
 
@@ -268,7 +243,6 @@ export default function PhotoPicker({
           return (
             <View key={index} style={styles.photoSlot}>
               {hasPhoto ? (
-                // Show uploaded photo with remove button
                 <View style={styles.photoContainer}>
                   <Image
                     source={{ uri: photos[index] }}
@@ -284,7 +258,6 @@ export default function PhotoPicker({
                   />
                 </View>
               ) : isUploading ? (
-                // Show uploading indicator
                 <View
                   style={[
                     styles.emptySlot,
@@ -300,7 +273,6 @@ export default function PhotoPicker({
                   </Text>
                 </View>
               ) : isNextSlot ? (
-                // Show "Add Photo" button for next available slot
                 <TouchableOpacity
                   style={[
                     styles.emptySlot,
@@ -322,7 +294,6 @@ export default function PhotoPicker({
                   </Text>
                 </TouchableOpacity>
               ) : (
-                // Show empty slot (no icon, just border)
                 <View
                   style={[
                     styles.emptySlot,
@@ -363,12 +334,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    marginHorizontal: -PHOTO_MARGIN, // Negative margin to offset photoSlot margins
+    marginHorizontal: -PHOTO_MARGIN,
   },
   photoSlot: {
     width: PHOTO_WIDTH,
     height: PHOTO_HEIGHT,
-    margin: PHOTO_MARGIN, // Margin around each photo slot
+    margin: PHOTO_MARGIN,
   },
   photoContainer: {
     width: "100%",
