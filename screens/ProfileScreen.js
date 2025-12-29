@@ -1,4 +1,3 @@
-// COMPLETE ProfileScreen.js with Hinge-Style Redesign + Bug Report Feature
 // This is a drop-in replacement for your existing ProfileScreen.js
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -163,13 +162,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [viewingRequesterProfile, setViewingRequesterProfile] = useState(null);
   const [requesterImageIndex, setRequesterImageIndex] = useState(0);
   const [copied, setCopied] = useState(false);
-
-  // Bug Report States
-  const [showBugReport, setShowBugReport] = useState(false);
-  const [bugTitle, setBugTitle] = useState("");
-  const [bugDescription, setBugDescription] = useState("");
-  const [bugAttachments, setBugAttachments] = useState([]);
-  const [submittingBug, setSubmittingBug] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -388,101 +380,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       setProfile({ ...profile, tags: [...currentTags, tag] });
     }
   };
-
-  // Bug Report Functions
-  const handlePickMedia = async () => {
-    try {
-      const result = await DocumentPicker.pick({
-        type: [
-          DocumentPicker.types.images,
-          DocumentPicker.types.video,
-        ],
-        allowMultiSelection: true,
-      });
-
-      setBugAttachments([...bugAttachments, ...result]);
-    } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
-        console.log("User cancelled media selection");
-      } else {
-        console.error("Error picking media:", err);
-        Alert.alert("Error", "Failed to pick media");
-      }
-    }
-  };
-
-  const handleRemoveAttachment = (index) => {
-    setBugAttachments(bugAttachments.filter((_, i) => i !== index));
-  };
-
-  const handleSubmitBugReport = async () => {
-    if (!bugTitle.trim()) {
-      Alert.alert("Missing Info", "Please enter a bug report title");
-      return;
-    }
-
-    if (!bugDescription.trim()) {
-      Alert.alert("Missing Info", "Please enter a bug description");
-      return;
-    }
-
-    setSubmittingBug(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("userId", CURRENT_USER_ID);
-      formData.append("userName", profile.name || "Unknown User");
-      formData.append("title", bugTitle);
-      formData.append("description", bugDescription);
-      formData.append("timestamp", new Date().toISOString());
-
-      // Attach media files
-      bugAttachments.forEach((attachment, index) => {
-        formData.append("attachments", {
-          uri: attachment.uri,
-          type: attachment.type,
-          name: attachment.name,
-        });
-      });
-
-      // Send email via your backend
-      const response = await fetch(
-        "YOUR_BACKEND_URL/api/send-bug-report",
-        {
-          method: "POST",
-          body: formData,
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        Alert.alert(
-          "Success",
-          "Bug report submitted! Thank you for helping us improve."
-        );
-        setBugTitle("");
-        setBugDescription("");
-        setBugAttachments([]);
-        setShowBugReport(false);
-      } else {
-        Alert.alert(
-          "Error",
-          "Failed to submit bug report. Please try again."
-        );
-      }
-    } catch (error) {
-      console.error("Error submitting bug report:", error);
-      Alert.alert(
-        "Error",
-        "Failed to submit bug report. Please check your connection."
-      );
-    } finally {
-      setSubmittingBug(false);
-    }
-  };
-
   // Partner search functions
   const searchPartners = async (query) => {
     if (!query || query.length < 10) {
@@ -1045,7 +942,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               {viewingRequesterProfile.name}'s Profile
             </Text>
           </Surface>
-
+          
           <ScrollView>
             <Card style={styles.card}>
               {currentPhoto ? (
