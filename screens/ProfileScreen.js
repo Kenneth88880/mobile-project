@@ -1,4 +1,4 @@
-// COMPLETE ProfileScreen.js with Hinge-Style Redesign
+// COMPLETE ProfileScreen.js with Hinge-Style Redesign + Bug Report Feature
 // This is a drop-in replacement for your existing ProfileScreen.js
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -44,6 +44,8 @@ import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
 import SettingsScreen from "./SettingsScreen";
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -140,8 +142,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     gender: null,
     genderPreference: [],
   });
-  const [originalAge, setOriginalAge] = useState(""); // Store original age to prevent changes
-  const [originalName, setOriginalName] = useState(""); // Store original name to prevent changes
+  const [originalAge, setOriginalAge] = useState("");
+  const [originalName, setOriginalName] = useState("");
 
   const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
@@ -161,6 +163,13 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [viewingRequesterProfile, setViewingRequesterProfile] = useState(null);
   const [requesterImageIndex, setRequesterImageIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+
+  // Bug Report States
+  const [showBugReport, setShowBugReport] = useState(false);
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDescription, setBugDescription] = useState("");
+  const [bugAttachments, setBugAttachments] = useState([]);
+  const [submittingBug, setSubmittingBug] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -293,8 +302,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       };
 
       setProfile(cleanedProfile);
-      setOriginalAge(userProfile.age || ""); // Store original age
-      setOriginalName(userProfile.name || ""); // Store original name
+      setOriginalAge(userProfile.age || "");
+      setOriginalName(userProfile.name || "");
       await loadDuo();
       setProfileLoaded(true);
     } catch (error) {
@@ -330,11 +339,10 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         return;
       }
 
-      // Use original age and name if they were previously set to prevent changes
       const profileToSave = {
         ...profile,
-        name: originalName || profile.name, // Always use original name if it exists
-        age: originalAge || profile.age, // Always use original age if it exists
+        name: originalName || profile.name,
+        age: originalAge || profile.age,
       };
 
       await saveUserProfile(CURRENT_USER_ID, profileToSave);
@@ -381,6 +389,100 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     }
   };
 
+  // Bug Report Functions
+  const handlePickMedia = async () => {
+    try {
+      const result = await DocumentPicker.pick({
+        type: [
+          DocumentPicker.types.images,
+          DocumentPicker.types.video,
+        ],
+        allowMultiSelection: true,
+      });
+
+      setBugAttachments([...bugAttachments, ...result]);
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        console.log("User cancelled media selection");
+      } else {
+        console.error("Error picking media:", err);
+        Alert.alert("Error", "Failed to pick media");
+      }
+    }
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setBugAttachments(bugAttachments.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitBugReport = async () => {
+    if (!bugTitle.trim()) {
+      Alert.alert("Missing Info", "Please enter a bug report title");
+      return;
+    }
+
+    if (!bugDescription.trim()) {
+      Alert.alert("Missing Info", "Please enter a bug description");
+      return;
+    }
+
+    setSubmittingBug(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("userId", CURRENT_USER_ID);
+      formData.append("userName", profile.name || "Unknown User");
+      formData.append("title", bugTitle);
+      formData.append("description", bugDescription);
+      formData.append("timestamp", new Date().toISOString());
+
+      // Attach media files
+      bugAttachments.forEach((attachment, index) => {
+        formData.append("attachments", {
+          uri: attachment.uri,
+          type: attachment.type,
+          name: attachment.name,
+        });
+      });
+
+      // Send email via your backend
+      const response = await fetch(
+        "YOUR_BACKEND_URL/api/send-bug-report",
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        Alert.alert(
+          "Success",
+          "Bug report submitted! Thank you for helping us improve."
+        );
+        setBugTitle("");
+        setBugDescription("");
+        setBugAttachments([]);
+        setShowBugReport(false);
+      } else {
+        Alert.alert(
+          "Error",
+          "Failed to submit bug report. Please try again."
+        );
+      }
+    } catch (error) {
+      console.error("Error submitting bug report:", error);
+      Alert.alert(
+        "Error",
+        "Failed to submit bug report. Please check your connection."
+      );
+    } finally {
+      setSubmittingBug(false);
+    }
+  };
+
   // Partner search functions
   const searchPartners = async (query) => {
     if (!query || query.length < 10) {
@@ -390,7 +492,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
     setSearching(true);
     try {
-      // Search by exact user ID
       const userDoc = await firestore()
         .collection("profiles")
         .doc(query.trim())
@@ -399,7 +500,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       if (userDoc.exists) {
         const userData = userDoc.data();
 
-        // Don't show current user
         if (userDoc.id === CURRENT_USER_ID) {
           setSearchResults([]);
           Alert.alert("Invalid", "You cannot add yourself as a partner");
@@ -407,7 +507,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           return;
         }
 
-        // Check if user already has a duo partner (handle undefined)
         const hasDuoPartner = userData?.duoPartnerId != null;
 
         if (hasDuoPartner) {
@@ -417,7 +516,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           return;
         }
 
-        // Check if this user already has a duo in the duos collection
         const duosSnapshot = await firestore()
           .collection("duos")
           .where("users", "array-contains", userDoc.id)
@@ -479,7 +577,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     try {
       const batch = firestore().batch();
 
-      // Create duo
       const duoRef = firestore().collection("duos").doc();
       batch.set(duoRef, {
         users: [CURRENT_USER_ID, fromUserId],
@@ -487,7 +584,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         createdAt: new Date().toISOString(),
       });
 
-      // Update request status
       batch.update(firestore().collection("duoRequests").doc(requestId), {
         status: "accepted",
       });
@@ -574,7 +670,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       <SafeAreaView
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       >
-        {/* Header with Close Button */}
         <View
           style={{
             flexDirection: "row",
@@ -593,7 +688,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           />
         </View>
 
-        {/* Scrollable Tags */}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
@@ -612,7 +706,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </View>
         </ScrollView>
 
-        {/* Done Button */}
         <View
           style={{
             padding: 16,
@@ -645,7 +738,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         <SafeAreaView
           style={{ flex: 1, backgroundColor: theme.colors.background }}
         >
-          {/* Header */}
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">Find a Duo Partner</Text>
             <IconButton
@@ -663,7 +755,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
             contentContainerStyle={{ padding: 15, paddingBottom: 40 }}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Instructions */}
             <Card style={{ marginBottom: 16 }}>
               <Card.Content>
                 <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
@@ -725,7 +816,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               </Card.Content>
             </Card>
 
-            {/* Search Input */}
             <TextInput
               label="Enter Partner's User ID"
               value={searchQuery}
@@ -747,7 +837,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               selectTextOnFocus={true}
             />
 
-            {/* Search Results */}
             {searchResults.length === 0 && searchQuery.length >= 10 ? (
               <View style={styles.emptyState}>
                 <Text>No user found with this ID</Text>
@@ -822,10 +911,9 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       <SafeAreaView
         style={{
           flex: 1,
-          backgroundColor: theme.colors.background, // ✅ Use theme background
+          backgroundColor: theme.colors.background,
         }}
       >
-        {/* Header with Close Button */}
         <View
           style={{
             flexDirection: "row",
@@ -847,7 +935,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           />
         </View>
 
-        {/* Instructions */}
         <Text
           variant="bodySmall"
           style={{
@@ -860,7 +947,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           Tap on a request to view their full profile
         </Text>
 
-        {/* Scrollable Requests List */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           {pendingRequests.length === 0 ? (
             <View style={styles.emptyState}>
