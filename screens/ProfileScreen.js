@@ -347,24 +347,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await auth().signOut();
-          } catch (error) {
-            console.error("Error signing out:", error);
-            Alert.alert("Error", "Failed to sign out");
-          }
-        },
-      },
-    ]);
-  };
-
   const handlePhotosChange = (newPhotos) => {
     setProfile({ ...profile, photos: newPhotos });
   };
@@ -1434,17 +1416,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
-        {/* Logout Button */}
-        <Button
-          mode="outlined"
-          icon="logout"
-          onPress={handleLogout}
-          style={styles.logoutButton}
-          textColor="#ff6b6b"
-        >
-          Sign Out
-        </Button>
-
         {/* Modals */}
         <SettingsScreen
           isDarkMode={isDarkMode}
@@ -1769,11 +1740,6 @@ const styles = StyleSheet.create({
   noPartnerContainer: {
     alignItems: "center",
     paddingVertical: 20,
-  },
-  logoutButton: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-    borderColor: "#ff6b6b",
   },
   // EXISTING STYLES
   card: {
