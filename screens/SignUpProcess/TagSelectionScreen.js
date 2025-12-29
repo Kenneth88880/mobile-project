@@ -126,6 +126,11 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
           />
         </View>
       )}
+      <View style={styles.progressCounter}>
+        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+          6/6
+        </Text>
+      </View>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.primary }]}>
           Pick your interests
@@ -169,7 +174,7 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
           style={styles.button}
           disabled={!canContinue}
         >
-          Continue
+          Finish
         </Button>
       </View>
     </SafeAreaView>
@@ -187,6 +192,16 @@ const styles = StyleSheet.create({
     top: 40,
     left: 10,
     zIndex: 10,
+  },
+  progressCounter: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   header: {
     padding: 20,

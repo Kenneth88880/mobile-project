@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { Text, TextInput, Button, useTheme, Card, IconButton } from "react-native-paper";
 
 const BirthdayScreen = ({ onNext, onBack, initialBirthday = {} }) => {
@@ -103,113 +103,120 @@ const BirthdayScreen = ({ onNext, onBack, initialBirthday = {} }) => {
           />
         </View>
       )}
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: theme.colors.primary }]}>
-          When's your birthday?
+      <View style={styles.progressCounter}>
+        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+          2/6
         </Text>
-        <Text
-          style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
-        >
-          We'll calculate your age automatically
-        </Text>
-        <Card
-          style={[
-            styles.warningCard,
-            { backgroundColor: theme.colors.errorContainer },
-          ]}
-        >
-          <Card.Content>
-            <Text
-              style={[
-                styles.warningText,
-                { color: theme.colors.onErrorContainer },
-              ]}
-            >
-              Your age cannot be changed after signing up
-            </Text>
-          </Card.Content>
-        </Card>
+      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: theme.colors.primary }]}>
+            When's your birthday?
+          </Text>
+          <Text
+            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+          >
+            We'll calculate your age automatically
+          </Text>
+          <Card
+            style={[
+              styles.warningCard,
+              { backgroundColor: theme.colors.errorContainer },
+            ]}
+          >
+            <Card.Content>
+              <Text
+                style={[
+                  styles.warningText,
+                  { color: theme.colors.onErrorContainer },
+                ]}
+              >
+                Your age cannot be changed after signing up
+              </Text>
+            </Card.Content>
+          </Card>
 
-        <View style={styles.inputContainer}>
-          <View style={styles.dateRow}>
-            <TextInput
-              label="Day"
-              value={day}
-              onChangeText={setDay}
-              mode="outlined"
-              keyboardType="numeric"
-              maxLength={2}
-              style={styles.dateInput}
-              placeholder="DD"
-            />
-            <TextInput
-              label="Month"
-              value={month}
-              onChangeText={setMonth}
-              mode="outlined"
-              keyboardType="numeric"
-              maxLength={2}
-              style={styles.dateInput}
-              placeholder="MM"
-            />
-            <TextInput
-              label="Year"
-              value={year}
-              onChangeText={setYear}
-              mode="outlined"
-              keyboardType="numeric"
-              maxLength={4}
-              style={styles.yearInput}
-              placeholder="YYYY"
-            />
+          <View style={styles.inputContainer}>
+            <View style={styles.dateRow}>
+              <TextInput
+                label="Day"
+                value={day}
+                onChangeText={setDay}
+                mode="outlined"
+                keyboardType="numeric"
+                maxLength={2}
+                style={styles.dateInput}
+                placeholder="DD"
+              />
+              <TextInput
+                label="Month"
+                value={month}
+                onChangeText={setMonth}
+                mode="outlined"
+                keyboardType="numeric"
+                maxLength={2}
+                style={styles.dateInput}
+                placeholder="MM"
+              />
+              <TextInput
+                label="Year"
+                value={year}
+                onChangeText={setYear}
+                mode="outlined"
+                keyboardType="numeric"
+                maxLength={4}
+                style={styles.yearInput}
+                placeholder="YYYY"
+              />
+            </View>
+
+            {error ? (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                {error}
+              </Text>
+            ) : null}
+
+            {age && !error ? (
+              <Card
+                style={[
+                  styles.ageCard,
+                  { backgroundColor: theme.colors.primaryContainer },
+                ]}
+              >
+                <Card.Content>
+                  <Text
+                    style={[
+                      styles.ageLabel,
+                      { color: theme.colors.onPrimaryContainer },
+                    ]}
+                  >
+                    Your age:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.ageValue,
+                      { color: theme.colors.onPrimaryContainer },
+                    ]}
+                  >
+                    {age} years old
+                  </Text>
+                </Card.Content>
+              </Card>
+            ) : null}
           </View>
 
-          {error ? (
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>
-              {error}
-            </Text>
-          ) : null}
-
-          {age && !error ? (
-            <Card
-              style={[
-                styles.ageCard,
-                { backgroundColor: theme.colors.primaryContainer },
-              ]}
+          <View style={styles.buttonContainer}>
+            <Button
+              mode="contained"
+              onPress={handleNext}
+              style={styles.button}
+              disabled={!age || !!error}
             >
-              <Card.Content>
-                <Text
-                  style={[
-                    styles.ageLabel,
-                    { color: theme.colors.onPrimaryContainer },
-                  ]}
-                >
-                  Your age:
-                </Text>
-                <Text
-                  style={[
-                    styles.ageValue,
-                    { color: theme.colors.onPrimaryContainer },
-                  ]}
-                >
-                  {age} years old
-                </Text>
-              </Card.Content>
-            </Card>
-          ) : null}
+              Next
+            </Button>
+          </View>
         </View>
-
-        <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            onPress={handleNext}
-            style={styles.button}
-            disabled={!age || !!error}
-          >
-            Continue
-          </Button>
-        </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -225,6 +232,19 @@ const styles = StyleSheet.create({
     top: 40,
     left: 10,
     zIndex: 10,
+  },
+  progressCounter: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   content: {
     flex: 1,
