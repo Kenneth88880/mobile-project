@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Clipboard,
 } from "react-native";
 import {
   Text,
@@ -677,6 +678,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
+                    Clipboard.setString(CURRENT_USER_ID);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 3000);
                   }}

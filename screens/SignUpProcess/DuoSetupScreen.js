@@ -7,6 +7,7 @@ import {
   Alert,
   ScrollView,
   TouchableOpacity,
+  Clipboard,
 } from "react-native";
 import {
   Text,
@@ -97,6 +98,7 @@ const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
 
               <TouchableOpacity
                 onPress={() => {
+                  Clipboard.setString(userCode);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 3000);
                 }}
