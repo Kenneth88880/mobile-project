@@ -34,6 +34,11 @@ const PhotoSelectionScreen = ({ onNext, onBack, initialPhotos = [] }) => {
           />
         </View>
       )}
+      <View style={styles.progressCounter}>
+        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+          5/6
+        </Text>
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
           <Text style={[styles.title, { color: theme.colors.primary }]}>
@@ -58,7 +63,7 @@ const PhotoSelectionScreen = ({ onNext, onBack, initialPhotos = [] }) => {
               style={styles.button}
               disabled={photos.length === 0}
             >
-              Continue
+              Next
             </Button>
           </View>
         </View>
@@ -78,6 +83,16 @@ const styles = StyleSheet.create({
     top: 40,
     left: 10,
     zIndex: 10,
+  },
+  progressCounter: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   scrollContent: {
     flexGrow: 1,

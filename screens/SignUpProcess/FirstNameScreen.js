@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { Text, TextInput, Button, useTheme, Card, IconButton } from "react-native-paper";
 
 const FirstNameScreen = ({ onNext, onBack, initialName = "" }) => {
@@ -29,56 +29,63 @@ const FirstNameScreen = ({ onNext, onBack, initialName = "" }) => {
           />
         </View>
       )}
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: theme.colors.primary }]}>
-          What's your first name?
+      <View style={styles.progressCounter}>
+        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+          1/6
         </Text>
-        <Text
-          style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
-        >
-          This is how you'll appear to others
-        </Text>
-        <Card
-          style={[
-            styles.warningCard,
-            { backgroundColor: theme.colors.errorContainer },
-          ]}
-        >
-          <Card.Content>
-            <Text
-              style={[
-                styles.warningText,
-                { color: theme.colors.onErrorContainer },
-              ]}
-            >
-              Your name cannot be changed after signing up
-            </Text>
-          </Card.Content>
-        </Card>
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            label="First Name"
-            value={firstName}
-            onChangeText={setFirstName}
-            mode="outlined"
-            autoFocus
-            style={styles.input}
-            maxLength={50}
-          />
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            onPress={handleNext}
-            style={styles.button}
-            disabled={!firstName.trim()}
-          >
-            Continue
-          </Button>
-        </View>
       </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: theme.colors.primary }]}>
+            What's your first name?
+          </Text>
+          <Text
+            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+          >
+            This is how you'll appear to others
+          </Text>
+          <Card
+            style={[
+              styles.warningCard,
+              { backgroundColor: theme.colors.errorContainer },
+            ]}
+          >
+            <Card.Content>
+              <Text
+                style={[
+                  styles.warningText,
+                  { color: theme.colors.onErrorContainer },
+                ]}
+              >
+                Your name cannot be changed after signing up
+              </Text>
+            </Card.Content>
+          </Card>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              label="First Name"
+              value={firstName}
+              onChangeText={setFirstName}
+              mode="outlined"
+              autoFocus
+              style={styles.input}
+              maxLength={50}
+            />
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <Button
+              mode="contained"
+              onPress={handleNext}
+              style={styles.button}
+              disabled={!firstName.trim()}
+            >
+              Next
+            </Button>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -94,6 +101,19 @@ const styles = StyleSheet.create({
     top: 40,
     left: 10,
     zIndex: 10,
+  },
+  progressCounter: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
+  },
+  counterText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   content: {
     flex: 1,
