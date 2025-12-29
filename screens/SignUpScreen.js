@@ -1,6 +1,6 @@
 import { StyleSheet, View, KeyboardAvoidingView, Text, TouchableOpacity } from "react-native";
 import React from "react";
-import { TextInput, Button, useTheme } from "react-native-paper";
+import { TextInput, Button, useTheme, SegmentedButtons } from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
 // ✅ FIXED: Use React Native Firebase
 import auth from "@react-native-firebase/auth";
@@ -12,16 +12,20 @@ import GenderPreferenceScreen from "./SignUpProcess/GenderPreferenceScreen";
 import PhotoSelectionScreen from "./SignUpProcess/PhotoSelectionScreen";
 import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
+import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 
 const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   const theme = useTheme();
+  const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [phoneNumber, setPhoneNumber] = React.useState("+1");
+  const [confirmation, setConfirmation] = React.useState(null);
   const [isTOSVisible, setTOSVisible] = React.useState(false);
   const [currentStep, setCurrentStep] = React.useState(
     isInSignupFlow ? "firstName" : "credentials"
-  ); // credentials, firstName, birthday, gender, genderPreference, photos, tags, duo
+  ); // credentials, phoneVerification, firstName, birthday, gender, genderPreference, photos, tags, duo
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -37,7 +41,11 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   };
 
   const handleAcceptTOS = () => {
-    handleRegister();
+    if (authMethod === "email") {
+      handleEmailRegister();
+    } else {
+      handlePhoneRegister();
+    }
     setTOSVisible(false);
   };
 
@@ -45,8 +53,25 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     setTOSVisible(false);
   };
 
-  // handles sign up
-  const handleRegister = () => {
+  // handles phone number input to maintain +1 prefix and limit to 10 digits
+  const handlePhoneNumberChange = (text) => {
+    // Always ensure the number starts with +1
+    if (!text.startsWith("+1")) {
+      setPhoneNumber("+1");
+      return;
+    }
+
+    // Extract only the digits after +1
+    const digitsOnly = text.slice(2).replace(/\D/g, "");
+
+    // Limit to 10 digits
+    const limitedDigits = digitsOnly.slice(0, 10);
+
+    setPhoneNumber("+1" + limitedDigits);
+  };
+
+  // handles email sign up
+  const handleEmailRegister = () => {
     auth()
       .createUserWithEmailAndPassword(email, password)
       .then((userCredential) => {
@@ -63,13 +88,46 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
       });
   };
 
+  // handles phone sign up (sends verification code)
+  const handlePhoneRegister = async () => {
+    try {
+      const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
+      setConfirmation(confirmationResult);
+      setCurrentStep("phoneVerification");
+    } catch (error) {
+      console.log("Phone sign up error:", error);
+      alert("Failed to send verification code: " + error.message);
+    }
+  };
+
+  const handlePhoneVerification = async (code) => {
+    try {
+      await confirmation.confirm(code);
+      console.log("Phone verified successfully");
+      // Move to first name step
+      setCurrentStep("firstName");
+    } catch (error) {
+      console.log("Invalid verification code:", error);
+      alert("Invalid verification code. Please try again.");
+    }
+  };
+
+  const handlePhoneVerificationBack = () => {
+    setCurrentStep("credentials");
+    setConfirmation(null);
+  };
+
   const handleFirstNameNext = (firstName) => {
     setSignupData({ ...signupData, firstName });
     setCurrentStep("birthday");
   };
 
   const handleFirstNameBack = () => {
-    setCurrentStep("credentials");
+    if (authMethod === "phone") {
+      setCurrentStep("phoneVerification");
+    } else {
+      setCurrentStep("credentials");
+    }
   };
 
   const handleBirthdayNext = (birthday) => {
@@ -219,6 +277,16 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   };
 
   // Render appropriate screen based on current step
+  if (currentStep === "phoneVerification") {
+    return (
+      <PhoneVerificationScreen
+        onVerify={handlePhoneVerification}
+        onBack={handlePhoneVerificationBack}
+        phoneNumber={phoneNumber}
+      />
+    );
+  }
+
   if (currentStep === "firstName") {
     return (
       <FirstNameScreen
@@ -306,23 +374,47 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
       </Text>
 
       <View style={styles.inputContainer}>
-        <TextInput
-          label="Email"
-          value={email}
-          onChangeText={(text) => setEmail(text)}
-          mode="outlined"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={styles.input}
+        <SegmentedButtons
+          value={authMethod}
+          onValueChange={setAuthMethod}
+          buttons={[
+            { value: "email", label: "Email" },
+            { value: "phone", label: "Phone" },
+          ]}
+          style={styles.segmentedButtons}
         />
-        <TextInput
-          label="Password"
-          value={password}
-          onChangeText={(text) => setPassword(text)}
-          mode="outlined"
-          secureTextEntry
-          style={styles.input}
-        />
+
+        {authMethod === "email" ? (
+          <>
+            <TextInput
+              label="Email"
+              value={email}
+              onChangeText={(text) => setEmail(text)}
+              mode="outlined"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={styles.input}
+            />
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={(text) => setPassword(text)}
+              mode="outlined"
+              secureTextEntry
+              style={styles.input}
+            />
+          </>
+        ) : (
+          <TextInput
+            label="Phone Number"
+            value={phoneNumber}
+            onChangeText={handlePhoneNumberChange}
+            mode="outlined"
+            keyboardType="phone-pad"
+            placeholder="+1 (123) 456-7890"
+            style={styles.input}
+          />
+        )}
       </View>
 
       <View style={styles.buttonContainer}>
@@ -357,6 +449,9 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     width: "80%",
+  },
+  segmentedButtons: {
+    marginBottom: 20,
   },
   input: {
     marginBottom: 10,
