@@ -122,12 +122,17 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     setCurrentStep("birthday");
   };
 
-  const handleFirstNameBack = () => {
-    if (authMethod === "phone") {
-      setCurrentStep("phoneVerification");
-    } else {
-      setCurrentStep("credentials");
+  const handleFirstNameBack = async () => {
+    // Sign out the user since they already created an account
+    try {
+      await auth().signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
     }
+    // Reset verification state
+    setConfirmation(null);
+    // Always go back to credentials screen
+    setCurrentStep("credentials");
   };
 
   const handleBirthdayNext = (birthday) => {
@@ -291,7 +296,7 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     return (
       <FirstNameScreen
         onNext={handleFirstNameNext}
-        onBack={isInSignupFlow ? null : handleFirstNameBack}
+        onBack={handleFirstNameBack}
         initialName={signupData.firstName}
       />
     );
