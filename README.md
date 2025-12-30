@@ -12,7 +12,7 @@
 - bug fixes in chat appearance
 - way to change group chat name
 - way to see group chat members
-- Report bug system
+- Report bug system (can't send images through)
 
 ## Things that are done mostly
 
