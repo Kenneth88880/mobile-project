@@ -559,54 +559,128 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
     );
   };
 
-  const handleSubmitBugReport = async () => {
-    if (!bugReport.title.trim() || !bugReport.description.trim()) {
-      Alert.alert(
-        "Missing Information",
-        "Please fill in both title and description"
-      );
-      return;
-    }
+// Updated handleSubmitBugReport for Firebase Trigger Email Extension
+// Replace your existing handleSubmitBugReport function with this:
 
-    setSendingBugReport(true);
-    try {
-      // Create bug report document in Firestore
-      await firestore()
-        .collection("bugReports")
-        .add({
-          userId: CURRENT_USER_ID,
-          userName: profile.name || "Unknown",
-          userEmail: auth().currentUser?.email || "No email",
-          title: bugReport.title,
-          description: bugReport.description,
-          deviceInfo: Platform.OS,
-          timestamp: new Date().toISOString(),
-          status: "new",
-        });
+const handleSubmitBugReport = async () => {
+  if (!bugReport.title.trim() || !bugReport.description.trim()) {
+    Alert.alert(
+      "Missing Information",
+      "Please fill in both title and description"
+    );
+    return;
+  }
 
-      // Send email notification (you'll need to set up a Cloud Function for this)
-      // Or use a third-party service like EmailJS
+  setSendingBugReport(true);
+  try {
+    // 1. Save the bug report to Firestore
+    const bugReportRef = await firestore()
+      .collection("bugReports")
+      .add({
+        userId: CURRENT_USER_ID,
+        userName: profile.name || "Unknown",
+        userEmail: auth().currentUser?.email || "No email",
+        title: bugReport.title,
+        description: bugReport.description,
+        deviceInfo: Platform.OS,
+        timestamp: new Date().toISOString(),
+        status: "new",
+      });
 
-      Alert.alert(
-        "Thank You!",
-        "Your bug report has been submitted. We'll look into it soon!",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setShowBugReportModal(false);
-              setBugReport({ title: "", description: "" });
-            },
+    console.log('✅ Bug report created:', bugReportRef.id);
+
+    // 2. Trigger email by adding document to 'mail' collection
+    await firestore()
+      .collection("mail")
+      .add({
+        to: "doubly202@gmail.com", // Replace with your work email
+        message: {
+          subject: `🐛 New Bug Report: ${bugReport.title}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background-color: #8B4A61; color: white; padding: 20px; border-radius: 10px 10px 0 0;">
+                <h2 style="margin: 0;">🐛 New Bug Report</h2>
+              </div>
+              
+              <div style="background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none;">
+                <h3 style="margin-top: 0; color: #8B4A61;">${bugReport.title}</h3>
+                
+                <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="padding: 8px; font-weight: bold; width: 150px;">Report ID:</td>
+                      <td style="padding: 8px; font-family: monospace;">${bugReportRef.id}</td>
+                    </tr>
+                    <tr style="background-color: #f5f5f5;">
+                      <td style="padding: 8px; font-weight: bold;">Submitted By:</td>
+                      <td style="padding: 8px;">${profile.name || "Unknown"}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; font-weight: bold;">User Email:</td>
+                      <td style="padding: 8px;">${auth().currentUser?.email || "No email"}</td>
+                    </tr>
+                    <tr style="background-color: #f5f5f5;">
+                      <td style="padding: 8px; font-weight: bold;">User ID:</td>
+                      <td style="padding: 8px; font-family: monospace; font-size: 12px;">${CURRENT_USER_ID}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; font-weight: bold;">Device:</td>
+                      <td style="padding: 8px;">${Platform.OS === 'ios' ? 'iOS' : 'Android'}</td>
+                    </tr>
+                    <tr style="background-color: #f5f5f5;">
+                      <td style="padding: 8px; font-weight: bold;">Date:</td>
+                      <td style="padding: 8px;">${new Date().toLocaleString()}</td>
+                    </tr>
+                  </table>
+                </div>
+                
+                <div style="background-color: white; padding: 20px; border-radius: 5px; margin: 15px 0;">
+                  <h4 style="margin-top: 0; color: #8B4A61;">Description:</h4>
+                  <p style="white-space: pre-wrap; line-height: 1.6; margin: 0;">${bugReport.description}</p>
+                </div>
+                
+                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50;">
+                  <p style="margin: 0; font-weight: bold; color: #2e7d32;">⚠️ Action Required</p>
+                  <p style="margin: 10px 0 0 0;">Please review this bug report in your Firebase Console:</p>
+                  <a href="https://console.firebase.google.com/project/_/firestore/data/bugReports/${bugReportRef.id}" 
+                     style="display: inline-block; margin-top: 15px; padding: 12px 24px; background-color: #8B4A61; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                    View in Firebase Console →
+                  </a>
+                </div>
+              </div>
+              
+              <div style="background-color: #f0f0f0; padding: 15px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; color: #666;">
+                <p style="margin: 0;">This is an automated email from your app's bug reporting system.</p>
+              </div>
+            </div>
+          `,
+        },
+      });
+
+    console.log('✅ Email queued successfully');
+
+    Alert.alert(
+      "Thank You!",
+      "Your bug report has been submitted. We'll look into it soon!",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            setShowBugReportModal(false);
+            setBugReport({ title: "", description: "" });
           },
-        ]
-      );
-    } catch (error) {
-      console.error("Error submitting bug report:", error);
-      Alert.alert("Error", "Failed to submit bug report. Please try again.");
-    } finally {
-      setSendingBugReport(false);
-    }
-  };
+        },
+      ]
+    );
+  } catch (error) {
+    console.error("❌ Error submitting bug report:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    Alert.alert("Error", "Failed to submit bug report. Please try again.");
+  } finally {
+    setSendingBugReport(false);
+  }
+};
 
   const handleLogout = async () => {
     try {
