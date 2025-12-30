@@ -1,5 +1,0 @@
-node_modules/
-*.local
-
-# firebase bug email reports
-index.js

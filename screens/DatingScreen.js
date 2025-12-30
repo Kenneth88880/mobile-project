@@ -330,6 +330,22 @@ export default function DatingScreen({ isActive = true }) {
     }
   };
 
+  // Instagram-style tap navigation
+  const handleImageTap = (event) => {
+    if (selectedProfile?.photos?.length <= 1) return;
+
+    const { locationX } = event.nativeEvent;
+    const { width } = event.nativeEvent.target?.offsetWidth ||
+      event.nativeEvent.target?.clientWidth || { width: 400 }; // fallback
+
+    // If tapped on right side (>50%), go next; left side, go previous
+    if (locationX > width / 2) {
+      handleNextImage();
+    } else {
+      handlePrevImage();
+    }
+  };
+
   const handleSwipeComplete = async (direction) => {
     if (currentPairIndex >= duoPairs.length) return;
 
@@ -570,13 +586,12 @@ export default function DatingScreen({ isActive = true }) {
 
         {profilePhotos.length > 0 ? (
           <Card style={styles.imageCard}>
-            <Card.Cover
-              source={{ uri: profilePhotos[currentImageIndex] }}
-              style={styles.cardCover}
-            />
-            {profilePhotos.length > 1 && (
-              <View style={styles.imageNavigation}>
-                <IconButton icon="chevron-left" onPress={handlePrevImage} />
+            <TouchableOpacity activeOpacity={0.9} onPress={handleImageTap}>
+              <Card.Cover
+                source={{ uri: profilePhotos[currentImageIndex] }}
+                style={styles.cardCover}
+              />
+              {profilePhotos.length > 1 && (
                 <View style={styles.dotsContainer}>
                   {profilePhotos.map((_, index) => (
                     <View
@@ -588,9 +603,8 @@ export default function DatingScreen({ isActive = true }) {
                     />
                   ))}
                 </View>
-                <IconButton icon="chevron-right" onPress={handleNextImage} />
-              </View>
-            )}
+              )}
+            </TouchableOpacity>
           </Card>
         ) : (
           <Card style={styles.imageCard}>
@@ -942,7 +956,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dotsContainer: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
     flexDirection: "row",
+    justifyContent: "center",
     gap: 8,
   },
   dot: {
