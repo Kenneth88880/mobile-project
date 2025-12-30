@@ -33,6 +33,7 @@ import { getUserProfile } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
+import { getAverageRating } from "../services/profileService";
 
 const getUserID = () => CURRENT_USER_ID;
 
@@ -591,6 +592,11 @@ function IndividualChatScreen({ chat, onBack }) {
     messages: null,
     chat: null,
   });
+  // to see and leave average rating
+  const [viewingProfileRating, setViewingProfileRating] = useState({ average: "0.0", count: 0 });
+  const [userRating, setUserRating] = useState(0);
+  const [hasRated, setHasRated] = useState(false);
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   useEffect(() => {
     if (!chat?.id) return;
@@ -788,12 +794,58 @@ function IndividualChatScreen({ chat, onBack }) {
     }
   };
 
-  // Handle profile picture click
-  const handleProfilePicturePress = (userId) => {
+  const handleProfilePicturePress = async (userId) => {
     const profile = userProfiles[userId];
-    if (profile) {
-      setViewingProfile(profile);
-      setProfileImageIndex(0);
+    if (!profile) return;
+
+    // Reset rating state before loading new profile
+    setUserRating(0);
+    setHasRated(false);
+    setViewingProfileRating({ average: "0.0", count: 0 });
+
+    setViewingProfile(profile);
+    setProfileImageIndex(0);
+
+    await loadProfileRating(userId);
+  };
+
+  const handleParticipantPress = async (profile) => {
+    // Reset rating state
+    setUserRating(0);
+    setHasRated(false);
+    setViewingProfileRating({ average: "0.0", count: 0 });
+
+    setViewingProfile(profile);
+    setProfileImageIndex(0);
+    setShowParticipants(false);
+
+    await loadProfileRating(profile.id);
+  };
+
+  const loadProfileRating = async (userId) => {
+    try {
+      // Reset first to avoid leakage
+      setUserRating(0);
+      setHasRated(false);
+      setViewingProfileRating({ average: "0.0", count: 0 });
+
+      const ratingData = await getAverageRating(userId);
+      setViewingProfileRating(ratingData);
+
+      const existingRatingSnap = await firestore()
+        .collection("ratings")
+        .where("fromUserId", "==", currentUserId)
+        .where("toUserId", "==", userId)
+        .limit(1)
+        .get();
+
+      if (!existingRatingSnap.empty) {
+        const ratingDoc = existingRatingSnap.docs[0];
+        setUserRating(ratingDoc.data().rating);
+        setHasRated(true);
+      }
+    } catch (error) {
+      console.error("Error loading rating:", error);
     }
   };
 
@@ -818,6 +870,89 @@ function IndividualChatScreen({ chat, onBack }) {
       );
     }
   };
+
+
+  // Submit or update rating
+  const handleSubmitRating = async (userId, rating) => {
+    if (rating === 0) {
+      Alert.alert("Invalid Rating", "Please select a rating between 1-5 stars");
+      return;
+    }
+
+    if (userId === currentUserId) {
+      Alert.alert("Error", "You cannot rate yourself");
+      return;
+    }
+
+    setSubmittingRating(true);
+
+    try {
+      // Check if user has already rated
+      const existingRating = await firestore()
+        .collection("ratings")
+        .where("fromUserId", "==", currentUserId)
+        .where("toUserId", "==", userId)
+        .get();
+
+      if (!existingRating.empty) {
+        // Update existing rating
+        const ratingDoc = existingRating.docs[0];
+        await firestore()
+          .collection("ratings")
+          .doc(ratingDoc.id)
+          .update({
+            rating: rating,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          });
+        
+        Alert.alert("Success", "Your rating has been updated!");
+      } else {
+        // Create new rating
+        await firestore()
+          .collection("ratings")
+          .add({
+            fromUserId: currentUserId,
+            toUserId: userId,
+            rating: rating,
+            createdAt: firestore.FieldValue.serverTimestamp(),
+          });
+        
+        Alert.alert("Success", "Thank you for your rating!");
+      }
+
+      // Reload rating data
+      await loadProfileRating(userId);
+      setHasRated(true);
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      Alert.alert("Error", "Failed to submit rating. Please try again.");
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
+  // Helper function to render star rating UI
+  const renderStars = (rating, onPress = null) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <TouchableOpacity
+          key={i}
+          onPress={() => onPress && onPress(i)}
+          disabled={!onPress}
+          style={{ marginHorizontal: 4 }}
+        >
+          <Icon
+            source={i <= rating ? "star" : "star-outline"}
+            size={onPress ? 36 : 20}
+            color={i <= rating ? "#FFD700" : "#ddd"}
+          />
+        </TouchableOpacity>
+      );
+    }
+    return stars;
+  };
+
 
   const onSend = useCallback(async () => {
     if (!chat?.id || !inputText.trim()) return;
@@ -1179,11 +1314,7 @@ function IndividualChatScreen({ chat, onBack }) {
                         <ProfilePhoto uri={profile.photos?.[0]} size={48} />
                       )}
                       style={{ paddingVertical: 8 }}
-                      onPress={() => {
-                        setViewingProfile(profile);
-                        setProfileImageIndex(0);
-                        setShowParticipants(false);
-                      }}
+                      onPress={() => handleParticipantPress(profile)}
                     />
                   );
                 })
@@ -1205,6 +1336,8 @@ function IndividualChatScreen({ chat, onBack }) {
           onDismiss={() => {
             setViewingProfile(null);
             setProfileImageIndex(0);
+            setUserRating(0);
+            setHasRated(false);
           }}
           contentContainerStyle={{
             backgroundColor: theme.colors.background,
@@ -1233,6 +1366,8 @@ function IndividualChatScreen({ chat, onBack }) {
                   onPress={() => {
                     setViewingProfile(null);
                     setProfileImageIndex(0);
+                    setUserRating(0);
+                    setHasRated(false);
                   }}
                 />
               </View>
@@ -1308,12 +1443,22 @@ function IndividualChatScreen({ chat, onBack }) {
                             {viewingProfile.name}, {viewingProfile.age || "?"}
                           </Text>
 
+                          {/* ⭐ NEW: Average Rating Display */}
+                          <View style={{ marginTop: 12, alignItems: "center" }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                              {renderStars(parseFloat(viewingProfileRating.average))}
+                            </View>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                              {viewingProfileRating.average} ({viewingProfileRating.count} rating{viewingProfileRating.count !== 1 ? "s" : ""})
+                            </Text>
+                          </View>
+
                           {viewingProfile.city && (
                             <View
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                marginTop: 8,
+                                marginTop: 12,
                               }}
                             >
                               <Icon source="map-marker" size={16} />
@@ -1400,6 +1545,56 @@ function IndividualChatScreen({ chat, onBack }) {
                             )}
                         </Card.Content>
                       </Card>
+
+                      {/* ⭐ NEW: Rate This Person Section */}
+                      {viewingProfile.id !== currentUserId && (
+                        <Card style={{ marginBottom: 16, backgroundColor: theme.colors.primaryContainer }}>
+                          <Card.Content>
+                            <Text variant="titleMedium" style={{ marginBottom: 12, textAlign: "center" }}>
+                              {hasRated ? "Update Your Rating" : "Rate This Person"}
+                            </Text>
+                            
+                            <View style={{ alignItems: "center", marginBottom: 12 }}>
+                              <View style={{ flexDirection: "row", justifyContent: "center" }}>
+                                {renderStars(userRating, setUserRating)}
+                              </View>
+                              {userRating > 0 && (
+                                <Text variant="bodySmall" style={{ marginTop: 8, fontStyle: "italic" }}>
+                                  {userRating === 1 && "Poor"}
+                                  {userRating === 2 && "Fair"}
+                                  {userRating === 3 && "Good"}
+                                  {userRating === 4 && "Very Good"}
+                                  {userRating === 5 && "Excellent"}
+                                </Text>
+                              )}
+                            </View>
+
+                            <Button
+                              mode="contained"
+                              onPress={() => handleSubmitRating(viewingProfile.id, userRating)}
+                              disabled={userRating === 0 || submittingRating}
+                              loading={submittingRating}
+                              icon={hasRated ? "update" : "star"}
+                            >
+                              {hasRated ? "Update Rating" : "Submit Rating"}
+                            </Button>
+                            
+                            {hasRated && (
+                              <Text 
+                                variant="bodySmall" 
+                                style={{ 
+                                  marginTop: 8, 
+                                  textAlign: "center",
+                                  fontStyle: "italic",
+                                  opacity: 0.7
+                                }}
+                              >
+                                You previously rated this person {userRating} star{userRating !== 1 ? "s" : ""}
+                              </Text>
+                            )}
+                          </Card.Content>
+                        </Card>
+                      )}
                     </View>
                   )}
                   keyExtractor={(item) => item.key}
