@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   FlatList,
@@ -58,36 +58,130 @@ const deleteChat = async (chatId) => {
   }
 };
 
-// Report a chat
+// Report a chat with comprehensive logging
 const reportChat = async (chatId, reportingUserId) => {
   try {
     const chatRef = firestore().collection("chats").doc(chatId);
     const chatDoc = await chatRef.get();
 
-    if (chatDoc.exists) {
-      const data = chatDoc.data();
-      const reports = data.reports || [];
-      reports.push({
-        reportedBy: reportingUserId,
-        reportedAt: firestore.FieldValue.serverTimestamp(),
-        reason: "User reported inappropriate content",
-      });
-
-      const participants = data.participants || [];
-      const updatedParticipants = participants.filter(
-        (id) => id !== reportingUserId
-      );
-
-      await chatRef.update({
-        reports: reports,
-        participants: updatedParticipants,
-        flaggedForModeration: true,
-        lastReportedAt: firestore.FieldValue.serverTimestamp(),
-      });
-
-      return true;
+    if (!chatDoc.exists) {
+      console.error("Chat not found");
+      return false;
     }
-    return false;
+
+    const chatData = chatDoc.data();
+    const participants = chatData.participants || [];
+
+    // 1. Get reporter's profile
+    const reporterProfile = await getUserProfile(reportingUserId);
+
+    // 2. Get all chat messages (optimized for storage)
+    const messagesSnapshot = await chatRef
+      .collection("messages")
+      .orderBy("createdAt", "asc")
+      .get();
+    const chatLogs = messagesSnapshot.docs.map((doc) => {
+      const msgData = doc.data();
+      // Truncate very long messages to save storage
+      const text = msgData.text || "";
+      const truncatedText =
+        text.length > 500 ? text.substring(0, 500) + "... [truncated]" : text;
+
+      return {
+        messageId: doc.id,
+        text: truncatedText,
+        senderId: msgData.user._id,
+        senderName: msgData.user.name,
+        createdAt: msgData.createdAt
+          ? msgData.createdAt.toDate().toISOString()
+          : null,
+      };
+    });
+
+    // 3. Get all participant profiles (optimized for storage)
+    const participantProfiles = {};
+    for (const participantId of participants) {
+      const profile = await getUserProfile(participantId);
+      if (profile) {
+        participantProfiles[participantId] = {
+          userId: participantId,
+          name: profile.name,
+          age: profile.age,
+          gender: profile.gender,
+          city: profile.city,
+          email: profile.email || "N/A",
+          // Only store first photo URL and count (not entire array)
+          firstPhoto: profile.photos?.[0] || null,
+          photoCount: profile.photos?.length || 0,
+          // Store tags as comma-separated string to save space
+          tags: profile.tags ? profile.tags.join(", ") : "",
+          description: profile.description || "",
+          createdAt: profile.createdAt || null,
+        };
+      }
+    }
+
+    // 4. Create comprehensive report document
+    const reportData = {
+      // Report metadata
+      reportId: `report_${Date.now()}`,
+      reportedAt: firestore.FieldValue.serverTimestamp(),
+      chatId: chatId,
+      chatName: chatData.groupName || "Unnamed Chat",
+      isGroupChat: chatData.isGroupChat || false,
+
+      // Reporter information
+      reporter: {
+        userId: reportingUserId,
+        profile: reporterProfile,
+      },
+
+      // All chat participants
+      participants: participantProfiles,
+      participantCount: participants.length,
+
+      // Complete chat logs
+      chatLogs: chatLogs,
+      messageCount: chatLogs.length,
+
+      // Chat metadata
+      chatCreatedAt: chatData.createdAt || null,
+      lastMessageTime: chatData.lastMessageTime,
+
+      // Status
+      status: "pending_review",
+      reviewedAt: null,
+      reviewedBy: null,
+      action: null,
+    };
+
+    // 5. Save to reports collection
+    await firestore().collection("reports").add(reportData);
+
+    // 6. Flag the chat for moderation AND hide it from reporter
+    const reports = chatData.reports || [];
+    reports.push({
+      reportedBy: reportingUserId,
+      reportedAt: Date.now(), // ✅ Use Date.now() instead of serverTimestamp() in arrays
+      reason: "User reported inappropriate content",
+    });
+
+    // Hide chat from reporter (but keep them in participants to avoid permission errors)
+    const hiddenFor = chatData.hiddenFor || [];
+    if (!hiddenFor.includes(reportingUserId)) {
+      hiddenFor.push(reportingUserId);
+    }
+
+    await chatRef.update({
+      reports: reports,
+      hiddenFor: hiddenFor, // ✅ Hide chat from reporter's view
+      flaggedForModeration: true,
+      lastReportedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`✅ Comprehensive report created for chat ${chatId}`);
+    console.log(`✅ Chat hidden from reporter`);
+    return true;
   } catch (error) {
     console.error("Error reporting chat:", error);
     return false;
@@ -154,6 +248,7 @@ function ChatListScreen({ onChatSelect }) {
   useEffect(() => {
     const unsubscribe = firestore()
       .collection("chats")
+      .where("participants", "array-contains", currentUserId)
       .onSnapshot(
         (snapshot) => {
           const activeChatsList = [];
@@ -161,21 +256,23 @@ function ChatListScreen({ onChatSelect }) {
 
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
-            if (
-              data.participants &&
-              data.participants.includes(currentUserId)
-            ) {
-              const chat = {
-                id: docSnap.id,
-                ...data,
-              };
 
-              // Separate active and archived chats
-              if (data.status === "archived") {
-                archivedChatsList.push(chat);
-              } else {
-                activeChatsList.push(chat);
-              }
+            // Skip chats that are hidden for this user
+            if (data.hiddenFor && data.hiddenFor.includes(currentUserId)) {
+              return; // Skip this chat
+            }
+
+            // Database already filters by participant via .where() clause
+            const chat = {
+              id: docSnap.id,
+              ...data,
+            };
+
+            // Separate active and archived chats
+            if (data.status === "archived") {
+              archivedChatsList.push(chat);
+            } else {
+              activeChatsList.push(chat);
             }
           });
 
@@ -265,22 +362,50 @@ function ChatListScreen({ onChatSelect }) {
   const handleReport = (chatId, chatName) => {
     Alert.alert(
       "Report Chat",
-      `Report "${chatName}"? This will flag it for moderation.`,
+      `Report "${chatName}" for inappropriate content?\n\nThis will:\n• Collect all chat messages\n• Log all participant profiles\n• Flag for moderation review\n• Hide this chat from your view`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Report",
           style: "destructive",
-          onPress: async () => {
-            const success = await reportChat(chatId, currentUserId);
-            if (success) {
-              Alert.alert(
-                "Reported",
-                "Thank you. Our team will review this chat."
-              );
-            } else {
-              Alert.alert("Error", "Failed to report chat");
-            }
+          onPress: () => {
+            // Use setTimeout to avoid async in Alert.alert onPress (can cause iOS crashes)
+            setTimeout(async () => {
+              try {
+                console.log("Submitting report for chat:", chatId);
+
+                // Small delay to let React finish any pending updates
+                await new Promise((resolve) => setTimeout(resolve, 100));
+
+                // Submit the report
+                const success = await reportChat(chatId, currentUserId);
+
+                console.log("Report submission result:", success);
+
+                // Wait before showing next alert to avoid nested alert issues on iOS
+                setTimeout(() => {
+                  if (success) {
+                    Alert.alert(
+                      "Report Submitted",
+                      "Thank you. Our moderation team will review this chat within 24 hours. The chat has been hidden from your view."
+                    );
+                  } else {
+                    Alert.alert(
+                      "Error",
+                      "Failed to submit report. Please try again."
+                    );
+                  }
+                }, 300);
+              } catch (error) {
+                console.error("Error in report flow:", error);
+                setTimeout(() => {
+                  Alert.alert(
+                    "Error",
+                    "Something went wrong. Please try again."
+                  );
+                }, 300);
+              }
+            }, 50);
           },
         },
       ]
@@ -461,6 +586,12 @@ function IndividualChatScreen({ chat, onBack }) {
   const [editingName, setEditingName] = useState("");
   const [currentChat, setCurrentChat] = useState(chat);
 
+  // Store unsubscribe functions to prevent crashes when reporting
+  const unsubscribersRef = useRef({
+    messages: null,
+    chat: null,
+  });
+
   useEffect(() => {
     if (!chat?.id) return;
 
@@ -484,24 +615,43 @@ function IndividualChatScreen({ chat, onBack }) {
       .doc(chat.id)
       .collection("messages")
       .orderBy("createdAt", "desc")
-      .onSnapshot((snapshot) => {
-        const messagesList = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            _id: doc.id,
-            text: data.text,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            user: {
-              _id: data.user._id,
-              name: data.user.name,
-            },
-          };
-        });
+      .onSnapshot(
+        (snapshot) => {
+          const messagesList = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              _id: doc.id,
+              text: data.text,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              user: {
+                _id: data.user._id,
+                name: data.user.name,
+              },
+            };
+          });
 
-        setMessages(messagesList);
-      });
+          setMessages(messagesList);
+        },
+        (error) => {
+          // Handle permission errors gracefully (happens when removed from chat)
+          if (error.code === "permission-denied") {
+            console.log(
+              "Permission denied - user removed from chat, navigating away"
+            );
+            onBack();
+          } else {
+            console.error("Error loading messages:", error);
+          }
+        }
+      );
 
-    return () => unsubscribe();
+    // Store unsubscribe function for cleanup
+    unsubscribersRef.current.messages = unsubscribe;
+
+    return () => {
+      unsubscribe();
+      unsubscribersRef.current.messages = null;
+    };
   }, [chat, currentUserId]);
 
   useEffect(() => {
@@ -529,14 +679,48 @@ function IndividualChatScreen({ chat, onBack }) {
     const unsubscribe = firestore()
       .collection("chats")
       .doc(chat.id)
-      .onSnapshot((doc) => {
-        if (doc.exists) {
-          setCurrentChat({ id: doc.id, ...doc.data() });
+      .onSnapshot(
+        (doc) => {
+          if (doc.exists) {
+            setCurrentChat({ id: doc.id, ...doc.data() });
+          }
+        },
+        (error) => {
+          // Handle permission errors gracefully (happens when removed from chat)
+          if (error.code === "permission-denied") {
+            console.log(
+              "Permission denied - user removed from chat, navigating away"
+            );
+            onBack();
+          } else {
+            console.error("Error loading chat:", error);
+          }
         }
-      });
+      );
 
-    return () => unsubscribe();
+    // Store unsubscribe function for cleanup
+    unsubscribersRef.current.chat = unsubscribe;
+
+    return () => {
+      unsubscribe();
+      unsubscribersRef.current.chat = null;
+    };
   }, [chat?.id]);
+
+  // Cleanup all listeners - call this before reporting to prevent crashes
+  const cleanupListeners = useCallback(() => {
+    console.log("Cleaning up all listeners before report...");
+
+    if (unsubscribersRef.current.messages) {
+      unsubscribersRef.current.messages();
+      unsubscribersRef.current.messages = null;
+    }
+
+    if (unsubscribersRef.current.chat) {
+      unsubscribersRef.current.chat();
+      unsubscribersRef.current.chat = null;
+    }
+  }, []);
 
   const handleEditGroupInfo = () => {
     setEditingName(currentChat.groupName || "");
@@ -610,6 +794,28 @@ function IndividualChatScreen({ chat, onBack }) {
     if (profile) {
       setViewingProfile(profile);
       setProfileImageIndex(0);
+    }
+  };
+
+  // Instagram-style tap navigation for profile photos
+  const handleProfileImageTap = (event) => {
+    if (!viewingProfile?.photos || viewingProfile.photos.length <= 1) return;
+
+    const { locationX } = event.nativeEvent;
+    const { width } = event.nativeEvent.target?.offsetWidth ||
+      event.nativeEvent.target?.clientWidth || { width: 400 }; // fallback
+
+    // If tapped on right side (>50%), go next; left side, go previous
+    if (locationX > width / 2) {
+      // Next image
+      setProfileImageIndex((prev) =>
+        prev === viewingProfile.photos.length - 1 ? 0 : prev + 1
+      );
+    } else {
+      // Previous image
+      setProfileImageIndex((prev) =>
+        prev === 0 ? viewingProfile.photos.length - 1 : prev - 1
+      );
     }
   };
 
@@ -863,6 +1069,10 @@ function IndividualChatScreen({ chat, onBack }) {
               maxLength={1000}
               style={styles.textInput}
               dense
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              spellCheck={true}
+              textContentType="none"
             />
             <IconButton
               icon="send"
@@ -1035,38 +1245,28 @@ function IndividualChatScreen({ chat, onBack }) {
                       {viewingProfile.photos &&
                       viewingProfile.photos.length > 0 ? (
                         <Card style={{ marginBottom: 16 }}>
-                          <Card.Cover
-                            source={{
-                              uri: viewingProfile.photos[profileImageIndex],
-                            }}
-                            style={{ height: 300 }}
-                          />
-                          {viewingProfile.photos.length > 1 && (
-                            <View
-                              style={{
-                                position: "absolute",
-                                bottom: 16,
-                                left: 0,
-                                right: 0,
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                paddingHorizontal: 8,
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={handleProfileImageTap}
+                          >
+                            <Card.Cover
+                              source={{
+                                uri: viewingProfile.photos[profileImageIndex],
                               }}
-                            >
-                              <IconButton
-                                icon="chevron-left"
-                                iconColor="white"
-                                onPress={() =>
-                                  setProfileImageIndex((prev) =>
-                                    prev === 0
-                                      ? viewingProfile.photos.length - 1
-                                      : prev - 1
-                                  )
-                                }
-                                style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                              />
-                              <View style={{ flexDirection: "row", gap: 8 }}>
+                              style={{ height: 300 }}
+                            />
+                            {viewingProfile.photos.length > 1 && (
+                              <View
+                                style={{
+                                  position: "absolute",
+                                  bottom: 16,
+                                  left: 0,
+                                  right: 0,
+                                  flexDirection: "row",
+                                  justifyContent: "center",
+                                  gap: 8,
+                                }}
+                              >
                                 {viewingProfile.photos.map((_, index) => (
                                   <View
                                     key={index}
@@ -1085,20 +1285,8 @@ function IndividualChatScreen({ chat, onBack }) {
                                   />
                                 ))}
                               </View>
-                              <IconButton
-                                icon="chevron-right"
-                                iconColor="white"
-                                onPress={() =>
-                                  setProfileImageIndex((prev) =>
-                                    prev === viewingProfile.photos.length - 1
-                                      ? 0
-                                      : prev + 1
-                                  )
-                                }
-                                style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                              />
-                            </View>
-                          )}
+                            )}
+                          </TouchableOpacity>
                         </Card>
                       ) : (
                         <Card
@@ -1280,15 +1468,28 @@ const styles = StyleSheet.create({
     width: 48,
   },
   messagesList: {
-    padding: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   messageRow: {
     flexDirection: "row",
     marginBottom: 8,
-    maxWidth: "80%",
+    alignItems: "flex-end",
+    paddingHorizontal: 4,
   },
   myMessageRow: {
     alignSelf: "flex-end",
+  },
+  avatarWrapper: {
+    alignItems: "center",
+    justifyContent: "flex-end",
+    marginBottom: 4,
+    minWidth: 40,
+  },
+  avatarName: {
+    fontSize: 10,
+    marginBottom: 2,
+    textAlign: "center",
   },
   messageAvatar: {
     marginHorizontal: 4,
@@ -1296,7 +1497,8 @@ const styles = StyleSheet.create({
   messageBubble: {
     padding: 12,
     borderRadius: 16,
-    maxWidth: "100%",
+    maxWidth: 280,
+    minWidth: 60,
   },
   senderName: {
     marginBottom: 4,
@@ -1312,10 +1514,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     padding: 8,
     gap: 8,
-    minHeight: 56, // Minimum height for single line
+    minHeight: 56,
+    maxHeight: 150, // Prevent container from growing too large
   },
   textInput: {
     flex: 1,
-    maxHeight: 120, // ✅ FIX BUG #3: Limit height to prevent avatar cutoff
+    maxHeight: 100, // Reduced from 120 to prevent avatar cutoff
   },
 });

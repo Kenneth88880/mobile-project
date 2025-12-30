@@ -324,12 +324,24 @@ export default function RequestsScreen({ isActive = true }) {
   };
 
   const handlePrevImage = () => {
-    if (
-      selectedProfile?.photos &&
-      currentImageIndex > 1 &&
-      currentImageIndex > 0
-    ) {
+    if (selectedProfile?.photos && currentImageIndex > 0) {
       setCurrentImageIndex(currentImageIndex - 1);
+    }
+  };
+
+  // Instagram-style tap navigation
+  const handleImageTap = (event) => {
+    if (!selectedProfile?.photos || selectedProfile.photos.length <= 1) return;
+
+    const { locationX } = event.nativeEvent;
+    const { width } = event.nativeEvent.target?.offsetWidth ||
+      event.nativeEvent.target?.clientWidth || { width: 400 }; // fallback
+
+    // If tapped on right side (>50%), go next; left side, go previous
+    if (locationX > width / 2) {
+      handleNextImage();
+    } else {
+      handlePrevImage();
     }
   };
 
@@ -493,49 +505,46 @@ export default function RequestsScreen({ isActive = true }) {
         <ScrollView showsVerticalScrollIndicator={false}>
           <Card style={styles.profileImageCard}>
             {currentPhoto ? (
-              <View style={styles.profileCover}>
-                <Image
-                  key={currentPhoto}
-                  source={{ uri: currentPhoto }}
-                  style={{ width: "100%", height: "100%" }}
-                  resizeMode="cover"
-                  onLoad={() => {
-                    console.log(
-                      "✅ Image loaded successfully:",
-                      currentPhoto.substring(0, 50) + "..."
-                    );
-                  }}
-                  onError={(error) => {
-                    console.error(
-                      "❌ Image load error:",
-                      error.nativeEvent?.error
-                    );
-                    console.log("Failed to load image URL:", currentPhoto);
-                  }}
-                />
-              </View>
+              <TouchableOpacity activeOpacity={0.9} onPress={handleImageTap}>
+                <View style={styles.profileCover}>
+                  <Image
+                    key={currentPhoto}
+                    source={{ uri: currentPhoto }}
+                    style={{ width: "100%", height: "100%" }}
+                    resizeMode="cover"
+                    onLoad={() => {
+                      console.log(
+                        "✅ Image loaded successfully:",
+                        currentPhoto.substring(0, 50) + "..."
+                      );
+                    }}
+                    onError={(error) => {
+                      console.error(
+                        "❌ Image load error:",
+                        error.nativeEvent?.error
+                      );
+                      console.log("Failed to load image URL:", currentPhoto);
+                    }}
+                  />
+                </View>
+                {hasPhotos && selectedProfile.photos.length > 1 && (
+                  <View style={styles.dotsContainer}>
+                    {selectedProfile.photos.map((_, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.dot,
+                          index === currentImageIndex && styles.activeDot,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                )}
+              </TouchableOpacity>
             ) : (
               <View style={styles.noPhotoContainer}>
                 <ProfilePhoto size={120} />
                 <Text variant="bodyLarge">No photos available</Text>
-              </View>
-            )}
-
-            {hasPhotos && selectedProfile.photos.length > 1 && (
-              <View style={styles.photoNavigation}>
-                <IconButton icon="chevron-left" onPress={handlePrevImage} />
-                <View style={styles.dotsContainer}>
-                  {selectedProfile.photos.map((_, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.dot,
-                        index === currentImageIndex && styles.activeDot,
-                      ]}
-                    />
-                  ))}
-                </View>
-                <IconButton icon="chevron-right" onPress={handleNextImage} />
               </View>
             )}
           </Card>
@@ -999,7 +1008,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dotsContainer: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
     flexDirection: "row",
+    justifyContent: "center",
     gap: 8,
   },
   dot: {
