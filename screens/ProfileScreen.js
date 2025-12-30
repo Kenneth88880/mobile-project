@@ -163,6 +163,9 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
   const [viewingRequesterProfile, setViewingRequesterProfile] = useState(null);
   const [requesterImageIndex, setRequesterImageIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [showBugReportModal, setShowBugReportModal] = useState(false);
+  const [bugReport, setBugReport] = useState({ title: "", description: "" });
+  const [sendingBugReport, setSendingBugReport] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -345,24 +348,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
       console.error("Error saving profile:", error);
       Alert.alert("Error", "Failed to save profile");
     }
-  };
-
-  const handleLogout = async () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await auth().signOut();
-          } catch (error) {
-            console.error("Error signing out:", error);
-            Alert.alert("Error", "Failed to sign out");
-          }
-        },
-      },
-    ]);
   };
 
   const handlePhotosChange = (newPhotos) => {
@@ -572,6 +557,65 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         },
       ]
     );
+  };
+
+  const handleSubmitBugReport = async () => {
+    if (!bugReport.title.trim() || !bugReport.description.trim()) {
+      Alert.alert(
+        "Missing Information",
+        "Please fill in both title and description"
+      );
+      return;
+    }
+
+    setSendingBugReport(true);
+    try {
+      // Create bug report document in Firestore
+      await firestore()
+        .collection("bugReports")
+        .add({
+          userId: CURRENT_USER_ID,
+          userName: profile.name || "Unknown",
+          userEmail: auth().currentUser?.email || "No email",
+          title: bugReport.title,
+          description: bugReport.description,
+          deviceInfo: Platform.OS,
+          timestamp: new Date().toISOString(),
+          status: "new",
+        });
+
+      // Send email notification (you'll need to set up a Cloud Function for this)
+      // Or use a third-party service like EmailJS
+
+      Alert.alert(
+        "Thank You!",
+        "Your bug report has been submitted. We'll look into it soon!",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setShowBugReportModal(false);
+              setBugReport({ title: "", description: "" });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error submitting bug report:", error);
+      Alert.alert("Error", "Failed to submit bug report. Please try again.");
+    } finally {
+      setSendingBugReport(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await auth().signOut();
+      Alert.alert("Signed Out", "You have been successfully signed out");
+    } catch (error) {
+      console.error("Error signing out:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
   };
 
   // Helper to render stars
@@ -941,6 +985,97 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           )}
         </ScrollView>
       </SafeAreaView>
+    </Modal>
+  );
+
+  const BugReportModal = () => (
+    <Modal
+      visible={showBugReportModal}
+      animationType="slide"
+      onRequestClose={() => setShowBugReportModal(false)}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: theme.colors.background }}
+        >
+          <View style={styles.modalHeader}>
+            <Text variant="headlineMedium">Report a Bug</Text>
+            <IconButton
+              icon="close"
+              onPress={() => {
+                setShowBugReportModal(false);
+                setBugReport({ title: "", description: "" });
+              }}
+            />
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 16 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Card style={{ marginBottom: 16 }}>
+              <Card.Content>
+                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
+                  Help us improve the app by reporting any issues you encounter.
+                </Text>
+                <Text
+                  variant="bodySmall"
+                  style={{ fontStyle: "italic", opacity: 0.7 }}
+                >
+                  We'll review your report and work on a fix as soon as
+                  possible.
+                </Text>
+              </Card.Content>
+            </Card>
+
+            <TextInput
+              label="Bug Title *"
+              value={bugReport.title}
+              onChangeText={(text) =>
+                setBugReport({ ...bugReport, title: text })
+              }
+              mode="outlined"
+              style={{ marginBottom: 16 }}
+              placeholder="Brief description of the issue"
+              maxLength={100}
+            />
+
+            <TextInput
+              label="Detailed Description *"
+              value={bugReport.description}
+              onChangeText={(text) =>
+                setBugReport({ ...bugReport, description: text })
+              }
+              mode="outlined"
+              multiline
+              numberOfLines={8}
+              style={{ marginBottom: 16 }}
+              placeholder="What happened? What were you doing when the bug occurred? Any steps to reproduce?"
+            />
+
+            <Text
+              variant="bodySmall"
+              style={{ fontStyle: "italic", opacity: 0.7, marginBottom: 16 }}
+            >
+              * Required fields
+            </Text>
+
+            <Button
+              mode="contained"
+              onPress={handleSubmitBugReport}
+              icon="send"
+              loading={sendingBugReport}
+              disabled={sendingBugReport}
+            >
+              Submit Bug Report
+            </Button>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -1464,6 +1599,27 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
           </Card.Content>
         </Card>
 
+        {/* Report Bug Button */}
+        <Card style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <Card.Content style={{ padding: 8 }}>
+            <Button
+              mode="contained"
+              icon="bug"
+              onPress={() => setShowBugReportModal(true)}
+              contentStyle={{
+                paddingVertical: 16,
+              }}
+              labelStyle={{
+                fontSize: 18,
+                fontWeight: "bold",
+              }}
+              buttonColor="#8B4A61"
+            >
+              Report a Bug
+            </Button>
+          </Card.Content>
+        </Card>
+
         {/* Logout Button */}
         <Button
           mode="outlined"
@@ -1484,6 +1640,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
         />
         {PartnerSearchModal()}
         {PendingRequestsModal()}
+        {BugReportModal()}
       </ScrollView>
     );
   }
@@ -1799,11 +1956,6 @@ const styles = StyleSheet.create({
   noPartnerContainer: {
     alignItems: "center",
     paddingVertical: 20,
-  },
-  logoutButton: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-    borderColor: "#ff6b6b",
   },
   // EXISTING STYLES
   card: {

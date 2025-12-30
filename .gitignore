@@ -60,3 +60,6 @@ colours/
 
 # .env containing api keys
 .env
+
+# firebase bug email reports
+firebaseConfig.js

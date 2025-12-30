@@ -6,10 +6,10 @@ export default {
     slug: "doubly-yrvn0tmogrdrliugnun4w",
     version: "1.0.2",
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: "./assets/doubly-icon.png",
     userInterfaceStyle: "light",
     splash: {
-      image: "./assets/splash.png",
+      image: "./assets/doubly-text-black.png",
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },

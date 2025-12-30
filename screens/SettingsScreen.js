@@ -16,8 +16,11 @@ import {
   Surface,
   useTheme,
   IconButton,
+  Button,
 } from "react-native-paper";
 import Slider from "@react-native-community/slider";
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   getUserProfile,
@@ -118,6 +121,114 @@ export default function SettingsScreen({
     }
   };
 
+  const handleLogout = async () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await auth().signOut();
+          } catch (error) {
+            console.error("Error signing out:", error);
+            Alert.alert("Error", "Failed to sign out");
+          }
+        },
+      },
+    ]);
+  };
+
+  // const confirmFinalDelete = async () => {
+  //   Alert.alert(
+  //     "Delete Account",
+  //     "This will delete your chats and may affect your duo.",
+  //     [
+  //       {
+  //         text: "Delete",
+  //         style: "destructive",
+  //         onPress: async () => {
+  //           try {
+  //             const userId = CURRENT_USER_ID;
+  //             const currentUser = auth().currentUser;
+
+  //             if (!userId || !currentUser) {
+  //               Alert.alert("Error", "User not found");
+  //               return;
+  //             }
+
+  //             // Delete user profile from Firestore
+  //             await firestore().collection("profiles").doc(userId).delete();
+
+  //             // Delete any duo requests involving this user
+  //             const duoRequestsSnapshot = await firestore()
+  //               .collection("duoRequests")
+  //               .where("fromUserId", "==", userId)
+  //               .get();
+
+  //             const duoRequestsToSnapshot = await firestore()
+  //               .collection("duoRequests")
+  //               .where("toUserId", "==", userId)
+  //               .get();
+
+  //             // Delete all duo requests
+  //             const batch = firestore().batch();
+  //             duoRequestsSnapshot.forEach((doc) => {
+  //               batch.delete(doc.ref);
+  //             });
+  //             duoRequestsToSnapshot.forEach((doc) => {
+  //               batch.delete(doc.ref);
+  //             });
+  //             await batch.commit();
+
+  //             // Delete Firebase auth account
+  //             await currentUser.delete();
+
+  //             console.log("Account deleted successfully");
+  //             Alert.alert("Success", "Your account has been deleted");
+  //           } catch (error) {
+  //             console.error("Error deleting account:", error);
+  //             Alert.alert(
+  //               "Error",
+  //               "Failed to delete account. Please try again or contact support."
+  //             );
+  //           }
+  //         },
+  //       },
+  //       {
+  //         text: "Cancel",
+  //         style: "cancel",
+  //       },
+  //     ]
+  //   );
+  // };
+
+  // const handleDeleteAccount = () => {
+  //   Alert.alert(
+  //     "Did you mean sign out?",
+  //     "",
+  //     [
+  //       {
+  //         text: "Cancel",
+  //         style: "cancel",
+  //       },
+  //       {
+  //         text: "Sign Out",
+  //         onPress: () => {
+  //           handleLogout();
+  //         },
+  //       },
+  //       {
+  //         text: "Delete",
+  //         style: "destructive",
+  //         onPress: () => {
+  //           confirmFinalDelete();
+  //         },
+  //       },
+  //     ]
+  //   );
+  // };
+
   if (loading) {
     const loadingContent = (
       <SafeAreaView
@@ -148,12 +259,6 @@ export default function SettingsScreen({
             style={styles.backButton}
           />
         )}
-        <Text
-          variant="headlineLarge"
-          style={onClose ? styles.headerWithBack : null}
-        >
-          Settings
-        </Text>
       </Surface>
 
       <ScrollView
@@ -310,6 +415,28 @@ export default function SettingsScreen({
             />
           </Card.Content>
         </Card>
+
+        {/* Sign Out Button */}
+        <Button
+          mode="outlined"
+          icon="logout"
+          onPress={handleLogout}
+          style={styles.logoutButton}
+          textColor="#ff6b6b"
+        >
+          Sign Out
+        </Button>
+
+        {/* Delete Account */}
+        {/* <Button
+          mode="outlined"
+          icon="delete-forever"
+          onPress={handleDeleteAccount}
+          style={styles.deleteButton}
+          textColor="#d32f2f"
+        >
+          Delete Account
+        </Button> */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -380,4 +507,15 @@ const styles = StyleSheet.create({
     color: "#666",
     fontStyle: "italic",
   },
+  logoutButton: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 24,
+    borderColor: "#ff6b6b",
+  },
+  // deleteButton: {
+  //   marginHorizontal: 16,
+  //   marginBottom: 24,
+  //   borderColor: "#d32f2f",
+  // },
 });
