@@ -44,8 +44,8 @@ import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import { formatLastActive } from "../utils/locationTracker";
 import SettingsScreen from "./SettingsScreen";
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -514,12 +514,18 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
 
   const handleRemovePartner = async () => {
     Alert.alert(
-      "Remove Duo Partner",
-      "Are you sure you want to remove your duo partner?",
+      "⚠️ Remove Duo Partner?",
+      `This will end your duo partnership with ${
+        duoPartnerProfile?.name || "your partner"
+      }.\n\n` +
+        "• All your duo matches and chats will be archived\n" +
+        "• You can still view archived chats, but can't send new messages\n" +
+        "• You'll need a new partner to start matching again\n\n" +
+        "Are you sure you want to continue?",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Remove",
+          text: "Remove Partner",
           style: "destructive",
           onPress: async () => {
             try {
@@ -529,14 +535,38 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
                 .get();
 
               if (!duosSnapshot.empty) {
+                // Delete the duo partnership
                 await duosSnapshot.docs[0].ref.delete();
+
+                // Archive all chats associated with this duo
+                const chatsSnapshot = await firestore()
+                  .collection("chats")
+                  .where("participants", "array-contains", CURRENT_USER_ID)
+                  .get();
+
+                const batch = firestore().batch();
+                chatsSnapshot.docs.forEach((doc) => {
+                  batch.update(doc.ref, {
+                    status: "archived",
+                    archivedAt: new Date().toISOString(),
+                    archivedReason: "duo_dissolved",
+                  });
+                });
+                await batch.commit();
+
                 setDuoPartnerProfile(null);
                 setProfile({ ...profile, duoPartnerId: null });
-                Alert.alert("Success", "Duo partner removed");
+                Alert.alert(
+                  "Duo Partnership Ended",
+                  "Your duo partner has been removed and all chats have been archived."
+                );
               }
             } catch (error) {
               console.error("Error removing partner:", error);
-              Alert.alert("Error", "Failed to remove partner");
+              Alert.alert(
+                "Error",
+                "Failed to remove partner. Please try again."
+              );
             }
           },
         },
@@ -944,7 +974,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
               {viewingRequesterProfile.name}'s Profile
             </Text>
           </Surface>
-          
+
           <ScrollView>
             <Card style={styles.card}>
               {currentPhoto ? (
