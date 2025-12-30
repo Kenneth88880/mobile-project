@@ -113,10 +113,10 @@ const uploadImageToStorage = async (imageUri, chatId) => {
   try {
     const filename = `chat_pictures/${chatId}_${Date.now()}.jpg`;
     const reference = storage().ref(filename);
-    
+
     await reference.putFile(imageUri);
     const downloadURL = await reference.getDownloadURL();
-    
+
     return downloadURL;
   } catch (error) {
     console.error("Error uploading image:", error);
@@ -129,13 +129,13 @@ const updateChatPicture = async (chatId, imageUri) => {
   try {
     // Upload image to Firebase Storage
     const downloadURL = await uploadImageToStorage(imageUri, chatId);
-    
+
     // Update Firestore with the download URL
     await firestore().collection("chats").doc(chatId).update({
       groupPhoto: downloadURL,
       updatedAt: firestore.FieldValue.serverTimestamp(),
     });
-    
+
     return true;
   } catch (error) {
     console.error("Error updating chat picture:", error);
@@ -148,6 +148,7 @@ function ChatListScreen({ onChatSelect }) {
   const theme = useTheme();
   const currentUserId = getUserID();
   const [chats, setChats] = useState([]);
+  const [archivedChats, setArchivedChats] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -155,7 +156,8 @@ function ChatListScreen({ onChatSelect }) {
       .collection("chats")
       .onSnapshot(
         (snapshot) => {
-          const chatsList = [];
+          const activeChatsList = [];
+          const archivedChatsList = [];
 
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
@@ -163,20 +165,31 @@ function ChatListScreen({ onChatSelect }) {
               data.participants &&
               data.participants.includes(currentUserId)
             ) {
-              chatsList.push({
+              const chat = {
                 id: docSnap.id,
                 ...data,
-              });
+              };
+
+              // Separate active and archived chats
+              if (data.status === "archived") {
+                archivedChatsList.push(chat);
+              } else {
+                activeChatsList.push(chat);
+              }
             }
           });
 
-          chatsList.sort((a, b) => {
-            const aTime = a.lastMessageTime?.seconds || 0;
-            const bTime = b.lastMessageTime?.seconds || 0;
-            return bTime - aTime;
-          });
+          // Sort both lists by last message time
+          const sortChats = (chatsList) => {
+            return chatsList.sort((a, b) => {
+              const aTime = a.lastMessageTime?.seconds || 0;
+              const bTime = b.lastMessageTime?.seconds || 0;
+              return bTime - aTime;
+            });
+          };
 
-          setChats(chatsList);
+          setChats(sortChats(activeChatsList));
+          setArchivedChats(sortChats(archivedChatsList));
           setLoading(false);
         },
         (error) => {
@@ -294,32 +307,46 @@ function ChatListScreen({ onChatSelect }) {
   const renderItem = ({ item }) => {
     const unreadCount = item.unreadCount?.[currentUserId] || 0;
     const isGroup = item.isGroupChat || false;
+    const isArchived = item.status === "archived";
 
     return (
       <List.Item
         title={item.groupName || "Chat"}
-        description={item.lastMessageText || "No messages yet"}
+        description={
+          isArchived
+            ? "🗄️ Archived - Read only"
+            : item.lastMessageText || "No messages yet"
+        }
         descriptionNumberOfLines={1}
         left={() =>
           isGroup ? (
             item.groupPhoto ? (
-              <Avatar.Image size={48} source={{ uri: item.groupPhoto }} />
+              <Avatar.Image
+                size={48}
+                source={{ uri: item.groupPhoto }}
+                style={isArchived && { opacity: 0.6 }}
+              />
             ) : (
-              <Avatar.Icon size={48} icon="account-group" />
+              <Avatar.Icon
+                size={48}
+                icon="account-group"
+                style={isArchived && { opacity: 0.6 }}
+              />
             )
           ) : (
             <Avatar.Image
               size={48}
               source={{ uri: "https://i.pravatar.cc/150" }}
+              style={isArchived && { opacity: 0.6 }}
             />
           )
         }
         right={() => (
           <View style={styles.chatRight}>
-            <Text variant="bodySmall">
+            <Text variant="bodySmall" style={isArchived && { opacity: 0.6 }}>
               {formatTimeStamp(item.lastMessageTime)}
             </Text>
-            {unreadCount > 0 && (
+            {unreadCount > 0 && !isArchived && (
               <Badge style={styles.badge}>{unreadCount}</Badge>
             )}
             <IconButton
@@ -332,7 +359,12 @@ function ChatListScreen({ onChatSelect }) {
         onPress={() => onChatSelect(item)}
         style={[
           styles.chatItem,
-          unreadCount > 0 && { backgroundColor: `${theme.colors.primary}15` },
+          unreadCount > 0 &&
+            !isArchived && { backgroundColor: `${theme.colors.primary}15` },
+          isArchived && {
+            opacity: 0.7,
+            backgroundColor: theme.colors.surfaceVariant,
+          },
         ]}
       />
     );
@@ -367,7 +399,7 @@ function ChatListScreen({ onChatSelect }) {
         </View>
       </Surface>
 
-      {chats.length === 0 ? (
+      {chats.length === 0 && archivedChats.length === 0 ? (
         <EmptyState
           icon="message"
           title="No Messages Yet"
@@ -375,8 +407,35 @@ function ChatListScreen({ onChatSelect }) {
         />
       ) : (
         <FlatList
-          data={chats}
-          renderItem={renderItem}
+          data={[
+            ...chats,
+            ...(archivedChats.length > 0
+              ? [{ id: "archived-header", isHeader: true }]
+              : []),
+            ...archivedChats,
+          ]}
+          renderItem={({ item }) => {
+            if (item.isHeader) {
+              return (
+                <View style={styles.sectionHeader}>
+                  <Divider />
+                  <Text
+                    variant="titleSmall"
+                    style={{
+                      padding: 12,
+                      paddingLeft: 16,
+                      color: theme.colors.onSurfaceVariant,
+                      fontWeight: "600",
+                    }}
+                  >
+                    🗄️ Archived Chats ({archivedChats.length})
+                  </Text>
+                  <Divider />
+                </View>
+              );
+            }
+            return renderItem({ item });
+          }}
           keyExtractor={(item) => item.id}
           ItemSeparatorComponent={() => <Divider />}
         />
@@ -396,7 +455,7 @@ function IndividualChatScreen({ chat, onBack }) {
   const [viewingProfile, setViewingProfile] = useState(null);
   const [profileImageIndex, setProfileImageIndex] = useState(0);
   const [uploadingImage, setUploadingImage] = useState(false);
-  
+
   // New states for editing group info
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingName, setEditingName] = useState("");
@@ -523,13 +582,13 @@ function IndividualChatScreen({ chat, onBack }) {
           if (response.assets && response.assets[0]) {
             const imageUri = response.assets[0].uri;
             console.log("Selected image URI:", imageUri);
-            
+
             setUploadingImage(true);
-            
+
             const success = await updateChatPicture(chat.id, imageUri);
-            
+
             setUploadingImage(false);
-            
+
             if (success) {
               Alert.alert("Success", "Group picture updated!");
             } else {
@@ -556,6 +615,15 @@ function IndividualChatScreen({ chat, onBack }) {
 
   const onSend = useCallback(async () => {
     if (!chat?.id || !inputText.trim()) return;
+
+    // Prevent sending messages in archived chats
+    if (currentChat.status === "archived") {
+      Alert.alert(
+        "Chat Archived",
+        "This chat is archived and read-only. You cannot send new messages."
+      );
+      return;
+    }
 
     try {
       await firestore()
@@ -595,7 +663,7 @@ function IndividualChatScreen({ chat, onBack }) {
       console.error("Error sending message:", error);
       Alert.alert("Error", "Failed to send message");
     }
-  }, [chat, currentUserId, inputText]);
+  }, [chat, currentUserId, inputText, currentChat.status]);
 
   if (!chat) {
     return (
@@ -615,12 +683,12 @@ function IndividualChatScreen({ chat, onBack }) {
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
-        
+
         {/* Group photo - tappable to change */}
         {currentChat.isGroupChat && (
           <TouchableOpacity
             onPress={handleChangeGroupPicture}
-            disabled={uploadingImage}
+            disabled={uploadingImage || currentChat.status === "archived"}
             style={{ marginRight: 8 }}
           >
             {uploadingImage ? (
@@ -628,27 +696,44 @@ function IndividualChatScreen({ chat, onBack }) {
                 <ActivityIndicator size={36} />
               </View>
             ) : currentChat.groupPhoto ? (
-              <Avatar.Image size={36} source={{ uri: currentChat.groupPhoto }} />
+              <Avatar.Image
+                size={36}
+                source={{ uri: currentChat.groupPhoto }}
+              />
             ) : (
               <Avatar.Icon size={36} icon="account-group" />
             )}
           </TouchableOpacity>
         )}
-        
+
         {/* Group name - tappable to edit */}
         <TouchableOpacity
-          onPress={currentChat.isGroupChat ? handleEditGroupInfo : undefined}
-          style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
-          disabled={!currentChat.isGroupChat}
+          onPress={
+            currentChat.isGroupChat && currentChat.status !== "archived"
+              ? handleEditGroupInfo
+              : undefined
+          }
+          style={{ flex: 1, flexDirection: "column", alignItems: "flex-start" }}
+          disabled={
+            !currentChat.isGroupChat || currentChat.status === "archived"
+          }
         >
-          <Text variant="titleLarge" style={{ flex: 1 }}>
-            {currentChat.groupName || "Chat"}
-          </Text>
-          {currentChat.isGroupChat && (
-            <Icon source="pencil" size={16} color={theme.colors.primary} />
+          <Text variant="titleLarge">{currentChat.groupName || "Chat"}</Text>
+          {currentChat.status === "archived" && (
+            <Text
+              variant="labelSmall"
+              style={{ color: theme.colors.error, marginTop: 2 }}
+            >
+              🗄️ Archived - Read Only
+            </Text>
+          )}
+          {currentChat.isGroupChat && currentChat.status !== "archived" && (
+            <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
+              Tap to edit name
+            </Text>
           )}
         </TouchableOpacity>
-        
+
         <IconButton
           icon="account-multiple"
           onPress={() => setShowParticipants(true)}
@@ -671,7 +756,9 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Text variant="labelSmall" style={styles.avatarName}>
                     {senderProfile?.name || "Unknown"}
                   </Text>
-                  <TouchableOpacity onPress={() => handleProfilePicturePress(item.user._id)}>
+                  <TouchableOpacity
+                    onPress={() => handleProfilePicturePress(item.user._id)}
+                  >
                     <ProfilePhoto
                       uri={senderProfile?.photos?.[0]}
                       size={32}
@@ -728,7 +815,9 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Text variant="labelSmall" style={styles.avatarName}>
                     {userProfiles[currentUserId].name || "You"}
                   </Text>
-                  <TouchableOpacity onPress={() => handleProfilePicturePress(currentUserId)}>
+                  <TouchableOpacity
+                    onPress={() => handleProfilePicturePress(currentUserId)}
+                  >
                     <ProfilePhoto
                       uri={userProfiles[currentUserId].photos?.[0]}
                       size={32}
@@ -746,22 +835,43 @@ function IndividualChatScreen({ chat, onBack }) {
       />
 
       <Surface style={styles.composerContainer} elevation={4}>
-        <TextInput
-          mode="outlined"
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Type a message..."
-          multiline
-          maxLength={1000}
-          style={styles.textInput}
-          dense
-        />
-        <IconButton
-          icon="send"
-          mode="contained"
-          onPress={onSend}
-          disabled={!inputText.trim()}
-        />
+        {currentChat.status === "archived" ? (
+          <View
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: theme.colors.surfaceVariant,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              variant="bodyMedium"
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
+              🗄️ This chat is archived and read-only
+            </Text>
+          </View>
+        ) : (
+          <>
+            <TextInput
+              mode="outlined"
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Type a message..."
+              multiline
+              maxLength={1000}
+              style={styles.textInput}
+              dense
+            />
+            <IconButton
+              icon="send"
+              mode="contained"
+              onPress={onSend}
+              disabled={!inputText.trim()}
+            />
+          </>
+        )}
       </Surface>
 
       {/* Edit Group Info Modal */}
@@ -789,18 +899,24 @@ function IndividualChatScreen({ chat, onBack }) {
                     <ActivityIndicator size="large" />
                   </View>
                 ) : currentChat.groupPhoto ? (
-                  <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
+                  <Avatar.Image
+                    size={80}
+                    source={{ uri: currentChat.groupPhoto }}
+                  />
                 ) : (
                   <Avatar.Icon size={80} icon="account-group" />
                 )}
-                <Text 
+                <Text
                   variant="labelLarge"
-                  style={{ marginTop: 8, color: uploadingImage ? '#999' : theme.colors.primary }}
+                  style={{
+                    marginTop: 8,
+                    color: uploadingImage ? "#999" : theme.colors.primary,
+                  }}
                 >
                   {uploadingImage ? "Uploading..." : "Tap to Change Picture"}
                 </Text>
               </TouchableOpacity>
-              
+
               <TextInput
                 mode="outlined"
                 label="Group Name"
@@ -1144,6 +1260,9 @@ const styles = StyleSheet.create({
   },
   chatItem: {
     paddingVertical: 8,
+  },
+  sectionHeader: {
+    marginVertical: 8,
   },
   chatRight: {
     flexDirection: "column",
