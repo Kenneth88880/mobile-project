@@ -595,11 +595,11 @@ const handleSubmitBugReport = async () => {
       .add({
         to: "doubly202@gmail.com", // Replace with your work email
         message: {
-          subject: `🐛 New Bug Report: ${bugReport.title}`,
+          subject: `New Bug Report: ${bugReport.title}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <div style="background-color: #8B4A61; color: white; padding: 20px; border-radius: 10px 10px 0 0;">
-                <h2 style="margin: 0;">🐛 New Bug Report</h2>
+                <h2 style="margin: 0;">New Bug Report</h2>
               </div>
               
               <div style="background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none;">
