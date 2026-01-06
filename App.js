@@ -38,6 +38,15 @@ export default function App() {
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
 
+  // Configure Firebase auth for development
+  useEffect(() => {
+    if (__DEV__) {
+      // Disable app verification for development to avoid SMS limits and reCAPTCHA blocking
+      auth().settings.appVerificationDisabledForTesting = true;
+      console.log('Firebase auth: app verification disabled for testing');
+    }
+  }, []);
+
   // Load theme preference on app start
   useEffect(() => {
     loadThemePreference();
@@ -235,10 +244,17 @@ export default function App() {
 
   // If user is authenticated but profile is not complete, show SignUpScreen
   if (user && !profileComplete) {
+    // Check if user signed up with email and hasn't verified yet
+    const needsEmailVerification =
+      user.providerData.some(provider => provider.providerId === 'password') &&
+      !user.emailVerified;
+
     return (
       <PaperProvider theme={theme}>
         <SignUpScreen
           isInSignupFlow={true}
+          needsEmailVerification={needsEmailVerification}
+          userEmail={user.email}
           onNavigateToSignIn={() => {
             // Don't allow navigation to sign in if already signed up
             // User must complete the signup process

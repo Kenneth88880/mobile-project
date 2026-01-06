@@ -13,19 +13,32 @@ import PhotoSelectionScreen from "./SignUpProcess/PhotoSelectionScreen";
 import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
 import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
+import EmailVerificationScreen from "./SignUpProcess/EmailVerificationScreen";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 
-const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
+const SignUpScreen = ({
+  onNavigateToSignIn,
+  isInSignupFlow = false,
+  needsEmailVerification = false,
+  userEmail = ""
+}) => {
   const theme = useTheme();
   const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(userEmail);
   const [password, setPassword] = React.useState("");
   const [phoneNumber, setPhoneNumber] = React.useState("+1");
   const [confirmation, setConfirmation] = React.useState(null);
   const [isTOSVisible, setTOSVisible] = React.useState(false);
-  const [currentStep, setCurrentStep] = React.useState(
-    isInSignupFlow ? "firstName" : "credentials"
-  ); // credentials, phoneVerification, firstName, birthday, gender, genderPreference, photos, tags, duo
+
+  // Determine initial step based on signup flow state
+  const getInitialStep = () => {
+    if (needsEmailVerification) return "emailVerification";
+    if (isInSignupFlow) return "firstName";
+    return "credentials";
+  };
+
+  const [currentStep, setCurrentStep] = React.useState(getInitialStep());
+  // credentials, emailVerification, phoneVerification, firstName, birthday, gender, genderPreference, photos, tags, duo
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -35,6 +48,13 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     tags: [],
     friendCode: "",
   });
+
+  // If user needs email verification and we have their email, send email on mount
+  React.useEffect(() => {
+    if (needsEmailVerification && userEmail && currentStep === "emailVerification") {
+      sendVerificationEmail();
+    }
+  }, []);
 
   const handleRegisterPress = () => {
     setTOSVisible(true);
@@ -71,26 +91,90 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   };
 
   // handles email sign up
-  const handleEmailRegister = () => {
-    auth()
-      .createUserWithEmailAndPassword(email, password)
-      .then((userCredential) => {
-        const user = userCredential.user;
-        console.log("Registered with:", user.email);
-        // Move to first name step
-        setCurrentStep("firstName");
-      })
-      .catch((error) => {
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        console.log(errorCode + errorMessage);
-        alert("Sign up failed: " + errorMessage);
-      });
+  const handleEmailRegister = async () => {
+    try {
+      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+      const user = userCredential.user;
+      console.log("Registered with:", user.email);
+
+      // Send verification email using Firebase's built-in method
+      try {
+        await sendVerificationEmail();
+      } catch (emailError) {
+        // Email sending failed, but user account was created
+        // Error already shown in sendVerificationEmail, just proceed to verification screen
+        console.log("Continuing to verification screen despite email send error");
+      }
+
+      // Move to email verification step even if email failed to send
+      // User can try resending from the verification screen
+      setCurrentStep("emailVerification");
+    } catch (error) {
+      const errorCode = error.code;
+      const errorMessage = error.message;
+      console.log(errorCode + errorMessage);
+
+      let userMessage = "Sign up failed: " + errorMessage;
+      if (error.code === "auth/email-already-in-use") {
+        userMessage = "This email is already registered. Please try signing in instead.";
+      } else if (error.code === "auth/invalid-email") {
+        userMessage = "Invalid email address. Please check and try again.";
+      } else if (error.code === "auth/weak-password") {
+        userMessage = "Password is too weak. Please use at least 6 characters.";
+      }
+
+      alert(userMessage);
+    }
+  };
+
+  // Send email verification link
+  const sendVerificationEmail = async () => {
+    try {
+      const user = auth().currentUser;
+      if (user && !user.emailVerified) {
+        // Optional: Configure action code settings for custom handling
+        const actionCodeSettings = {
+          // You can add a custom URL here if you want to handle the verification
+          // in your app instead of the default Firebase page
+          // url: 'https://yourapp.com/verify-email',
+          // iOS: {
+          //   bundleId: 'com.yourapp.bundle'
+          // },
+          // android: {
+          //   packageName: 'com.yourapp',
+          //   installApp: true,
+          //   minimumVersion: '12'
+          // },
+          handleCodeInApp: false, // Set to true if you want to handle in-app
+        };
+
+        await user.sendEmailVerification(actionCodeSettings);
+        console.log("Verification email sent to", user.email);
+      }
+    } catch (error) {
+      console.log("Error sending verification email:", error);
+
+      let errorMessage = "Error sending verification email: " + error.message;
+
+      if (error.code === "auth/too-many-requests") {
+        errorMessage = "Too many requests. Please wait a few minutes before trying again, or check your email - a verification link may have already been sent.";
+      } else if (error.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      }
+
+      alert(errorMessage);
+      throw error;
+    }
   };
 
   // handles phone sign up (sends verification code)
   const handlePhoneRegister = async () => {
     try {
+      // Disable app verification for development to avoid SMS limits and blocking
+      if (__DEV__) {
+        auth().settings.appVerificationDisabledForTesting = true;
+      }
+
       const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
       setConfirmation(confirmationResult);
       setCurrentStep("phoneVerification");
@@ -115,6 +199,23 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   const handlePhoneVerificationBack = () => {
     setCurrentStep("credentials");
     setConfirmation(null);
+  };
+
+  const handleEmailVerified = () => {
+    console.log("Email verified, proceeding to profile setup");
+    // Move to first name step
+    setCurrentStep("firstName");
+  };
+
+  const handleEmailVerificationBack = async () => {
+    // Sign out the user since they already created an account
+    try {
+      await auth().signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+    // Go back to credentials screen
+    setCurrentStep("credentials");
   };
 
   const handleFirstNameNext = (firstName) => {
@@ -288,6 +389,17 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
         onVerify={handlePhoneVerification}
         onBack={handlePhoneVerificationBack}
         phoneNumber={phoneNumber}
+      />
+    );
+  }
+
+  if (currentStep === "emailVerification") {
+    return (
+      <EmailVerificationScreen
+        onVerified={handleEmailVerified}
+        onBack={handleEmailVerificationBack}
+        email={email}
+        onResendEmail={sendVerificationEmail}
       />
     );
   }
