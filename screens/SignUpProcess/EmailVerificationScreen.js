@@ -3,7 +3,12 @@ import React from "react";
 import { Button, useTheme } from "react-native-paper";
 import auth from "@react-native-firebase/auth";
 
-const EmailVerificationScreen = ({ onVerified, onBack, email, onResendEmail }) => {
+const EmailVerificationScreen = ({
+  onVerified,
+  onBack,
+  email,
+  onResendEmail,
+}) => {
   const theme = useTheme();
   const [isChecking, setIsChecking] = React.useState(false);
   const [isResending, setIsResending] = React.useState(false);
@@ -26,7 +31,9 @@ const EmailVerificationScreen = ({ onVerified, onBack, email, onResendEmail }) =
         console.log("Email verified successfully");
         onVerified();
       } else {
-        alert("Email not verified yet. Please check your inbox and click the verification link.");
+        alert(
+          "Email not verified yet. Please check your inbox or spam folder to find the verification link."
+        );
       }
     } catch (error) {
       console.log("Error checking verification:", error);
@@ -65,7 +72,8 @@ const EmailVerificationScreen = ({ onVerified, onBack, email, onResendEmail }) =
       </Text>
 
       <Text style={[styles.instructions, { color: theme.colors.onBackground }]}>
-        Please check your inbox and click the verification link. Then tap "I've Verified" below.
+        Please check your inbox (including spam folder) and click the
+        verification link. Then tap "I've Verified" below.
       </Text>
 
       <View style={styles.buttonContainer}>
