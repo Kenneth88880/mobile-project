@@ -1694,17 +1694,6 @@ const handleSubmitBugReport = async () => {
           </Card.Content>
         </Card>
 
-        {/* Logout Button */}
-        <Button
-          mode="outlined"
-          icon="logout"
-          onPress={handleLogout}
-          style={styles.logoutButton}
-          textColor="#ff6b6b"
-        >
-          Sign Out
-        </Button>
-
         {/* Modals */}
         <SettingsScreen
           isDarkMode={isDarkMode}
