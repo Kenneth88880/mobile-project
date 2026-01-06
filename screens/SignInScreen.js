@@ -55,6 +55,11 @@ const SignInScreen = ({ onNavigateToRegister }) => {
   // handles phone sign in (sends verification code)
   const handlePhoneSignIn = async () => {
     try {
+      // Disable app verification for development to avoid SMS limits and blocking
+      if (__DEV__) {
+        auth().settings.appVerificationDisabledForTesting = true;
+      }
+
       const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
       setConfirmation(confirmationResult);
       setShowPhoneVerification(true);
