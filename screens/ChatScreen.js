@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, } from "react";
 import {
   View,
   FlatList,
@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
+  Image
 } from "react-native";
 import {
   Text,
@@ -162,7 +163,7 @@ const reportChat = async (chatId, reportingUserId) => {
     const reports = chatData.reports || [];
     reports.push({
       reportedBy: reportingUserId,
-      reportedAt: Date.now(), // ✅ Use Date.now() instead of serverTimestamp() in arrays
+      reportedAt: Date.now(), 
       reason: "User reported inappropriate content",
     });
 
@@ -205,7 +206,7 @@ const updateChatName = async (chatId, newName) => {
 // Upload image to Firebase Storage and return URL
 const uploadImageToStorage = async (imageUri, chatId) => {
   try {
-    const filename = `chat_pictures/${chatId}_${Date.now()}.jpg`;
+    const filename = `chat_profile_pictures/${chatId}_${Date.now()}.jpg`;
     const reference = storage().ref(filename);
 
     await reference.putFile(imageUri);
@@ -279,6 +280,7 @@ function ChatListScreen({ onChatSelect }) {
           // Sort both lists by last message time
           const sortChats = (chatsList) => {
             return chatsList.sort((a, b) => {
+              
               const aTime = a.lastMessageTime?.seconds || 0;
               const bTime = b.lastMessageTime?.seconds || 0;
               return bTime - aTime;
@@ -429,10 +431,11 @@ function ChatListScreen({ onChatSelect }) {
     ]);
   };
 
-  const renderItem = ({ item }) => {
+    const renderItem = ({ item }) => {
     const unreadCount = item.unreadCount?.[currentUserId] || 0;
     const isGroup = item.isGroupChat || false;
     const isArchived = item.status === "archived";
+    const timestamp = formatTimeStamp(item.lastMessageTime);
 
     return (
       <List.Item
@@ -466,11 +469,16 @@ function ChatListScreen({ onChatSelect }) {
             />
           )
         }
-        right={() => (
-          <View style={styles.chatRight}>
-            <Text variant="bodySmall" style={isArchived && { opacity: 0.6 }}>
-              {formatTimeStamp(item.lastMessageTime)}
-            </Text>
+          right={() => (
+            <View style={styles.chatRight}>
+              {timestamp && (
+                <Text variant="bodySmall" style={[
+                  { marginBottom: 4 },
+                  isArchived && { opacity: 0.6 }
+                ]}>
+                  {timestamp}
+                </Text>
+              )}
             {unreadCount > 0 && !isArchived && (
               <Badge style={styles.badge}>{unreadCount}</Badge>
             )}
@@ -579,7 +587,7 @@ function IndividualChatScreen({ chat, onBack }) {
   const [showParticipants, setShowParticipants] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [profileImageIndex, setProfileImageIndex] = useState(0);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingChatImage, setuploadingChatImage] = useState(false);
 
   // New states for editing group info
   const [showEditModal, setShowEditModal] = useState(false);
@@ -596,6 +604,9 @@ function IndividualChatScreen({ chat, onBack }) {
   const [userRating, setUserRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
+
+  // handles sending images into chats
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     if (!chat?.id) return;
@@ -624,9 +635,11 @@ function IndividualChatScreen({ chat, onBack }) {
         (snapshot) => {
           const messagesList = snapshot.docs.map((doc) => {
             const data = doc.data();
+            //console.log("Message data:", data); // Debug log
             return {
               _id: doc.id,
               text: data.text,
+               imageUrl: data.imageUrl, // Include imageUrl field
               createdAt: data.createdAt?.toDate() || new Date(),
               user: {
                 _id: data.user._id,
@@ -635,6 +648,7 @@ function IndividualChatScreen({ chat, onBack }) {
             };
           });
 
+          //console.log("Processed messages:", messagesList); // Debug log
           setMessages(messagesList);
         },
         (error) => {
@@ -772,11 +786,11 @@ function IndividualChatScreen({ chat, onBack }) {
             const imageUri = response.assets[0].uri;
             console.log("Selected image URI:", imageUri);
 
-            setUploadingImage(true);
+            setuploadingChatImage(true);
 
             const success = await updateChatPicture(chat.id, imageUri);
 
-            setUploadingImage(false);
+            setuploadingChatImage(false);
 
             if (success) {
               Alert.alert("Success", "Group picture updated!");
@@ -788,7 +802,7 @@ function IndividualChatScreen({ chat, onBack }) {
       );
     } catch (error) {
       console.error("Error in handleChangeGroupPicture:", error);
-      setUploadingImage(false);
+      setuploadingChatImage(false);
       Alert.alert("Error", "An error occurred while selecting the image");
     }
   };
@@ -952,6 +966,96 @@ function IndividualChatScreen({ chat, onBack }) {
     return stars;
   };
 
+  // handles how images are sent into a group chat 
+  const handleSendImage = async () => {
+    try {
+      launchImageLibrary(
+        {
+          mediaType: "photo",
+          quality: 0.8,
+          maxWidth: 1000,
+          maxHeight: 1000,
+        },
+        async (response) => {
+          if (response.didCancel) {
+            console.log("User cancelled image picker");
+            return;
+          }
+
+          if (response.errorCode) {
+            console.log("ImagePicker Error: ", response.errorMessage);
+            Alert.alert("Error", "Failed to select image");
+            return;
+          }
+
+          if (response.assets && response.assets[0]) {
+            const imageUri = response.assets[0].uri;
+            console.log("Selected image URI:", imageUri);
+
+            setUploadingImage(true); // Show loading
+
+            try {
+              // Upload to Firebase Storage
+              const filename = `chat_messages/${chat.id}_${Date.now()}.jpg`;
+              const reference = storage().ref(filename);
+              await reference.putFile(imageUri);
+              const downloadURL = await reference.getDownloadURL();
+
+              console.log("Image uploaded, URL:", downloadURL);
+
+              // Send as message
+              await firestore()
+                .collection("chats")
+                .doc(chat.id)
+                .collection("messages")
+                .add({
+                  imageUrl: downloadURL,
+                  text: "", // Empty text for image messages
+                  createdAt: firestore.FieldValue.serverTimestamp(),
+                  user: {
+                    _id: currentUserId,
+                    name: "You",
+                  },
+                });
+
+              console.log("Message added to Firestore");
+
+              // Update chat
+              const unreadUpdate = {};
+              if (chat.participants) {
+                chat.participants.forEach((participantId) => {
+                  if (participantId !== currentUserId) {
+                    unreadUpdate[`unreadCount.${participantId}`] =
+                      (chat.unreadCount?.[participantId] || 0) + 1;
+                  }
+                });
+              }
+
+              await firestore()
+                .collection("chats")
+                .doc(chat.id)
+                .update({
+                  lastMessageText: "📷 Image",
+                  lastMessageTime: firestore.FieldValue.serverTimestamp(),
+                  ...unreadUpdate,
+                });
+
+              console.log("Chat updated successfully");
+              setUploadingImage(false);
+            } catch (uploadError) {
+              console.error("Upload error:", uploadError);
+              Alert.alert("Error", "Failed to upload image");
+              setUploadingImage(false);
+            }
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error sending image:", error);
+      Alert.alert("Error", "Failed to send image");
+      setUploadingImage(false);
+    }
+  };
 
   const onSend = useCallback(async () => {
     if (!chat?.id || !inputText.trim()) return;
@@ -1018,8 +1122,8 @@ function IndividualChatScreen({ chat, onBack }) {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 20}
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
@@ -1028,10 +1132,10 @@ function IndividualChatScreen({ chat, onBack }) {
         {currentChat.isGroupChat && (
           <TouchableOpacity
             onPress={handleChangeGroupPicture}
-            disabled={uploadingImage || currentChat.status === "archived"}
+            disabled={uploadingChatImage || currentChat.status === "archived"}
             style={{ marginRight: 8 }}
           >
-            {uploadingImage ? (
+            {uploadingChatImage ? (
               <View style={styles.avatarContainer}>
                 <ActivityIndicator size={36} />
               </View>
@@ -1083,9 +1187,10 @@ function IndividualChatScreen({ chat, onBack }) {
 
       <FlatList
         data={messages}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const isMyMessage = item.user._id === currentUserId;
           const senderProfile = userProfiles[item.user._id];
+          const isLatestMessage = index === 0;
 
           return (
             <View
@@ -1108,47 +1213,73 @@ function IndividualChatScreen({ chat, onBack }) {
                 </View>
               )}
 
-              <Surface
-                style={[
-                  styles.messageBubble,
-                  {
-                    backgroundColor: isMyMessage
-                      ? theme.colors.primaryContainer
-                      : theme.colors.surfaceVariant,
-                    borderBottomRightRadius: isMyMessage ? 4 : 16,
-                    borderBottomLeftRadius: isMyMessage ? 16 : 4,
-                  },
-                ]}
-                elevation={1}
-              >
-                <Text
-                  variant="bodyMedium"
-                  style={{
-                    color: isMyMessage
-                      ? theme.colors.onPrimaryContainer
-                      : theme.colors.onSurfaceVariant,
-                  }}
-                >
-                  {item.text}
-                </Text>
+              <View style={{ alignItems: isMyMessage ? 'flex-end' : 'flex-start' }}>
+                
+                
+                {item.text && !item.imageUrl && (
+                  <Surface
+                    style={[
+                      styles.messageBubble,
+                      {
+                        backgroundColor: isMyMessage
+                          ? theme.colors.primaryContainer
+                          : theme.colors.surfaceVariant,
+                        borderBottomRightRadius: isMyMessage ? 4 : 16,
+                        borderBottomLeftRadius: isMyMessage ? 16 : 4,
+                      },
+                    ]}
+                    elevation={1}>
+                    <Text
+                      variant="bodyMedium"
+                      style={{
+                        color: isMyMessage
+                          ? theme.colors.onPrimaryContainer
+                          : theme.colors.onSurfaceVariant,
+                      }}
+                    >
+                      {item.text}
+                    </Text>
+                  </Surface>
+                )}
 
-                <Text
-                  variant="labelSmall"
-                  style={[
-                    styles.messageTime,
-                    {
-                      color: isMyMessage
-                        ? theme.colors.onPrimaryContainer
-                        : theme.colors.onSurfaceVariant,
-                    },
-                  ]}
-                >
-                  {item.createdAt?.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </Text>
-              </Surface>
+                  {item.imageUrl && (
+                    <Surface>
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={{ 
+                          width: 200, 
+                          height: 200, 
+                          borderRadius: 12,
+                          marginBottom: item.text ? 8 : 0,
+                          borderWidth: 0,        
+                          borderColor: 'transparent',
+                          backgroundColor: 'transparent'
+                        }}
+                        resizeMode="cover"
+                      />
+                    </Surface>                
+                )}
+
+                  {isLatestMessage && (
+                    <Text
+                    
+                      variant="labelSmall"
+                      style={[
+                        styles.messageTime,
+                        {
+                          color: isMyMessage
+                            ? theme.colors.onPrimaryContainer
+                            : theme.colors.onSurfaceVariant,
+                        },
+                      ]}
+                    >
+                      {item.createdAt?.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  )}
+              </View>
 
               {isMyMessage && userProfiles[currentUserId] && (
                 <View style={styles.avatarWrapper}>
@@ -1174,48 +1305,95 @@ function IndividualChatScreen({ chat, onBack }) {
         contentContainerStyle={styles.messagesList}
       />
 
-      <Surface style={styles.composerContainer} elevation={4}>
-        {currentChat.status === "archived" ? (
-          <View
-            style={{
-              flex: 1,
-              padding: 12,
-              backgroundColor: theme.colors.surfaceVariant,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text
-              variant="bodyMedium"
-              style={{ color: theme.colors.onSurfaceVariant }}
-            >
-              🗄️ This chat is archived and read-only
-            </Text>
-          </View>
-        ) : (
-          <>
-            <TextInput
-              mode="outlined"
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Type a message..."
-              multiline
-              maxLength={1000}
-              style={styles.textInput}
-              dense
-              autoCorrect={true}
-              autoCapitalize="sentences"
-              spellCheck={true}
-              textContentType="none"
-            />
-            <IconButton
-              icon="send"
-              mode="contained"
-              onPress={onSend}
-              disabled={!inputText.trim()}
-            />
-          </>
-        )}
+        <Surface style={{
+                backgroundColor: theme.colors.background,
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderTopColor: 'transparent',
+                borderColor: 'transparent',
+
+              }}>
+          
+          {currentChat.status === "archived" ? (
+
+              <View
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  backgroundColor: theme.colors.surfaceVariant,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  alignContent: "center",  
+                }}
+              >
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
+                  🗄️ This chat is archived and read-only
+                </Text>
+              </View>
+
+          ) : (
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center',
+              justifyContent: 'space-between' // This will push button to the right
+            }}>
+            
+              <TextInput
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder=" Type a message..."
+                multiline
+                maxLength={1000}
+                style={[styles.textInput, {
+                  borderRadius: 30,
+                  borderTopLeftRadius: 30,
+                  borderTopRightRadius: 30,
+                  borderWidth: 1,
+                  borderColor: 'transparent',
+                }]}
+                dense
+                autoCorrect={true}
+                autoCapitalize="sentences"
+                spellCheck={true}
+                textContentType="none"
+                contentStyle={{ justifyContent: 'center' }}
+                underlineColor="transparent"
+                activeUnderlineColor="transparent"
+                
+                cursorColor= '#000000'
+                
+              />
+             <IconButton
+                style={{
+                  position: 'absolute',
+                  right: 35,
+                  marginLeft: 0,
+                  backgroundColor: 'transparent',
+                }}
+                icon="image"
+                size={24}
+                onPress={handleSendImage}
+              />
+              <IconButton
+                  style={{
+                    position: 'absolute',
+                    right: 5,
+                    marginLeft: 0,
+                    backgroundColor: 'transparent',
+                  }}
+                  icon="send"
+                  mode="contained"
+                  onPress={onSend}
+                  disabled={!inputText.trim()}
+                  size={20}
+                />
+            </View>
+          )}
       </Surface>
 
       {/* Edit Group Info Modal */}
@@ -1235,10 +1413,10 @@ function IndividualChatScreen({ chat, onBack }) {
             <Card.Content>
               <TouchableOpacity
                 onPress={handleChangeGroupPicture}
-                disabled={uploadingImage}
+                disabled={uploadingChatImage}
                 style={{ alignItems: "center", marginBottom: 16 }}
               >
-                {uploadingImage ? (
+                {uploadingChatImage ? (
                   <View style={styles.uploadingContainer}>
                     <ActivityIndicator size="large" />
                   </View>
@@ -1254,10 +1432,10 @@ function IndividualChatScreen({ chat, onBack }) {
                   variant="labelLarge"
                   style={{
                     marginTop: 8,
-                    color: uploadingImage ? "#999" : theme.colors.primary,
+                    color: uploadingChatImage ? "#999" : theme.colors.primary,
                   }}
                 >
-                  {uploadingImage ? "Uploading..." : "Tap to Change Picture"}
+                  {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
                 </Text>
               </TouchableOpacity>
 
@@ -1708,11 +1886,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     padding: 8,
     gap: 8,
-    minHeight: 56,
-    maxHeight: 150, // Prevent container from growing too large
+    maxHeight: 57, // Prevent container from growing too large
   },
   textInput: {
     flex: 1,
-    maxHeight: 100, // Reduced from 120 to prevent avatar cutoff
+    maxHeight: 40, // Reduced from 120 to prevent avatar cutoff
   },
 });
