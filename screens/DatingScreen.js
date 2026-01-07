@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
-  Image,
   ScrollView,
   Animated,
   Alert,
@@ -19,8 +18,6 @@ import {
   useTheme,
 } from "react-native-paper";
 import {
-  ProfilePhoto,
-  StarRating,
   EmptyState,
   ProfileInfoCard,
 } from "../components/CommonComponents";
@@ -40,7 +37,6 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   getDistanceToProfile,
   isWithinDistance,
-  calculateDistance,
 } from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 

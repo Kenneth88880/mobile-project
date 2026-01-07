@@ -23,7 +23,6 @@ import {
   useTheme,
   Icon,
 } from "react-native-paper";
-// import MapView, { Marker } from "react-native-maps"; // Using static maps instead
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";

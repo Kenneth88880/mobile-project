@@ -1,6 +1,6 @@
 import { useStripe } from "@stripe/stripe-react-native";
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, StyleSheet, Alert } from "react-native";
 //import { Screen } from './Screen';
 import { Button } from "react-native-paper";
 
