@@ -28,6 +28,14 @@ const DuoSetupScreen = ({ onNext, onSkip, onBack }) => {
 
   const handleNext = () => {
     if (friendCode.trim()) {
+      // Check if user is trying to add themselves
+      if (friendCode.trim() === CURRENT_USER_ID) {
+        Alert.alert(
+          "Invalid Code",
+          "You cannot add yourself as your own duo partner. Please enter a different friend's code."
+        );
+        return;
+      }
       onNext(friendCode.trim());
     } else {
       Alert.alert(
