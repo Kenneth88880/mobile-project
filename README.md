@@ -7,7 +7,10 @@
 - connect chat with explore screen to send and plan
 
 ## Things in progress
-
+- change chat text box to be smaller
+- change chat bubble text more soft/round
+- app efficiency
+- swipe to get out of chats
 - Create a welcome experience for users to add their info
 - bug fixes in chat appearance
 - way to change group chat name
