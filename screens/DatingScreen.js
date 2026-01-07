@@ -96,20 +96,41 @@ export default function DatingScreen({ isActive = true }) {
 
       let filteredPairs = fetchedPairs || [];
 
-      if (duo && duo.partnerId && currentUserProfile?.gender) {
+      if (duo && duo.partnerId) {
         try {
           // Get partner's full profile with gender
           const partnerProfile = await getDuoPartnerProfile(duo.partnerId);
 
-          if (partnerProfile?.gender) {
-            console.log("Filtering by gender preferences...");
+          // Only filter if BOTH users in the duo have gender AND at least one has preferences set
+          const currentUserPref =
+            currentUserProfile.duoPreference?.interestedIn ||
+            currentUserProfile.genderPreference ||
+            [];
+          const partnerPref =
+            partnerProfile?.duoPreference?.interestedIn ||
+            partnerProfile?.genderPreference ||
+            [];
+
+          const hasPreferences =
+            currentUserPref.length > 0 || partnerPref.length > 0;
+
+          if (
+            currentUserProfile?.gender &&
+            partnerProfile?.gender &&
+            hasPreferences
+          ) {
+            console.log("✅ Filtering by gender preferences...");
             console.log(
+              "Your gender:",
+              currentUserProfile.gender,
               "Your preference:",
-              currentUserProfile.duoPreference?.interestedIn
+              currentUserPref
             );
             console.log(
+              "Partner gender:",
+              partnerProfile.gender,
               "Partner preference:",
-              partnerProfile.duoPreference?.interestedIn
+              partnerPref
             );
 
             // Filter pairs based on mutual gender preferences
@@ -119,11 +140,11 @@ export default function DatingScreen({ isActive = true }) {
 
               // Skip if other duo doesn't have genders set
               if (!user1.gender || !user2.gender) {
-                console.log(`Skipping duo ${pair.id} - missing gender info`);
-                return true; // Include them anyway if no gender set
+                console.log(`⚠️ Skipping duo ${pair.id} - missing gender info`);
+                return false; // Don't show duos without gender set if filtering is active
               }
 
-              // Check if preferences match
+              // Check if preferences match (new strict logic)
               const preferencesMatch = checkDuoPreferenceMatch(
                 currentUserProfile,
                 partnerProfile,
@@ -133,8 +154,10 @@ export default function DatingScreen({ isActive = true }) {
 
               if (!preferencesMatch) {
                 console.log(
-                  `Filtered out duo ${pair.id} - preferences don't match`
+                  `❌ Filtered out duo ${pair.id} - preferences don't match`
                 );
+              } else {
+                console.log(`✅ Duo ${pair.id} matches preferences!`);
               }
 
               return preferencesMatch;
@@ -144,18 +167,14 @@ export default function DatingScreen({ isActive = true }) {
               `Gender filtering: ${fetchedPairs.length} → ${filteredPairs.length} pairs`
             );
           } else {
-            console.log(
-              "Partner gender not set - showing all pairs without filtering"
-            );
+            console.log("⚠️ No gender preferences set - showing all pairs");
           }
         } catch (error) {
           console.error("Error loading partner profile for filtering:", error);
           // On error, show all pairs without filtering
         }
       } else {
-        console.log(
-          "Gender not set for current user - showing all pairs without filtering"
-        );
+        console.log("⚠️ No duo partner or gender not set - showing all pairs");
       }
 
       // NEW: Filter by distance if user has maxDistance preference set
@@ -444,6 +463,11 @@ export default function DatingScreen({ isActive = true }) {
     duoPairs.length === 0 ||
     currentPairIndex >= duoPairs.length
   ) {
+    // Check if user has preferences set
+    const hasPreferences =
+      currentDuo?.partnerProfile?.genderPreference?.length > 0 ||
+      currentDuo?.partnerProfile?.duoPreference?.interestedIn?.length > 0;
+
     return (
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -454,6 +478,8 @@ export default function DatingScreen({ isActive = true }) {
           message={
             !currentDuo
               ? "You need a duo partner first! Go to Profile → Edit to find a partner."
+              : hasPreferences
+              ? "No duos match your gender preferences right now. Check back later as more users join, or adjust your preferences in Profile!"
               : "No more duo pairs to show. Check back later or invite friends to join!"
           }
           actionLabel="Reload"
