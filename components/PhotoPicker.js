@@ -208,7 +208,81 @@ export default function PhotoPicker({
     }
   };
 
+  const replacePhoto = async (index) => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library to upload photos.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 1,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const imageUri = result.assets[0].uri;
+
+      if (!validateImageFormat(imageUri)) {
+        Alert.alert(
+          "Invalid Format",
+          `Please select a valid image format (${ALLOWED_FORMATS.join(
+            ", "
+          ).toUpperCase()}).`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      setUploading(true);
+      setUploadingIndex(index);
+
+      const processedUri = await processImage(imageUri);
+      const downloadUrl = await uploadProfilePhoto(processedUri);
+
+      // Delete the old photo
+      const oldPhotoUrl = photos[index];
+      await deleteProfilePhoto(oldPhotoUrl);
+
+      // Update photos array with new photo at the same index
+      const updatedPhotos = [...photos];
+      updatedPhotos[index] = downloadUrl;
+      onPhotosChange(updatedPhotos);
+    } catch (error) {
+      console.error("Error replacing photo:", error);
+      Alert.alert(
+        "Upload Failed",
+        "There was an error replacing your photo. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setUploading(false);
+      setUploadingIndex(null);
+    }
+  };
+
   const removePhoto = async (index) => {
+    // Prevent removing the first photo
+    if (index === 0) {
+      Alert.alert(
+        "Cannot Remove",
+        "You must have at least one photo. Use the replace button to change your main photo.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     Alert.alert("Remove Photo", "Are you sure you want to remove this photo?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -249,13 +323,25 @@ export default function PhotoPicker({
                     style={styles.photo}
                     resizeMode="cover"
                   />
-                  <IconButton
-                    icon="close-circle"
-                    size={24}
-                    iconColor="#fff"
-                    style={styles.removeButton}
-                    onPress={() => removePhoto(index)}
-                  />
+                  {index === 0 ? (
+                    // First photo: Show replace button
+                    <IconButton
+                      icon="camera-retake"
+                      size={24}
+                      iconColor="#fff"
+                      style={styles.replaceButton}
+                      onPress={() => replacePhoto(index)}
+                    />
+                  ) : (
+                    // Other photos: Show remove button
+                    <IconButton
+                      icon="close-circle"
+                      size={24}
+                      iconColor="#fff"
+                      style={styles.removeButton}
+                      onPress={() => removePhoto(index)}
+                    />
+                  )}
                 </View>
               ) : isUploading ? (
                 <View
@@ -320,7 +406,8 @@ export default function PhotoPicker({
       >
         • Upload up to {maxPhotos} photos{"\n"}• Supported formats: JPG, PNG,
         WebP{"\n"}• Images will be resized to max 1080p{"\n"}• Extreme aspect
-        ratios will be cropped
+        ratios will be cropped{"\n"}• First photo can be replaced but not
+        removed
       </Text>
     </View>
   );
@@ -356,6 +443,13 @@ const styles = StyleSheet.create({
     top: -8,
     right: -8,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
+    margin: 0,
+  },
+  replaceButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "rgba(139, 74, 97, 0.9)", // Use your app's primary color
     margin: 0,
   },
   emptySlot: {
