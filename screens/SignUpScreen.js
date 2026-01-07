@@ -2,7 +2,6 @@ import { StyleSheet, View, KeyboardAvoidingView, Text, TouchableOpacity } from "
 import React from "react";
 import { TextInput, Button, useTheme, SegmentedButtons } from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
-// ✅ FIXED: Use React Native Firebase
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import FirstNameScreen from "./SignUpProcess/FirstNameScreen";

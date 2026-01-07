@@ -1,14 +1,12 @@
 // This is a drop-in replacement for your existing ProfileScreen.js
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect} from "react";
 import {
   View,
   ScrollView,
   TouchableOpacity,
-  Image,
   Alert,
   Modal,
-  FlatList,
   ActivityIndicator,
   StyleSheet,
   SafeAreaView,
@@ -24,11 +22,7 @@ import {
   Chip,
   Avatar,
   IconButton,
-  Switch,
-  Portal,
-  Dialog,
   Divider,
-  List,
   Surface,
   useTheme,
 } from "react-native-paper";
@@ -42,10 +36,7 @@ import {
 import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
-import { formatLastActive } from "../utils/locationTracker";
 import SettingsScreen from "./SettingsScreen";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -126,7 +117,7 @@ const AVAILABLE_TAGS = [
   "🧘 Yoga",
 ];
 
-export default function ProfileScreen({ isDarkMode, toggleTheme, isNewUser }) {
+export default function ProfileScreen({ isDarkMode, toggleTheme}) {
   const theme = useTheme();
   const [profile, setProfile] = useState({
     name: "",
