@@ -20,7 +20,6 @@ import {
 } from "react-native-paper";
 import Slider from "@react-native-community/slider";
 import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   getUserProfile,

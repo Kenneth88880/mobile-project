@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme, SegmentedButtons } from "react-native-paper";
-// ✅ FIXED: Use React Native Firebase
 import auth from "@react-native-firebase/auth";
 import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 
