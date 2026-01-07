@@ -299,39 +299,20 @@ export const saveDuoLike = async (
       createdAt: new Date().toISOString(),
     });
 
-    console.log("✅ Duo like saved with sending duo pre-accepted:", acceptedBy);
+    console.log("✅ Duo like saved successfully");
     return true;
   } catch (error) {
-    console.error("❌ Error saving duo like:", error);
+    console.error("Error saving duo like:", error);
     return false;
   }
 };
 
 /**
- * Save a duo swipe (pass or like)
- */
-export const saveDuoSwipe = async (fromDuoId, toDuoId, action) => {
-  try {
-    await firestore().collection("duoSwipes").add({
-      fromDuoId,
-      toDuoId,
-      action,
-      timestamp: firestore.FieldValue.serverTimestamp(),
-      createdAt: new Date().toISOString(),
-    });
-    return true;
-  } catch (error) {
-    console.error("Error saving duo swipe:", error);
-    return false;
-  }
-};
-
-/**
- * Delete any existing duo like between two duos (to prevent duplicates)
+ * Delete a duo like between two duos
  */
 export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
   try {
-    console.log("Checking for existing likes between:", { fromDuoId, toDuoId });
+    console.log("Deleting duo like between:", { fromDuoId, toDuoId });
 
     const snapshot = await firestore()
       .collection("duoLikes")
@@ -339,78 +320,13 @@ export const deleteDuoLikeBetween = async (fromDuoId, toDuoId) => {
       .where("toDuoId", "==", toDuoId)
       .get();
 
-    if (snapshot.size > 0) {
-      console.log(`Found ${snapshot.size} existing like(s) to delete`);
-      const deletePromises = snapshot.docs.map((doc) => doc.ref.delete());
-      await Promise.all(deletePromises);
-      console.log(`✅ Deleted ${snapshot.size} existing likes between duos`);
-    } else {
-      console.log(
-        "No existing likes found (this is normal for first-time likes)"
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error("❌ Error deleting duo like:", error);
-    return false;
-  }
-};
-
-/**
- * Accept a duo like (add user to acceptedBy array)
- */
-export const acceptDuoLike = async (
-  likeId,
-  userId,
-  currentDuoId,
-  fromDuoId
-) => {
-  try {
-    const likeRef = firestore().collection("duoLikes").doc(likeId);
-    const doc = await likeRef.get();
-
-    if (!doc.exists) {
-      console.error("Duo like not found");
-      return false;
-    }
-
-    const likeData = doc.data();
-    const acceptedBy = likeData.acceptedBy || [];
-
-    // Add user to acceptedBy if not already there
-    if (!acceptedBy.includes(userId)) {
-      acceptedBy.push(userId);
-    }
-
-    // Check if all 4 users have accepted (2 from each duo)
-    const allAccepted = acceptedBy.length >= 4;
-
-    await likeRef.update({
-      acceptedBy,
-      status: allAccepted ? "matched" : "pending",
-      updatedAt: new Date().toISOString(),
+    const batch = firestore().batch();
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
     });
 
-    // If all accepted, create a match/conversation
-    if (allAccepted) {
-      await createDuoMatch(currentDuoId, fromDuoId, likeData);
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Error accepting duo like:", error);
-    return false;
-  }
-};
-
-/**
- * Delete a duo like by ID
- */
-export const deleteDuoLike = async (likeId) => {
-  try {
-    await firestore().collection("duoLikes").doc(likeId).delete();
-    console.log("Duo like deleted:", likeId);
+    await batch.commit();
+    console.log("✅ Duo like deleted successfully");
     return true;
   } catch (error) {
     console.error("Error deleting duo like:", error);
@@ -419,38 +335,56 @@ export const deleteDuoLike = async (likeId) => {
 };
 
 /**
- * Save a rating for a user (creates new or updates existing)
+ * Save a duo swipe (pass)
  */
-export const saveRating = async (fromUserId, toUserId, rating) => {
+export const saveDuoSwipe = async (fromDuoId, toDuoId) => {
   try {
-    // Check if user has already rated this profile
-    const existingRating = await hasUserRatedProfile(fromUserId, toUserId);
-
-    if (existingRating.exists) {
-      // Update existing rating
-      await firestore()
-        .collection("ratings")
-        .doc(existingRating.ratingId)
-        .update({
-          rating,
-          timestamp: firestore.FieldValue.serverTimestamp(),
-          updatedAt: new Date().toISOString(),
-        });
-      console.log(
-        `Rating updated: ${fromUserId} -> ${toUserId}: ${rating} stars`
-      );
-      return true;
-    }
-
-    // Create new rating
-    await firestore().collection("ratings").add({
-      fromUserId,
-      toUserId,
-      rating,
+    await firestore().collection("duoSwipes").add({
+      fromDuoId,
+      toDuoId,
       timestamp: firestore.FieldValue.serverTimestamp(),
       createdAt: new Date().toISOString(),
     });
-    console.log(`Rating saved: ${fromUserId} -> ${toUserId}: ${rating} stars`);
+    console.log("✅ Duo swipe saved");
+    return true;
+  } catch (error) {
+    console.error("Error saving duo swipe:", error);
+    return false;
+  }
+};
+
+/**
+ * Save or update a rating for a user
+ */
+export const saveRating = async (fromUserId, toUserId, rating) => {
+  try {
+    // Check if rating already exists
+    const existingRating = await firestore()
+      .collection("ratings")
+      .where("fromUserId", "==", fromUserId)
+      .where("toUserId", "==", toUserId)
+      .get();
+
+    if (!existingRating.empty) {
+      // Update existing rating
+      const ratingDoc = existingRating.docs[0];
+      await ratingDoc.ref.update({
+        rating,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("✅ Rating updated");
+    } else {
+      // Create new rating
+      await firestore().collection("ratings").add({
+        fromUserId,
+        toUserId,
+        rating,
+        timestamp: firestore.FieldValue.serverTimestamp(),
+        createdAt: new Date().toISOString(),
+      });
+      console.log("✅ Rating saved");
+    }
+
     return true;
   } catch (error) {
     console.error("Error saving rating:", error);
@@ -459,69 +393,9 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
 };
 
 /**
- * Create a match between two duos (creates a group chat)
- */
-const createDuoMatch = async (duo1Id, duo2Id, likeData) => {
-  try {
-    console.log("Creating duo match and group chat...");
-
-    const users = [
-      likeData.fromUser1,
-      likeData.fromUser2,
-      likeData.toUser1,
-      likeData.toUser2,
-    ].filter(Boolean);
-
-    if (users.length !== 4) {
-      console.error("Cannot create match - missing user IDs:", users);
-      return false;
-    }
-
-    // Get user profiles for chat name
-    const profiles = await Promise.all(users.map((id) => getUserProfile(id)));
-    const names = profiles.map((p) => p?.name || "User").join(", ");
-
-    // Create chat in 'chats' collection
-    await firestore()
-      .collection("chats")
-      .add({
-        participants: users,
-        isGroupChat: true,
-        groupName: `Duo Match: ${names}`,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        lastMessageText: "Chat created! Say hi to your match!",
-        lastMessageTime: firestore.FieldValue.serverTimestamp(),
-        unreadCount: {},
-        duo1Id,
-        duo2Id,
-      });
-
-    // Also create match record for tracking
-    await firestore().collection("duoMatches").add({
-      duo1Id,
-      duo2Id,
-      users,
-      matchedAt: firestore.FieldValue.serverTimestamp(),
-      createdAt: new Date().toISOString(),
-      status: "active",
-    });
-
-    console.log("✅ Duo match and group chat created successfully!");
-    return true;
-  } catch (error) {
-    console.error("❌ Error creating duo match:", error);
-    return false;
-  }
-};
-
-// ============================================
-// NEW GENDER PREFERENCE FUNCTIONS
-// ============================================
-
-/**
- * Update user's gender in their profile
+ * Update user's gender
  * @param {string} userId - The user's ID
- * @param {string} gender - The gender ('male', 'female', or 'non-binary')
+ * @param {string} gender - Gender value ("male", "female", or "non-binary")
  */
 export const updateUserGender = async (userId, gender) => {
   try {
@@ -584,12 +458,17 @@ export const getDuoPartnerProfile = async (partnerId) => {
 };
 
 /**
- * Check if two duos match based on their gender preferences
- * @param {Object} duo1User1 - First user of duo 1
- * @param {Object} duo1User2 - Second user of duo 1
+ * ✅ FIXED: Check if two duos match based on their gender preferences
+ *
+ * NEW LOGIC: Each person's preference must match ALL members of the other duo
+ *
+ * Example: If both men prefer women, they should ONLY see duos where BOTH members are women
+ *
+ * @param {Object} duo1User1 - First user of duo 1 (you)
+ * @param {Object} duo1User2 - Second user of duo 1 (your partner)
  * @param {Object} duo2User1 - First user of duo 2
  * @param {Object} duo2User2 - Second user of duo 2
- * @returns {boolean} True if preferences match
+ * @returns {boolean} True if preferences match on BOTH sides
  */
 export const checkDuoPreferenceMatch = (
   duo1User1,
@@ -597,31 +476,121 @@ export const checkDuoPreferenceMatch = (
   duo2User1,
   duo2User2
 ) => {
-  // Get preferences for both duos
-  const duo1Pref1 = duo1User1.duoPreference?.interestedIn || [];
-  const duo1Pref2 = duo1User2.duoPreference?.interestedIn || [];
-  const duo2Pref1 = duo2User1.duoPreference?.interestedIn || [];
-  const duo2Pref2 = duo2User2.duoPreference?.interestedIn || [];
+  console.log("=== CHECKING DUO PREFERENCE MATCH ===");
 
-  // If no preferences set, match with everyone
+  // Get preferences - supporting both duoPreference.interestedIn and genderPreference
+  const duo1Pref1 =
+    duo1User1.duoPreference?.interestedIn || duo1User1.genderPreference || [];
+  const duo1Pref2 =
+    duo1User2.duoPreference?.interestedIn || duo1User2.genderPreference || [];
+  const duo2Pref1 =
+    duo2User1.duoPreference?.interestedIn || duo2User1.genderPreference || [];
+  const duo2Pref2 =
+    duo2User2.duoPreference?.interestedIn || duo2User2.genderPreference || [];
+
+  console.log("Duo 1:", {
+    user1: { gender: duo1User1.gender, preferences: duo1Pref1 },
+    user2: { gender: duo1User2.gender, preferences: duo1Pref2 },
+  });
+
+  console.log("Duo 2:", {
+    user1: { gender: duo2User1.gender, preferences: duo2Pref1 },
+    user2: { gender: duo2User2.gender, preferences: duo2Pref2 },
+  });
+
+  // ===== CHECK IF DUO 1 IS INTERESTED IN DUO 2 =====
+
+  // Duo1 User1's preference: If they have preferences, BOTH members of Duo2 must match
+  let duo1User1InterestedInDuo2;
+  if (duo1Pref1.length === 0) {
+    // No preference = interested in anyone
+    duo1User1InterestedInDuo2 = true;
+    console.log("Duo1 User1: No preference set (matches anyone)");
+  } else {
+    // BOTH members of Duo2 must be in their preference list
+    duo1User1InterestedInDuo2 =
+      duo1Pref1.includes(duo2User1.gender) &&
+      duo1Pref1.includes(duo2User2.gender);
+    console.log(
+      `Duo1 User1 wants [${duo1Pref1}], Duo2 has [${duo2User1.gender}, ${
+        duo2User2.gender
+      }]: ${duo1User1InterestedInDuo2 ? "✅ MATCH" : "❌ NO MATCH"}`
+    );
+  }
+
+  // Duo1 User2's preference: If they have preferences, BOTH members of Duo2 must match
+  let duo1User2InterestedInDuo2;
+  if (duo1Pref2.length === 0) {
+    duo1User2InterestedInDuo2 = true;
+    console.log("Duo1 User2: No preference set (matches anyone)");
+  } else {
+    duo1User2InterestedInDuo2 =
+      duo1Pref2.includes(duo2User1.gender) &&
+      duo1Pref2.includes(duo2User2.gender);
+    console.log(
+      `Duo1 User2 wants [${duo1Pref2}], Duo2 has [${duo2User1.gender}, ${
+        duo2User2.gender
+      }]: ${duo1User2InterestedInDuo2 ? "✅ MATCH" : "❌ NO MATCH"}`
+    );
+  }
+
+  // BOTH users in Duo1 must be satisfied with Duo2
   const duo1InterestedInDuo2 =
-    (duo1Pref1.length === 0 ||
-      duo1Pref1.includes(duo2User1.gender) ||
-      duo1Pref1.includes(duo2User2.gender)) &&
-    (duo1Pref2.length === 0 ||
-      duo1Pref2.includes(duo2User1.gender) ||
-      duo1Pref2.includes(duo2User2.gender));
+    duo1User1InterestedInDuo2 && duo1User2InterestedInDuo2;
+  console.log(
+    `Duo1 interested in Duo2: ${duo1InterestedInDuo2 ? "✅ YES" : "❌ NO"}`
+  );
 
+  // ===== CHECK IF DUO 2 IS INTERESTED IN DUO 1 =====
+
+  // Duo2 User1's preference: If they have preferences, BOTH members of Duo1 must match
+  let duo2User1InterestedInDuo1;
+  if (duo2Pref1.length === 0) {
+    duo2User1InterestedInDuo1 = true;
+    console.log("Duo2 User1: No preference set (matches anyone)");
+  } else {
+    duo2User1InterestedInDuo1 =
+      duo2Pref1.includes(duo1User1.gender) &&
+      duo2Pref1.includes(duo1User2.gender);
+    console.log(
+      `Duo2 User1 wants [${duo2Pref1}], Duo1 has [${duo1User1.gender}, ${
+        duo1User2.gender
+      }]: ${duo2User1InterestedInDuo1 ? "✅ MATCH" : "❌ NO MATCH"}`
+    );
+  }
+
+  // Duo2 User2's preference: If they have preferences, BOTH members of Duo1 must match
+  let duo2User2InterestedInDuo1;
+  if (duo2Pref2.length === 0) {
+    duo2User2InterestedInDuo1 = true;
+    console.log("Duo2 User2: No preference set (matches anyone)");
+  } else {
+    duo2User2InterestedInDuo1 =
+      duo2Pref2.includes(duo1User1.gender) &&
+      duo2Pref2.includes(duo1User2.gender);
+    console.log(
+      `Duo2 User2 wants [${duo2Pref2}], Duo1 has [${duo1User1.gender}, ${
+        duo1User2.gender
+      }]: ${duo2User2InterestedInDuo1 ? "✅ MATCH" : "❌ NO MATCH"}`
+    );
+  }
+
+  // BOTH users in Duo2 must be satisfied with Duo1
   const duo2InterestedInDuo1 =
-    (duo2Pref1.length === 0 ||
-      duo2Pref1.includes(duo1User1.gender) ||
-      duo2Pref1.includes(duo1User2.gender)) &&
-    (duo2Pref2.length === 0 ||
-      duo2Pref2.includes(duo1User1.gender) ||
-      duo2Pref2.includes(duo1User2.gender));
+    duo2User1InterestedInDuo1 && duo2User2InterestedInDuo1;
+  console.log(
+    `Duo2 interested in Duo1: ${duo2InterestedInDuo1 ? "✅ YES" : "❌ NO"}`
+  );
 
-  // Both duos must be interested in each other
-  return duo1InterestedInDuo2 && duo2InterestedInDuo1;
+  // ===== FINAL RESULT =====
+  // BOTH duos must be mutually interested
+  const finalMatch = duo1InterestedInDuo2 && duo2InterestedInDuo1;
+  console.log(
+    `FINAL RESULT: ${finalMatch ? "✅✅ MUTUAL MATCH" : "❌ NO MATCH"}`
+  );
+  console.log("=====================================");
+
+  return finalMatch;
 };
 
 /**
