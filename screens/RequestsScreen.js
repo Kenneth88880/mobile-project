@@ -20,7 +20,6 @@ import {
   Divider,
   Icon,
 } from "react-native-paper";
-// FIXED: Using React Native Firebase instead of web SDK
 import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
@@ -35,7 +34,6 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   EmptyState,
   ProfilePhoto,
-  StarRating,
 } from "../components/CommonComponents";
 
 export default function RequestsScreen({ isActive = true }) {

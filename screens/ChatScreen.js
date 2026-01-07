@@ -7,7 +7,6 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
-  Image,
 } from "react-native";
 import {
   Text,

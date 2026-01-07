@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>418458858405-jdg22pajulp02hckihdn2puq9ur1l6rb.apps.googleusercontent.com</string>
+	<string>418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.418458858405-jdg22pajulp02hckihdn2puq9ur1l6rb</string>
+	<string>com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>418458858405-n8sd62tg5su19diqos39iu9j6gcma80n.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyD56VQp7xcQZt7LeqcoCWWz31zfXdSnDnI</string>
 	<key>GCM_SENDER_ID</key>
@@ -13,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.galaxies.firebase</string>
+	<string>com.doublyconnections.doubly</string>
 	<key>PROJECT_ID</key>
 	<string>doubly-messenging</string>
 	<key>STORAGE_BUCKET</key>
@@ -29,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:418458858405:ios:d7fbb51780746752d92e4c</string>
+	<string>1:418458858405:ios:075d8f146219ee1ed92e4c</string>
 </dict>
 </plist>
