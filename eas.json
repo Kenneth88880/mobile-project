@@ -17,6 +17,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "bundleIdentifier": "com.doublyconnections.doubly"
+      },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
