@@ -18,6 +18,11 @@ export default {
       bundleIdentifier: "com.doublyconnections.doubly",
       googleServicesFile:
         process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+      config: {
+        googleSignIn: {
+          reservedClientId: "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
+        },
+      },
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
