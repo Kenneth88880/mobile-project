@@ -31,9 +31,6 @@ export default {
       package: "com.doublyconnections.doubly",
     },
     plugins: [
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      //"./expo-firebase-plugin.cjs",
       [
         "expo-build-properties",
         {
