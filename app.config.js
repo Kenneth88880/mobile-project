@@ -4,7 +4,7 @@ export default {
   expo: {
     name: "Doubly",
     slug: "doubly-yrvn0tmogrdrliugnun4w",
-    version: "1.0.3",
+    version: "1.0.4",
     orientation: "portrait",
     icon: "./assets/doubly-icon.png",
     userInterfaceStyle: "light",
@@ -40,9 +40,9 @@ export default {
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "dynamic",
+            useFrameworks: "static",
             deploymentTarget: "15.1",
-            buildReactNativeFromSource: true,
+            //commented this out for build-> buildReactNativeFromSource: true,
           },
         },
       ],
