@@ -35,7 +35,7 @@ export default {
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "dynamic",
+            useFrameworks: "static",
             deploymentTarget: "15.1",
             //commented this out for build-> buildReactNativeFromSource: true,
           },
