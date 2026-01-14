@@ -1,6 +1,17 @@
-import { StyleSheet, View, KeyboardAvoidingView, Text, TouchableOpacity } from "react-native";
+import {
+  StyleSheet,
+  View,
+  KeyboardAvoidingView,
+  Text,
+  TouchableOpacity,
+} from "react-native";
 import React from "react";
-import { TextInput, Button, useTheme, SegmentedButtons } from "react-native-paper";
+import {
+  TextInput,
+  Button,
+  useTheme,
+  SegmentedButtons,
+} from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -19,7 +30,7 @@ const SignUpScreen = ({
   onNavigateToSignIn,
   isInSignupFlow = false,
   needsEmailVerification = false,
-  userEmail = ""
+  userEmail = "",
 }) => {
   const theme = useTheme();
   const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
@@ -50,7 +61,11 @@ const SignUpScreen = ({
 
   // If user needs email verification and we have their email, send email on mount
   React.useEffect(() => {
-    if (needsEmailVerification && userEmail && currentStep === "emailVerification") {
+    if (
+      needsEmailVerification &&
+      userEmail &&
+      currentStep === "emailVerification"
+    ) {
       sendVerificationEmail();
     }
   }, []);
@@ -92,7 +107,10 @@ const SignUpScreen = ({
   // handles email sign up
   const handleEmailRegister = async () => {
     try {
-      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+      const userCredential = await auth().createUserWithEmailAndPassword(
+        email,
+        password
+      );
       const user = userCredential.user;
       console.log("Registered with:", user.email);
 
@@ -102,7 +120,9 @@ const SignUpScreen = ({
       } catch (emailError) {
         // Email sending failed, but user account was created
         // Error already shown in sendVerificationEmail, just proceed to verification screen
-        console.log("Continuing to verification screen despite email send error");
+        console.log(
+          "Continuing to verification screen despite email send error"
+        );
       }
 
       // Move to email verification step even if email failed to send
@@ -115,7 +135,8 @@ const SignUpScreen = ({
 
       let userMessage = "Sign up failed: " + errorMessage;
       if (error.code === "auth/email-already-in-use") {
-        userMessage = "This email is already registered. Please try signing in instead.";
+        userMessage =
+          "This email is already registered. Please try signing in instead.";
       } else if (error.code === "auth/invalid-email") {
         userMessage = "Invalid email address. Please check and try again.";
       } else if (error.code === "auth/weak-password") {
@@ -131,20 +152,13 @@ const SignUpScreen = ({
     try {
       const user = auth().currentUser;
       if (user && !user.emailVerified) {
-        // Optional: Configure action code settings for custom handling
+        // Configure action code settings for email verification
         const actionCodeSettings = {
-          // You can add a custom URL here if you want to handle the verification
-          // in your app instead of the default Firebase page
-          // url: 'https://yourapp.com/verify-email',
-          // iOS: {
-          //   bundleId: 'com.yourapp.bundle'
-          // },
-          // android: {
-          //   packageName: 'com.yourapp',
-          //   installApp: true,
-          //   minimumVersion: '12'
-          // },
-          handleCodeInApp: false, // Set to true if you want to handle in-app
+          url: "https://doubly-messenging.firebaseapp.com", // Your Firebase hosting domain
+          handleCodeInApp: false, // Opens in browser, not app
+          iOS: {
+            bundleId: "com.doublyconnections.doubly",
+          },
         };
 
         await user.sendEmailVerification(actionCodeSettings);
@@ -156,9 +170,11 @@ const SignUpScreen = ({
       let errorMessage = "Error sending verification email: " + error.message;
 
       if (error.code === "auth/too-many-requests") {
-        errorMessage = "Too many requests. Please wait a few minutes before trying again, or check your email - a verification link may have already been sent.";
+        errorMessage =
+          "Too many requests. Please wait a few minutes before trying again, or check your email - a verification link may have already been sent.";
       } else if (error.code === "auth/network-request-failed") {
-        errorMessage = "Network error. Please check your internet connection and try again.";
+        errorMessage =
+          "Network error. Please check your internet connection and try again.";
       }
 
       alert(errorMessage);
@@ -174,7 +190,9 @@ const SignUpScreen = ({
         auth().settings.appVerificationDisabledForTesting = true;
       }
 
-      const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
+      const confirmationResult = await auth().signInWithPhoneNumber(
+        phoneNumber
+      );
       setConfirmation(confirmationResult);
       setCurrentStep("phoneVerification");
     } catch (error) {
@@ -321,7 +339,10 @@ const SignUpScreen = ({
         return;
       }
 
-      if (!signupData.genderPreference || signupData.genderPreference.length === 0) {
+      if (
+        !signupData.genderPreference ||
+        signupData.genderPreference.length === 0
+      ) {
         alert("Please select at least one gender preference");
         setCurrentStep("genderPreference");
         return;
@@ -534,13 +555,20 @@ const SignUpScreen = ({
       </View>
 
       <View style={styles.buttonContainer}>
-        <Button mode="contained" onPress={handleRegisterPress} style={styles.button}>
+        <Button
+          mode="contained"
+          onPress={handleRegisterPress}
+          style={styles.button}
+        >
           Register
         </Button>
       </View>
 
       {!isInSignupFlow && (
-        <TouchableOpacity onPress={onNavigateToSignIn} style={styles.linkContainer}>
+        <TouchableOpacity
+          onPress={onNavigateToSignIn}
+          style={styles.linkContainer}
+        >
           <Text style={[styles.linkText, { color: theme.colors.primary }]}>
             Already have an account? Back to login
           </Text>
