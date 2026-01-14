@@ -7,6 +7,7 @@
 - connect chat with explore screen to send and plan
 
 ## Things in progress
+
 - change chat text box to be smaller
 - change chat bubble text more soft/round
 - app efficiency
