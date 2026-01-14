@@ -43,7 +43,7 @@ const SignUpScreen = ({
   // Determine initial step based on signup flow state
   const getInitialStep = () => {
     if (needsEmailVerification) return "emailVerification";
-    if (isInSignupFlow) return "firstName";
+    if (isInSignupFlow) return "genderPreference";
     return "credentials";
   };
 
@@ -57,6 +57,7 @@ const SignUpScreen = ({
     photos: [],
     tags: [],
     friendCode: "",
+    setUp: false,
   });
 
   // If user needs email verification and we have their email, send email on mount
@@ -315,40 +316,40 @@ const SignUpScreen = ({
   const saveProfile = async (friendCode) => {
     try {
       // Validate that all required data is present
-      if (!signupData.firstName) {
+      if (!signupData.firstName && signupData.setUp === false) {
         alert("Please enter your first name");
         setCurrentStep("firstName");
         return;
       }
 
-      if (!signupData.birthday || !signupData.birthday.age) {
+      if ((!signupData.birthday || !signupData.birthday.age) && signupData.setUp === false) {
         alert("Please enter your birthday");
         setCurrentStep("birthday");
         return;
       }
 
-      if (!signupData.tags || signupData.tags.length < 3) {
+      if ((!signupData.tags || signupData.tags.length < 3) && signupData.setUp === false) {
         alert("Please select at least 3 tags");
         setCurrentStep("tags");
         return;
       }
 
-      if (!signupData.gender) {
+      if (!signupData.gender && signupData.setUp === false) {
         alert("Please select your gender");
         setCurrentStep("gender");
         return;
       }
 
       if (
-        !signupData.genderPreference ||
-        signupData.genderPreference.length === 0
+        (!signupData.genderPreference ||
+        signupData.genderPreference.length === 0) && signupData.setUp === false
       ) {
         alert("Please select at least one gender preference");
         setCurrentStep("genderPreference");
         return;
       }
 
-      if (!signupData.photos || signupData.photos.length === 0) {
+      if ((!signupData.photos || signupData.photos.length === 0) && signupData.setUp === false) {
         alert("Please add at least one photo");
         setCurrentStep("photos");
         return;
@@ -374,6 +375,7 @@ const SignUpScreen = ({
         longitude: null,
         showOnlineStatus: true,
         createdAt: new Date().toISOString(),
+        setUp: true,
       };
 
       // Save profile to Firestore
@@ -424,7 +426,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "firstName") {
+  if (currentStep === "firstName" && signupData.setUp === false) {
     return (
       <FirstNameScreen
         onNext={handleFirstNameNext}
@@ -434,7 +436,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "birthday") {
+  if (currentStep === "birthday" && signupData.setUp === false) {
     return (
       <BirthdayScreen
         onNext={handleBirthdayNext}
@@ -444,7 +446,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "gender") {
+  if (currentStep === "gender" && signupData.setUp === false) {
     return (
       <GenderScreen
         onNext={handleGenderNext}
@@ -454,7 +456,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "genderPreference") {
+  if (currentStep === "genderPreference" && signupData.setUp === false) {
     return (
       <GenderPreferenceScreen
         onNext={handleGenderPreferenceNext}
@@ -464,7 +466,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "photos") {
+  if (currentStep === "photos" && signupData.setUp === false) {
     return (
       <PhotoSelectionScreen
         onNext={handlePhotosNext}
@@ -474,7 +476,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "tags") {
+  if (currentStep === "tags" && signupData.setUp === false) {
     return (
       <TagSelectionScreen
         onNext={handleTagsNext}
@@ -484,7 +486,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "duo") {
+  if (currentStep === "duo" && signupData.setUp === false) {
     return (
       <DuoSetupScreen
         onNext={handleDuoNext}
