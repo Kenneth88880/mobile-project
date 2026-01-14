@@ -101,9 +101,28 @@ export default function SettingsScreen({
       if (currentPreferences.includes(gender)) {
         // Remove the gender
         newPreferences = currentPreferences.filter((g) => g !== gender);
+       // console.log('soemthing' + currentPreferences);
+        
       } else {
         // Add the gender
         newPreferences = [...currentPreferences, gender];
+        //console.log('soemthing' + currentPreferences);
+      }
+
+      if (currentPreferences.includes('tester') ) {
+
+        console.log("tester detected");
+        newPreferences = [];
+        console.log(currentPreferences);
+        console.log('error')
+
+
+      } else {
+
+        console.log("no tester detected");
+        console.log(currentPreferences)
+        console.log('error')
+
       }
 
       const updatedProfile = {
@@ -326,6 +345,16 @@ export default function SettingsScreen({
                   <Switch
                     value={genderPreference.includes("male")}
                     onValueChange={() => toggleGenderPreference("male")}
+                  />
+                )}
+              />
+              <Divider />
+              <List.Item
+                title="tester"
+                right={() => (
+                  <Switch
+                    value={genderPreference.includes("tester")}
+                    onValueChange={() => toggleGenderPreference("tester")}
                   />
                 )}
               />
