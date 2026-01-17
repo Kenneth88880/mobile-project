@@ -195,10 +195,18 @@ export default function RequestsScreen({ isActive = true }) {
   };
 
   const handleAccept = async (likeId, fromDuoId) => {
-    if (!currentDuo) {
-      Alert.alert("Error", "You need to be in a duo to accept requests");
-      return;
-    }
+  if (!currentDuo) {
+    Alert.alert("Error", "You need to be in a duo to accept requests");
+    return;
+  }
+
+  try {
+    console.log("Accepting duo like:", {
+      likeId,
+      currentUserId,
+      currentDuoId: currentDuo.duoId,
+      fromDuoId,
+    });
 
     const success = await acceptDuoLike(
       likeId,
@@ -206,12 +214,23 @@ export default function RequestsScreen({ isActive = true }) {
       currentDuo.duoId,
       fromDuoId
     );
+
+    console.log("Accept result:", success);
+
     if (success) {
       Alert.alert("Accepted!", "You've accepted this duo request");
+      // The listener should automatically update the UI
     } else {
-      Alert.alert("Error", "Failed to accept request");
+      Alert.alert("Error", "Failed to accept request. Please try again.");
     }
-  };
+  } catch (error) {
+    console.error("Error accepting duo like:", error);
+    Alert.alert(
+      "Error",
+      `Failed to accept request: ${error.message || "Unknown error"}`
+    );
+  }
+};
 
   const handleDecline = async (likeId, fromDuoId) => {
     if (!currentDuo) return;
