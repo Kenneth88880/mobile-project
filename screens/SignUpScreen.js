@@ -43,7 +43,7 @@ const SignUpScreen = ({
   // Determine initial step based on signup flow state
   const getInitialStep = () => {
     if (needsEmailVerification) return "emailVerification";
-    if (isInSignupFlow) return "genderPreference";
+    if (isInSignupFlow) return "firstName";
     return "credentials";
   };
 

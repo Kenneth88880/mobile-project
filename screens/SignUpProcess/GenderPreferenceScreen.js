@@ -13,10 +13,8 @@ const GenderPreferenceScreen = ({ onNext, onBack, initialPreferences = [] }) => 
 
   const togglePreference = (gender) => {
     if (selectedPreferences.includes(gender)) {
-      console.log("if you see this again, you fucke dup")
       setSelectedPreferences(selectedPreferences.filter((g) => g !== gender));
     } else {
-      console.log("if you see this again, you fucke dup")
       setSelectedPreferences([...selectedPreferences, gender]);
     }
   };
