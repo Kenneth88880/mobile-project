@@ -1826,22 +1826,6 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                 Male
               </Chip>
               <Chip
-                selected={profile.gender === "tester"}
-                onPress={() => setProfile({ ...profile, gender: "tester" })}
-                style={{
-                  backgroundColor:
-                    profile.gender === "tester" ? "#4A90E2" : undefined,
-                }}
-                textStyle={{
-                  color:
-                    profile.gender === "tester"
-                      ? "#FFFFFF"
-                      : theme.colors.onSurface,
-                }}
-              >
-                Male
-              </Chip>
-              <Chip
                 selected={profile.gender === "female"}
                 onPress={() => setProfile({ ...profile, gender: "female" })}
                 style={{
