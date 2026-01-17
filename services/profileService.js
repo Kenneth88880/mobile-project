@@ -119,6 +119,121 @@ export const getCurrentDuoPartner = async (userId) => {
   }
 };
 
+export const createDuoMatchChat = async (duo1Id, duo2Id, allUserIds) => {
+  try {
+    console.log("Creating chat for matched duos:", { duo1Id, duo2Id, allUserIds });
+
+    // Validate that we have exactly 4 users
+    if (!allUserIds || allUserIds.length !== 4) {
+      console.error("Invalid user count for duo chat:", allUserIds?.length);
+      return null;
+    }
+
+    // Fetch all user profiles to create a nice group name
+    const userProfiles = await Promise.all(
+      allUserIds.map(async (userId) => {
+        const profile = await getUserProfile(userId);
+        return profile;
+      })
+    );
+
+    // Filter out any null profiles
+    const validProfiles = userProfiles.filter(p => p !== null);
+    
+    if (validProfiles.length !== 4) {
+      console.error("Could not fetch all user profiles");
+      return null;
+    }
+
+    // Create a group name from the first names
+    const groupName = validProfiles
+      .map(p => p.name?.split(' ')[0] || 'User')
+      .join(', ');
+
+    // Create the chat document
+    const chatData = {
+      participants: allUserIds,
+      isGroupChat: true,
+      groupName: groupName,
+      groupPhoto: null, // Can be set later by users
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      lastMessageTime: firestore.FieldValue.serverTimestamp(),
+      lastMessageText: "Match created! Say hello! 👋",
+      status: "active",
+      duo1Id: duo1Id,
+      duo2Id: duo2Id,
+      matchType: "duo",
+      unreadCount: {
+        [allUserIds[0]]: 0,
+        [allUserIds[1]]: 0,
+        [allUserIds[2]]: 0,
+        [allUserIds[3]]: 0,
+      },
+      reports: [],
+      hiddenFor: [],
+    };
+
+    // Create the chat
+    const chatRef = await firestore().collection("chats").add(chatData);
+    console.log("✅ Chat created successfully:", chatRef.id);
+
+    // Send an initial system message
+    await firestore()
+      .collection("chats")
+      .doc(chatRef.id)
+      .collection("messages")
+      .add({
+        text: "🎉 You matched! Start chatting and plan your double date!",
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        user: {
+          _id: "system",
+          name: "DuoDates",
+        },
+        isSystemMessage: true,
+      });
+
+    return {
+      chatId: chatRef.id,
+      groupName: groupName,
+      participants: allUserIds,
+    };
+  } catch (error) {
+    console.error("Error creating duo match chat:", error);
+    return null;
+  }
+};
+
+export const findExistingDuoChat = async (duo1Id, duo2Id) => {
+  try {
+    // Query for chats that include both duos
+    const snapshot = await firestore()
+      .collection("chats")
+      .where("duo1Id", "in", [duo1Id, duo2Id])
+      .get();
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      // Check if both duos are in this chat
+      if (
+        (data.duo1Id === duo1Id && data.duo2Id === duo2Id) ||
+        (data.duo1Id === duo2Id && data.duo2Id === duo1Id)
+      ) {
+        return {
+          chatId: doc.id,
+          ...data,
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error finding existing duo chat:", error);
+    return null;
+  }
+};
+
+
+
 /**
  * Check if a user has already rated another user and get the rating
  */
@@ -266,6 +381,89 @@ export const getAllDuoPairs = async (userId) => {
   } catch (error) {
     console.error("Error loading duo pairs:", error);
     return [];
+  }
+};
+
+export const acceptDuoLike = async (likeId, userId, currentDuoId, fromDuoId) => {
+  try {
+    const likeRef = firestore().collection("duoLikes").doc(likeId);
+    const likeDoc = await likeRef.get();
+
+    if (!likeDoc.exists) {
+      console.error("Duo like document not found");
+      return false;
+    }
+
+    const likeData = likeDoc.data();
+    const acceptedBy = likeData.acceptedBy || [];
+
+    // Add user to acceptedBy array if not already there
+    if (!acceptedBy.includes(userId)) {
+      acceptedBy.push(userId);
+    }
+
+    // Check if all 4 users have accepted (both from the sending duo and receiving duo)
+    const allAccepted = acceptedBy.length >= 4;
+
+    // Update the like document
+    await likeRef.update({
+      acceptedBy: acceptedBy,
+      status: allAccepted ? "matched" : "pending",
+      lastUpdated: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // If all accepted, create a match
+    if (allAccepted) {
+      await firestore().collection("duoMatches").add({
+        duo1: currentDuoId,
+        duo2: fromDuoId,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        users: acceptedBy,
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error in acceptDuoLike:", error);
+    return false;
+  }
+};
+
+// Then use this handleAccept function in your component:
+const handleAccept = async (likeId, fromDuoId) => {
+  if (!currentDuo) {
+    Alert.alert("Error", "You need to be in a duo to accept requests");
+    return;
+  }
+
+  try {
+    console.log("Accepting duo like:", {
+      likeId,
+      currentUserId,
+      currentDuoId: currentDuo.duoId,
+      fromDuoId,
+    });
+
+    const success = await acceptDuoLike(
+      likeId,
+      currentUserId,
+      currentDuo.duoId,
+      fromDuoId
+    );
+
+    console.log("Accept result:", success);
+
+    if (success) {
+      Alert.alert("Accepted!", "You've accepted this duo request");
+    } else {
+      Alert.alert("Error", "Failed to accept request. Please try again.");
+    }
+  } catch (error) {
+    console.error("Error accepting duo like:", error);
+    Alert.alert(
+      "Error",
+      `Failed to accept request: ${error.message || "Unknown error"}`
+    );
   }
 };
 
