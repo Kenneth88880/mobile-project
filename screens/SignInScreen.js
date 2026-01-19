@@ -12,7 +12,9 @@ import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 
 const SignInScreen = ({ onNavigateToRegister }) => {
   const theme = useTheme();
-  const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
+  // TODO: Re-enable phone auth later - currently disabled
+  // const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
+  const [authMethod, setAuthMethod] = React.useState("email"); // Phone auth disabled temporarily
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [phoneNumber, setPhoneNumber] = React.useState("+1");
@@ -114,6 +116,7 @@ const SignInScreen = ({ onNavigateToRegister }) => {
       </Text>
 
       <View style={styles.inputContainer}>
+{/* TODO: Re-enable phone auth toggle later
         <SegmentedButtons
           value={authMethod}
           onValueChange={setAuthMethod}
@@ -123,6 +126,7 @@ const SignInScreen = ({ onNavigateToRegister }) => {
           ]}
           style={styles.segmentedButtons}
         />
+*/}
 
         {authMethod === "email" ? (
           <>
