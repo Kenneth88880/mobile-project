@@ -24,6 +24,7 @@ import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
 import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 import EmailVerificationScreen from "./SignUpProcess/EmailVerificationScreen";
+import VerificationCompleteScreen from "./SignUpProcess/VerificationCompleteScreen";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 
 const SignUpScreen = ({
@@ -33,7 +34,9 @@ const SignUpScreen = ({
   userEmail = "",
 }) => {
   const theme = useTheme();
-  const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
+  // TODO: Re-enable phone auth later - currently disabled
+  // const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
+  const [authMethod, setAuthMethod] = React.useState("email"); // Phone auth disabled temporarily
   const [email, setEmail] = React.useState(userEmail);
   const [password, setPassword] = React.useState("");
   const [phoneNumber, setPhoneNumber] = React.useState("+1");
@@ -110,7 +113,7 @@ const SignUpScreen = ({
     try {
       const userCredential = await auth().createUserWithEmailAndPassword(
         email,
-        password
+        password,
       );
       const user = userCredential.user;
       console.log("Registered with:", user.email);
@@ -122,7 +125,7 @@ const SignUpScreen = ({
         // Email sending failed, but user account was created
         // Error already shown in sendVerificationEmail, just proceed to verification screen
         console.log(
-          "Continuing to verification screen despite email send error"
+          "Continuing to verification screen despite email send error",
         );
       }
 
@@ -191,9 +194,8 @@ const SignUpScreen = ({
         auth().settings.appVerificationDisabledForTesting = true;
       }
 
-      const confirmationResult = await auth().signInWithPhoneNumber(
-        phoneNumber
-      );
+      const confirmationResult =
+        await auth().signInWithPhoneNumber(phoneNumber);
       setConfirmation(confirmationResult);
       setCurrentStep("phoneVerification");
     } catch (error) {
@@ -220,8 +222,12 @@ const SignUpScreen = ({
   };
 
   const handleEmailVerified = () => {
-    console.log("Email verified, proceeding to profile setup");
-    // Move to first name step
+    console.log("Email verified, showing verification complete screen");
+    setCurrentStep("verificationComplete");
+  };
+
+  const handleVerificationCompleteContinue = () => {
+    console.log("Proceeding to profile setup");
     setCurrentStep("firstName");
   };
 
@@ -322,13 +328,19 @@ const SignUpScreen = ({
         return;
       }
 
-      if ((!signupData.birthday || !signupData.birthday.age) && signupData.setUp === false) {
+      if (
+        (!signupData.birthday || !signupData.birthday.age) &&
+        signupData.setUp === false
+      ) {
         alert("Please enter your birthday");
         setCurrentStep("birthday");
         return;
       }
 
-      if ((!signupData.tags || signupData.tags.length < 3) && signupData.setUp === false) {
+      if (
+        (!signupData.tags || signupData.tags.length < 3) &&
+        signupData.setUp === false
+      ) {
         alert("Please select at least 3 tags");
         setCurrentStep("tags");
         return;
@@ -342,14 +354,18 @@ const SignUpScreen = ({
 
       if (
         (!signupData.genderPreference ||
-        signupData.genderPreference.length === 0) && signupData.setUp === false
+          signupData.genderPreference.length === 0) &&
+        signupData.setUp === false
       ) {
         alert("Please select at least one gender preference");
         setCurrentStep("genderPreference");
         return;
       }
 
-      if ((!signupData.photos || signupData.photos.length === 0) && signupData.setUp === false) {
+      if (
+        (!signupData.photos || signupData.photos.length === 0) &&
+        signupData.setUp === false
+      ) {
         alert("Please add at least one photo");
         setCurrentStep("photos");
         return;
@@ -422,6 +438,14 @@ const SignUpScreen = ({
         onBack={handleEmailVerificationBack}
         email={email}
         onResendEmail={sendVerificationEmail}
+      />
+    );
+  }
+
+  if (currentStep === "verificationComplete") {
+    return (
+      <VerificationCompleteScreen
+        onContinue={handleVerificationCompleteContinue}
       />
     );
   }
@@ -513,6 +537,7 @@ const SignUpScreen = ({
       </Text>
 
       <View style={styles.inputContainer}>
+        {/* TODO: Re-enable phone auth toggle later
         <SegmentedButtons
           value={authMethod}
           onValueChange={setAuthMethod}
@@ -522,6 +547,7 @@ const SignUpScreen = ({
           ]}
           style={styles.segmentedButtons}
         />
+*/}
 
         {authMethod === "email" ? (
           <>
