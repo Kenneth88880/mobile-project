@@ -18,13 +18,21 @@ export default {
       bundleIdentifier: "com.doublyconnections.doubly",
       googleServicesFile:
         process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+      infoPlist: {
+        NSLocationWhenInUseUsageDescription:
+          "We need your location to show you potential matches nearby.",
+        NSPhotoLibraryUsageDescription:
+          "We need access to your photos to let you upload profile pictures.",
+        NSCameraUsageDescription:
+          "We need access to your camera to take profile pictures.",
+        ITSAppUsesNonExemptEncryption: false,
+      },
       config: {
         googleSignIn: {
-          reservedClientId: "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
+          reservedClientId:
+            "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
         },
-      },
-      infoPlist: {
-        ITSAppUsesNonExemptEncryption: false,
+        googleMapsApiKey: process.env.GOOGLE_PLACES_API_KEY,
       },
     },
     android: {
@@ -34,15 +42,20 @@ export default {
       },
       googleServicesFile: "./google-services.json",
       package: "com.doublyconnections.doubly",
+      permissions: [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+      ],
     },
     plugins: [
       [
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "static",
-            deploymentTarget: "15.1",
-            //commented this out for build-> buildReactNativeFromSource: true,
+            useFrameworks: "dynamic",
           },
         },
       ],
