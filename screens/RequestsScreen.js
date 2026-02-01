@@ -31,10 +31,7 @@ import {
   hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
-import {
-  EmptyState,
-  ProfilePhoto,
-} from "../components/CommonComponents";
+import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
 export default function RequestsScreen({ isActive = true }) {
   const theme = useTheme();
@@ -145,7 +142,7 @@ export default function RequestsScreen({ isActive = true }) {
         (error) => {
           console.error("Error loading pending requests:", error);
           setLoading(false);
-        }
+        },
       );
 
     return () => {
@@ -162,7 +159,7 @@ export default function RequestsScreen({ isActive = true }) {
           const profileId = selectedProfile.userId || selectedProfile.id;
           const ratingCheck = await hasUserRatedProfile(
             currentUserId,
-            profileId
+            profileId,
           );
           setHasRatedUser(ratingCheck.exists);
           if (ratingCheck.exists) {
@@ -194,43 +191,98 @@ export default function RequestsScreen({ isActive = true }) {
     setRefreshing(false);
   };
 
-  const handleAccept = async (likeId, fromDuoId) => {
-  if (!currentDuo) {
-    Alert.alert("Error", "You need to be in a duo to accept requests");
-    return;
-  }
+  const handleAccept = async (request) => {
+    try {
+      setLoadingStates((prev) => ({ ...prev, [request.id]: true }));
 
-  try {
-    console.log("Accepting duo like:", {
-      likeId,
-      currentUserId,
-      currentDuoId: currentDuo.duoId,
-      fromDuoId,
-    });
+      const currentUserId = auth.currentUser?.uid;
+      if (!currentUserId) {
+        throw new Error("Not authenticated");
+      }
 
-    const success = await acceptDuoLike(
-      likeId,
-      currentUserId,
-      currentDuo.duoId,
-      fromDuoId
-    );
+      // Get current user's duo
+      const duoQuery = query(
+        collection(db, "duos"),
+        where("users", "array-contains", currentUserId),
+      );
+      const duoSnapshot = await getDocs(duoQuery);
 
-    console.log("Accept result:", success);
+      if (duoSnapshot.empty) {
+        Alert.alert("Error", "You must be in a duo to accept requests");
+        return;
+      }
 
-    if (success) {
-      Alert.alert("Accepted!", "You've accepted this duo request");
-      // The listener should automatically update the UI
-    } else {
-      Alert.alert("Error", "Failed to accept request. Please try again.");
+      const duo = duoSnapshot.docs[0].data();
+      const duoUsers = duo.users; // This should be an array of [userId1, userId2]
+
+      // Get the partner's ID (the other user in the duo who isn't currentUserId)
+      const partnerId = duoUsers.find((id) => id !== currentUserId);
+
+      if (!partnerId) {
+        Alert.alert("Error", "Could not find your duo partner");
+        return;
+      }
+
+      // Update the request with acceptance
+      const requestRef = doc(db, "duoRequests", request.id);
+      const updatedAcceptedBy = [...(request.acceptedBy || []), currentUserId];
+
+      await updateDoc(requestRef, {
+        acceptedBy: updatedAcceptedBy,
+        status: "pending",
+      });
+
+      // Check if all 4 users have accepted (both users from each duo)
+      const allUsers = [
+        request.fromDuoUser1,
+        request.fromDuoUser2,
+        ...duoUsers,
+      ];
+
+      const allAccepted = allUsers.every((userId) =>
+        updatedAcceptedBy.includes(userId),
+      );
+
+      if (allAccepted) {
+        // ALL 4 USERS SAID YES - CREATE THE CHAT
+        console.log("All users accepted! Creating chat...");
+
+        // Create the chat with all 4 participants
+        const chatDocRef = await addDoc(collection(db, "chats"), {
+          participants: allUsers, // All 4 user IDs
+          duoIds: [request.fromDuoId, duoSnapshot.docs[0].id],
+          createdAt: serverTimestamp(),
+          lastMessage: null,
+          lastMessageTime: serverTimestamp(),
+          archived: false,
+          archivedBy: [],
+        });
+
+        console.log("Chat created with ID:", chatDocRef.id);
+
+        // Update the request to completed status
+        await updateDoc(requestRef, {
+          status: "accepted",
+          chatId: chatDocRef.id,
+        });
+
+        Alert.alert(
+          "Match Created!",
+          "A chat has been created with your match. Check your messages!",
+          [{ text: "OK" }],
+        );
+      } else {
+        Alert.alert("Request Accepted", "Waiting for others to accept...", [
+          { text: "OK" },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      Alert.alert("Error", "Failed to accept request: " + error.message);
+    } finally {
+      setLoadingStates((prev) => ({ ...prev, [request.id]: false }));
     }
-  } catch (error) {
-    console.error("Error accepting duo like:", error);
-    Alert.alert(
-      "Error",
-      `Failed to accept request: ${error.message || "Unknown error"}`
-    );
-  }
-};
+  };
 
   const handleDecline = async (likeId, fromDuoId) => {
     if (!currentDuo) return;
@@ -253,7 +305,7 @@ export default function RequestsScreen({ isActive = true }) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -275,7 +327,7 @@ export default function RequestsScreen({ isActive = true }) {
         console.error("Profile has no userId:", profile);
         Alert.alert(
           "Error",
-          "Could not identify user. Profile data may be incomplete."
+          "Could not identify user. Profile data may be incomplete.",
         );
         return;
       }
@@ -400,7 +452,7 @@ export default function RequestsScreen({ isActive = true }) {
           "Success",
           existingRating
             ? `You updated your rating to ${rating} stars!`
-            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
+            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`,
         );
 
         setShowRatingModal(false);
@@ -532,13 +584,13 @@ export default function RequestsScreen({ isActive = true }) {
                     onLoad={() => {
                       console.log(
                         "✅ Image loaded successfully:",
-                        currentPhoto.substring(0, 50) + "..."
+                        currentPhoto.substring(0, 50) + "...",
                       );
                     }}
                     onError={(error) => {
                       console.error(
                         "❌ Image load error:",
-                        error.nativeEvent?.error
+                        error.nativeEvent?.error,
                       );
                       console.log("Failed to load image URL:", currentPhoto);
                     }}
