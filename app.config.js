@@ -20,7 +20,8 @@ export default {
         process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
       config: {
         googleSignIn: {
-          reservedClientId: "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
+          reservedClientId:
+            "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
         },
       },
       infoPlist: {
@@ -36,6 +37,14 @@ export default {
       package: "com.doublyconnections.doubly",
     },
     plugins: [
+      [
+        "@stripe/stripe-react-native",
+        {
+          merchantIdentifier: "", // Replace with actual merchant ID
+          enableGooglePay: false, // or true if you want Google Pay
+        },
+      ],
+      "expo-router",
       [
         "expo-build-properties",
         {
