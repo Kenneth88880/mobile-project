@@ -52,6 +52,14 @@ export default {
     },
     plugins: [
       [
+        "@stripe/stripe-react-native",
+        {
+          merchantIdentifier: "", // Replace with actual merchant ID
+          enableGooglePay: false, // or true if you want Google Pay
+        },
+      ],
+      "expo-router",
+      [
         "expo-build-properties",
         {
           ios: {
