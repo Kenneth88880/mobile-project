@@ -6,13 +6,18 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Debug"
+      },
+      "env": {
+        "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
+        "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "ios": {
-        "buildConfiguration": "Release"
-      },
+      "ios": {},
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
@@ -20,6 +25,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {},
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
