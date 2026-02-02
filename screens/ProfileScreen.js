@@ -1,6 +1,6 @@
 // This is a drop-in replacement for your existing ProfileScreen.js
 
-import React, { useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   ScrollView,
@@ -13,11 +13,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Clipboard,
+  TextInput,
+  Pressable,
 } from "react-native";
 import {
   Text,
   Button,
-  TextInput,
   Card,
   Chip,
   Avatar,
@@ -37,6 +38,8 @@ import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import SettingsScreen from "./SettingsScreen";
+import { LongPressGestureHandler, State } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
@@ -117,7 +120,12 @@ const AVAILABLE_TAGS = [
   "🧘 Yoga",
 ];
 
-export default function ProfileScreen({ isDarkMode, toggleTheme}) {
+export default function ProfileScreen({
+  isDarkMode,
+  toggleTheme,
+  devMode = false,
+  setDevMode = null,
+}) {
   const theme = useTheme();
   const [profile, setProfile] = useState({
     name: "",
@@ -157,6 +165,8 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
   const [showBugReportModal, setShowBugReportModal] = useState(false);
   const [bugReport, setBugReport] = useState({ title: "", description: "" });
   const [sendingBugReport, setSendingBugReport] = useState(false);
+  const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
+  const [devPasswordInput, setDevPasswordInput] = useState("");
 
   useEffect(() => {
     loadProfile();
@@ -534,19 +544,19 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                 setProfile({ ...profile, duoPartnerId: null });
                 Alert.alert(
                   "Duo Partnership Ended",
-                  "Your duo partner has been removed and all chats have been archived."
+                  "Your duo partner has been removed and all chats have been archived.",
                 );
               }
             } catch (error) {
               console.error("Error removing partner:", error);
               Alert.alert(
                 "Error",
-                "Failed to remove partner. Please try again."
+                "Failed to remove partner. Please try again.",
               );
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -557,7 +567,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
     if (!bugReport.title.trim() || !bugReport.description.trim()) {
       Alert.alert(
         "Missing Information",
-        "Please fill in both title and description"
+        "Please fill in both title and description",
       );
       return;
     }
@@ -675,7 +685,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
               setBugReport({ title: "", description: "" });
             },
           },
-        ]
+        ],
       );
     } catch (error) {
       console.error("❌ Error submitting bug report:", error);
@@ -697,6 +707,30 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
     }
   };
 
+  const handleDevLongPress = (event) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      setShowDevPasswordModal(true);
+    }
+  };
+
+  const handleDevModeToggle = () => {
+    if (devPasswordInput === "devmode123") {
+      const newDevMode = !devMode;
+      setDevMode(newDevMode); // Call parent's setDevMode from App.js
+      setShowDevPasswordModal(false);
+      setDevPasswordInput("");
+      Alert.alert(
+        "Dev Mode",
+        newDevMode
+          ? "Dev mode enabled - only test accounts visible"
+          : "Dev mode disabled",
+      );
+    } else {
+      Alert.alert("Wrong password", "Dev mode password is incorrect");
+      setDevPasswordInput("");
+    }
+  };
+
   // Helper to render stars
   const renderStars = (average) => {
     const rating = parseFloat(average);
@@ -705,7 +739,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
       stars.push(
         <Text key={i} style={i <= rating ? styles.star : styles.starEmpty}>
           ★
-        </Text>
+        </Text>,
       );
     }
     return stars;
@@ -1231,7 +1265,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                       setRequesterImageIndex((prev) =>
                         prev === 0
                           ? viewingRequesterProfile.photos.length - 1
-                          : prev - 1
+                          : prev - 1,
                       )
                     }
                     style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1259,7 +1293,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                       setRequesterImageIndex((prev) =>
                         prev === viewingRequesterProfile.photos.length - 1
                           ? 0
-                          : prev + 1
+                          : prev + 1,
                       )
                     }
                     style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1376,7 +1410,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                     setCurrentImageIndex((prev) =>
                       prev === 0
                         ? duoPartnerProfile.photos.length - 1
-                        : prev - 1
+                        : prev - 1,
                     )
                   }
                   style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1404,7 +1438,7 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
                     setCurrentImageIndex((prev) =>
                       prev === duoPartnerProfile.photos.length - 1
                         ? 0
-                        : prev + 1
+                        : prev + 1,
                     )
                   }
                   style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
@@ -1478,239 +1512,351 @@ export default function ProfileScreen({ isDarkMode, toggleTheme}) {
     const mainPhoto = hasPhotos ? profile.photos[0] : null;
 
     return (
-      <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-        contentContainerStyle={{ paddingBottom: 80 }}
-      >
-        {/* Header with Settings */}
-        <Surface style={styles.header} elevation={0}>
-          <Text variant="headlineSmall">Profile</Text>
-          <IconButton
-            icon="cog"
-            onPress={() => setShowSettingsModal(true)}
-            size={24}
-          />
-        </Surface>
-
-        {/* Circular Profile Photo Section */}
-        <View style={styles.profilePhotoSection}>
-          <TouchableOpacity onPress={() => setIsEditing(true)}>
-            <View style={styles.circularPhoto}>
-              <Avatar.Image
-                size={120}
-                source={{ uri: mainPhoto || "https://via.placeholder.com/120" }}
-              />
-            </View>
-            {/* Edit indicator badge */}
-            <View style={styles.editBadge}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ScrollView
+          style={[
+            styles.container,
+            { backgroundColor: theme.colors.background },
+          ]}
+          contentContainerStyle={{ paddingBottom: 80 }}
+        >
+          {/* Header with Settings */}
+          <Surface style={styles.header} elevation={0}>
+            <Text variant="headlineSmall">Profile</Text>
+            <LongPressGestureHandler
+              onHandlerStateChange={handleDevLongPress}
+              minDurationMs={1000}
+            >
               <IconButton
-                icon="pencil"
-                size={16}
-                iconColor="#fff"
-                style={{ margin: 0 }}
+                icon="cog"
+                onPress={() => setShowSettingsModal(true)}
+                size={24}
               />
-            </View>
-          </TouchableOpacity>
+            </LongPressGestureHandler>
+          </Surface>
 
-          <Text variant="headlineMedium" style={styles.profileName}>
-            {profile.name || "Add Your Name"}
-          </Text>
-
-          {profile.age && (
-            <Text variant="bodyMedium" style={styles.profileAge}>
-              {profile.age} years old
-            </Text>
-          )}
-
-          {/* Rating Stars */}
-          <View style={styles.ratingContainerHinge}>
-            <View style={styles.starsContainer}>
-              {renderStars(rating.average)}
-            </View>
-            <Text variant="bodySmall" style={{ marginTop: 4 }}>
-              {rating.average} ({rating.count} rating
-              {rating.count !== 1 ? "s" : ""})
-            </Text>
-          </View>
-        </View>
-
-        {/* Action Buttons Row */}
-        <View style={styles.actionButtons}>
-          <Button
-            mode="contained"
-            icon="pencil"
-            onPress={() => setIsEditing(true)}
-            style={styles.editButton}
-          >
-            Edit Profile
-          </Button>
-        </View>
-
-        {/* Warning if user has no photos */}
-        {profileLoaded && (!profile.photos || profile.photos.length === 0) && (
-          <Card style={[styles.warningCard, { backgroundColor: "#fff5f5" }]}>
-            <Card.Content>
-              <View style={styles.warningHeader}>
-                <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
-                <Text
-                  variant="titleMedium"
-                  style={{ color: "#ff6b6b", fontWeight: "bold" }}
-                >
-                  Photo Required
-                </Text>
-              </View>
-              <Text style={{ color: "#666", marginTop: 8 }}>
-                Add at least one photo to appear in the dating feed and start
-                matching!
-              </Text>
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Duo Partner Section */}
-        <Card style={styles.card}>
-          <Card.Title
-            title="Your Duo Partner"
-            left={(props) => (
-              <Avatar.Icon {...props} icon="account-multiple" size={40} />
-            )}
-          />
-          <Card.Content>
-            {duoPartnerProfile ? (
-              <>
-                <TouchableOpacity
-                  onPress={() => {
-                    setCurrentImageIndex(0);
-                    setViewingPartnerProfile(true);
+          {/* Circular Profile Photo Section */}
+          <View style={styles.profilePhotoSection}>
+            <TouchableOpacity onPress={() => setIsEditing(true)}>
+              <View style={styles.circularPhoto}>
+                <Avatar.Image
+                  size={120}
+                  source={{
+                    uri: mainPhoto || "https://via.placeholder.com/120",
                   }}
-                  style={styles.partnerContainer}
-                >
-                  <Avatar.Image
-                    size={80}
-                    source={{
-                      uri:
-                        duoPartnerProfile.photos?.[0] ||
-                        "https://via.placeholder.com/80",
-                    }}
-                  />
-                  <View style={styles.partnerInfo}>
-                    <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
-                    <Text
-                      variant="bodyMedium"
-                      style={{ color: theme.colors.onSurfaceVariant }}
-                    >
-                      {duoPartnerProfile.age} years old
-                    </Text>
-                    <Text
-                      variant="bodySmall"
-                      style={{ marginTop: 4, color: theme.colors.primary }}
-                    >
-                      Tap to view profile →
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Warning if duo partner has no photos */}
-                {profileLoaded &&
-                  (!duoPartnerProfile.photos ||
-                    duoPartnerProfile.photos.length === 0) && (
-                    <Card
-                      style={{
-                        marginTop: 12,
-                        borderColor: "#ff9800",
-                        borderWidth: 2,
-                        backgroundColor: "#fff8e1",
-                      }}
-                    >
-                      <Card.Content>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginBottom: 8,
-                          }}
-                        >
-                          <Text style={{ fontSize: 24, marginRight: 8 }}>
-                            ⚠️
-                          </Text>
-                          <Text
-                            variant="titleMedium"
-                            style={{ color: "#ff9800", fontWeight: "bold" }}
-                          >
-                            Partner Needs Photos
-                          </Text>
-                        </View>
-                        <Text style={{ color: "#666" }}>
-                          Your duo partner needs to add at least one photo for
-                          your duo to appear in the dating feed.
-                        </Text>
-                      </Card.Content>
-                    </Card>
-                  )}
-              </>
-            ) : (
-              <View style={styles.noPartnerContainer}>
-                <Avatar.Icon size={64} icon="account-plus" />
-                <Text
-                  variant="bodyLarge"
-                  style={{ marginTop: 12, marginBottom: 16 }}
-                >
-                  No duo partner yet
-                </Text>
-                <Button
-                  mode="contained"
-                  icon="account-plus"
-                  onPress={() => setShowPartnerSearch(true)}
-                >
-                  Find a Duo Partner
-                </Button>
-                {pendingRequests.length > 0 && (
-                  <Button
-                    mode="outlined"
-                    icon="bell"
-                    onPress={() => setShowPendingRequests(true)}
-                    style={{ marginTop: 12 }}
-                  >
-                    View Requests ({pendingRequests.length})
-                  </Button>
-                )}
+                />
               </View>
-            )}
-          </Card.Content>
-        </Card>
+              {/* Edit indicator badge */}
+              <View style={styles.editBadge}>
+                <IconButton
+                  icon="pencil"
+                  size={16}
+                  iconColor="#fff"
+                  style={{ margin: 0 }}
+                />
+              </View>
+            </TouchableOpacity>
 
-        {/* Report Bug Button */}
-        <Card style={{ marginHorizontal: 16, marginBottom: 12 }}>
-          <Card.Content style={{ padding: 8 }}>
+            <Text variant="headlineMedium" style={styles.profileName}>
+              {profile.name || "Add Your Name"}
+            </Text>
+
+            {profile.age && (
+              <Text variant="bodyMedium" style={styles.profileAge}>
+                {profile.age} years old
+              </Text>
+            )}
+
+            {/* Rating Stars */}
+            <View style={styles.ratingContainerHinge}>
+              <View style={styles.starsContainer}>
+                {renderStars(rating.average)}
+              </View>
+              <Text variant="bodySmall" style={{ marginTop: 4 }}>
+                {rating.average} ({rating.count} rating
+                {rating.count !== 1 ? "s" : ""})
+              </Text>
+            </View>
+          </View>
+
+          {/* Action Buttons Row */}
+          <View style={styles.actionButtons}>
             <Button
               mode="contained"
-              icon="bug"
-              onPress={() => setShowBugReportModal(true)}
-              contentStyle={{
-                paddingVertical: 16,
-              }}
-              labelStyle={{
-                fontSize: 18,
-                fontWeight: "bold",
-              }}
-              buttonColor="#8B4A61"
+              icon="pencil"
+              onPress={() => setIsEditing(true)}
+              style={styles.editButton}
             >
-              Report a Bug
+              Edit Profile
             </Button>
-          </Card.Content>
-        </Card>
+          </View>
 
-        {/* Modals */}
-        <SettingsScreen
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          visible={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-        />
-        {PartnerSearchModal()}
-        {PendingRequestsModal()}
-        {BugReportModal()}
-      </ScrollView>
+          {/* Warning if user has no photos */}
+          {profileLoaded &&
+            (!profile.photos || profile.photos.length === 0) && (
+              <Card
+                style={[styles.warningCard, { backgroundColor: "#fff5f5" }]}
+              >
+                <Card.Content>
+                  <View style={styles.warningHeader}>
+                    <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
+                    <Text
+                      variant="titleMedium"
+                      style={{ color: "#ff6b6b", fontWeight: "bold" }}
+                    >
+                      Photo Required
+                    </Text>
+                  </View>
+                  <Text style={{ color: "#666", marginTop: 8 }}>
+                    Add at least one photo to appear in the dating feed and
+                    start matching!
+                  </Text>
+                </Card.Content>
+              </Card>
+            )}
+
+          {/* Duo Partner Section */}
+          <Card style={styles.card}>
+            <Card.Title
+              title="Your Duo Partner"
+              left={(props) => (
+                <Avatar.Icon {...props} icon="account-multiple" size={40} />
+              )}
+            />
+            <Card.Content>
+              {duoPartnerProfile ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCurrentImageIndex(0);
+                      setViewingPartnerProfile(true);
+                    }}
+                    style={styles.partnerContainer}
+                  >
+                    <Avatar.Image
+                      size={80}
+                      source={{
+                        uri:
+                          duoPartnerProfile.photos?.[0] ||
+                          "https://via.placeholder.com/80",
+                      }}
+                    />
+                    <View style={styles.partnerInfo}>
+                      <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
+                      <Text
+                        variant="bodyMedium"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        {duoPartnerProfile.age} years old
+                      </Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ marginTop: 4, color: theme.colors.primary }}
+                      >
+                        Tap to view profile →
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Warning if duo partner has no photos */}
+                  {profileLoaded &&
+                    (!duoPartnerProfile.photos ||
+                      duoPartnerProfile.photos.length === 0) && (
+                      <Card
+                        style={{
+                          marginTop: 12,
+                          borderColor: "#ff9800",
+                          borderWidth: 2,
+                          backgroundColor: "#fff8e1",
+                        }}
+                      >
+                        <Card.Content>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <Text style={{ fontSize: 24, marginRight: 8 }}>
+                              ⚠️
+                            </Text>
+                            <Text
+                              variant="titleMedium"
+                              style={{ color: "#ff9800", fontWeight: "bold" }}
+                            >
+                              Partner Needs Photos
+                            </Text>
+                          </View>
+                          <Text style={{ color: "#666" }}>
+                            Your duo partner needs to add at least one photo for
+                            your duo to appear in the dating feed.
+                          </Text>
+                        </Card.Content>
+                      </Card>
+                    )}
+                </>
+              ) : (
+                <View style={styles.noPartnerContainer}>
+                  <Avatar.Icon size={64} icon="account-plus" />
+                  <Text
+                    variant="bodyLarge"
+                    style={{ marginTop: 12, marginBottom: 16 }}
+                  >
+                    No duo partner yet
+                  </Text>
+                  <Button
+                    mode="contained"
+                    icon="account-plus"
+                    onPress={() => setShowPartnerSearch(true)}
+                  >
+                    Find a Duo Partner
+                  </Button>
+                  {pendingRequests.length > 0 && (
+                    <Button
+                      mode="outlined"
+                      icon="bell"
+                      onPress={() => setShowPendingRequests(true)}
+                      style={{ marginTop: 12 }}
+                    >
+                      View Requests ({pendingRequests.length})
+                    </Button>
+                  )}
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Report Bug Button */}
+          <Card style={{ marginHorizontal: 16, marginBottom: 12 }}>
+            <Card.Content style={{ padding: 8 }}>
+              <Button
+                mode="contained"
+                icon="bug"
+                onPress={() => setShowBugReportModal(true)}
+                contentStyle={{
+                  paddingVertical: 16,
+                }}
+                labelStyle={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                }}
+                buttonColor="#8B4A61"
+              >
+                Report a Bug
+              </Button>
+            </Card.Content>
+          </Card>
+
+          {/* Modals */}
+          <Modal
+            visible={showDevPasswordModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowDevPasswordModal(false)}
+          >
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "rgba(0,0,0,0.5)",
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "white",
+                  padding: 20,
+                  borderRadius: 10,
+                  width: "80%",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}
+                >
+                  Dev Mode
+                </Text>
+                <Text style={{ fontSize: 14, marginBottom: 15, color: "#666" }}>
+                  Enter password to toggle dev mode
+                </Text>
+
+                <TextInput
+                  placeholder="Password"
+                  secureTextEntry
+                  value={devPasswordInput}
+                  onChangeText={setDevPasswordInput}
+                  placeholderTextColor="#999"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ddd",
+                    padding: 10,
+                    marginBottom: 15,
+                    borderRadius: 5,
+                    fontSize: 16,
+                  }}
+                  autoFocus
+                />
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <Pressable
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      backgroundColor: "#f0f0f0",
+                      borderRadius: 5,
+                    }}
+                    onPress={() => setShowDevPasswordModal(false)}
+                  >
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        color: "#666",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Cancel
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      backgroundColor: "#8B4A61",
+                      borderRadius: 5,
+                    }}
+                    onPress={handleDevModeToggle}
+                  >
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        color: "white",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Unlock
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          <SettingsScreen
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+            visible={showSettingsModal}
+            onClose={() => setShowSettingsModal(false)}
+          />
+          {PartnerSearchModal()}
+          {PendingRequestsModal()}
+          {BugReportModal()}
+        </ScrollView>
+      </GestureHandlerRootView>
     );
   }
 

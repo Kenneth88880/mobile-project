@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, Platform } from "react-native";
+import { StyleSheet, View, Platform, LogBox } from "react-native";
 import {
   PaperProvider,
   MD3LightTheme,
@@ -37,19 +37,26 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [devMode, setDevMode] = useState(false);
+
+  LogBox.ignoreLogs([
+    "This method is deprecated",
+    "Non-serializable values were found in the navigation state",
+  ]);
 
   // Configure Firebase auth for development
   useEffect(() => {
     if (__DEV__) {
       // Disable app verification for development to avoid SMS limits and reCAPTCHA blocking
       auth().settings.appVerificationDisabledForTesting = true;
-      console.log('Firebase auth: app verification disabled for testing');
+      console.log("Firebase auth: app verification disabled for testing");
     }
   }, []);
 
   // Load theme preference on app start
   useEffect(() => {
     loadThemePreference();
+    loadDevModePreference();
   }, []);
 
   const loadThemePreference = async () => {
@@ -60,6 +67,26 @@ export default function App() {
       }
     } catch (error) {
       console.error("Error loading theme preference:", error);
+    }
+  };
+
+  const loadDevModePreference = async () => {
+    try {
+      const savedDevMode = await AsyncStorage.getItem("devMode");
+      if (savedDevMode !== null) {
+        setDevMode(savedDevMode === "true");
+      }
+    } catch (error) {
+      console.error("Error loading dev mode preference:", error);
+    }
+  };
+
+  const handleDevModeChange = async (newValue) => {
+    setDevMode(newValue);
+    try {
+      await AsyncStorage.setItem("devMode", newValue.toString());
+    } catch (error) {
+      console.error("Error saving dev mode preference:", error);
     }
   };
 
@@ -82,33 +109,36 @@ export default function App() {
         profileUnsubscribe = firestore()
           .collection("profiles")
           .doc(user.uid)
-          .onSnapshot((doc) => {
-            if (doc.exists) {
-              const profileData = doc.data();
-              // Safely check if profile is complete
-              const isComplete = !!(
-                profileData &&
-                profileData.name &&
-                profileData.age &&
-                profileData.gender &&
-                Array.isArray(profileData.genderPreference) &&
-                profileData.genderPreference.length > 0 &&
-                Array.isArray(profileData.photos) &&
-                profileData.photos.length > 0 &&
-                Array.isArray(profileData.tags) &&
-                profileData.tags.length >= 3
-              );
-              setProfileComplete(isComplete);
-              setCheckingProfile(false);
-            } else {
+          .onSnapshot(
+            (doc) => {
+              if (doc.exists) {
+                const profileData = doc.data();
+                // Safely check if profile is complete
+                const isComplete = !!(
+                  profileData &&
+                  profileData.name &&
+                  profileData.age &&
+                  profileData.gender &&
+                  Array.isArray(profileData.genderPreference) &&
+                  profileData.genderPreference.length > 0 &&
+                  Array.isArray(profileData.photos) &&
+                  profileData.photos.length > 0 &&
+                  Array.isArray(profileData.tags) &&
+                  profileData.tags.length >= 3
+                );
+                setProfileComplete(isComplete);
+                setCheckingProfile(false);
+              } else {
+                setProfileComplete(false);
+                setCheckingProfile(false);
+              }
+            },
+            (error) => {
+              console.error("Error listening to profile changes:", error);
               setProfileComplete(false);
               setCheckingProfile(false);
-            }
-          }, (error) => {
-            console.error("Error listening to profile changes:", error);
-            setProfileComplete(false);
-            setCheckingProfile(false);
-          });
+            },
+          );
       } else {
         setCurrentUserId(null);
         setProfileComplete(false);
@@ -133,7 +163,10 @@ export default function App() {
   const checkProfileComplete = async (userId) => {
     try {
       setCheckingProfile(true);
-      const profileDoc = await firestore().collection("profiles").doc(userId).get();
+      const profileDoc = await firestore()
+        .collection("profiles")
+        .doc(userId)
+        .get();
 
       if (profileDoc.exists) {
         const profileData = profileDoc.data();
@@ -166,7 +199,7 @@ export default function App() {
 
   const theme = useMemo(
     () => (isDarkMode ? darkTheme : lightTheme),
-    [isDarkMode]
+    [isDarkMode],
   );
 
   const toggleTheme = async () => {
@@ -220,14 +253,21 @@ export default function App() {
   ];
 
   const renderScene = BottomNavigation.SceneMap({
-    dating: () => <DatingScreen isActive={activeTab === "dating"} />,
+    dating: () => (
+      <DatingScreen isActive={activeTab === "dating"} devMode={devMode} />
+    ),
     likes: () => <RequestsScreen isActive={activeTab === "likes"} />,
     explore: () => <ExploreScreen isActive={activeTab === "explore"} />,
     messages: () => <ChatScreen isActive={activeTab === "messages"} />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
     // payment: () => <CheckoutScreen />,  // COMMENTED OUT - Payment disabled
     profile: () => (
-      <ProfileScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+      <ProfileScreen
+        isDarkMode={isDarkMode}
+        toggleTheme={toggleTheme}
+        devMode={devMode}
+        setDevMode={handleDevModeChange}
+      />
     ),
   });
 
@@ -235,7 +275,9 @@ export default function App() {
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
           {/* You can add a loading spinner here if desired */}
         </View>
       </PaperProvider>
@@ -246,8 +288,9 @@ export default function App() {
   if (user && !profileComplete) {
     // Check if user signed up with email and hasn't verified yet
     const needsEmailVerification =
-      user.providerData.some(provider => provider.providerId === 'password') &&
-      !user.emailVerified;
+      user.providerData.some(
+        (provider) => provider.providerId === "password",
+      ) && !user.emailVerified;
 
     return (
       <PaperProvider theme={theme}>

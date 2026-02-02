@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -6,6 +6,7 @@ import {
   Alert,
   Modal,
   SafeAreaView,
+  PanResponder,
 } from "react-native";
 import {
   Text,
@@ -18,7 +19,6 @@ import {
   IconButton,
   Button,
 } from "react-native-paper";
-import Slider from "@react-native-community/slider";
 import auth from "@react-native-firebase/auth";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
@@ -34,11 +34,16 @@ export default function SettingsScreen({
   onClose = null,
 }) {
   const theme = useTheme();
-  const [maxDistance, setMaxDistance] = useState(50); // Default 50km
+  const [maxDistance, setMaxDistance] = useState(50);
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [genderPreference, setGenderPreference] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+
+  const sliderRef = useRef(null);
+  const distanceRef = useRef(50);
+  const minVal = 5;
+  const maxVal = 200;
 
   useEffect(() => {
     loadSettings();
@@ -49,12 +54,14 @@ export default function SettingsScreen({
       const userProfile = await getUserProfile(CURRENT_USER_ID);
       if (userProfile) {
         setProfile(userProfile);
-        setMaxDistance(userProfile.maxDistance || 50);
+        const distance = userProfile.maxDistance || 50;
+        setMaxDistance(distance);
+        distanceRef.current = distance;
         setShowOnlineStatus(userProfile.showOnlineStatus !== false);
         setGenderPreference(
           Array.isArray(userProfile.genderPreference)
             ? userProfile.genderPreference
-            : []
+            : [],
         );
       }
     } catch (error) {
@@ -64,15 +71,41 @@ export default function SettingsScreen({
     }
   };
 
-  const handleDistanceChange = async (value) => {
+  const handleDistanceSave = async () => {
+    const value = distanceRef.current;
+    console.log("Saving distance:", value);
+    setMaxDistance(value);
     try {
       await updateMaxDistance(CURRENT_USER_ID, value);
-      setMaxDistance(value);
     } catch (error) {
       console.error("Error updating max distance:", error);
       Alert.alert("Error", "Failed to update distance preference");
     }
   };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (evt, gestureState) => {
+        if (sliderRef.current) {
+          sliderRef.current.measure((fx, fy, width, height) => {
+            const relativeX = gestureState.moveX - fx;
+            const percentage = Math.max(0, Math.min(1, relativeX / width));
+            const newDistance = Math.round(
+              percentage * (maxVal - minVal) + minVal,
+            );
+            distanceRef.current = newDistance;
+            setMaxDistance(newDistance);
+            console.log("Dragging to:", newDistance);
+          });
+        }
+      },
+      onPanResponderRelease: () => {
+        handleDistanceSave();
+      },
+    }),
+  ).current;
 
   const handleOnlineStatusChange = async (value) => {
     try {
@@ -99,14 +132,9 @@ export default function SettingsScreen({
       let newPreferences;
 
       if (currentPreferences.includes(gender)) {
-        // Remove the gender
         newPreferences = currentPreferences.filter((g) => g !== gender);
-       // console.log('soemthing' + currentPreferences);
-        
       } else {
-        // Add the gender
         newPreferences = [...currentPreferences, gender];
-        //console.log('soemthing' + currentPreferences);
       }
 
       const updatedProfile = {
@@ -141,96 +169,6 @@ export default function SettingsScreen({
     ]);
   };
 
-  // const confirmFinalDelete = async () => {
-  //   Alert.alert(
-  //     "Delete Account",
-  //     "This will delete your chats and may affect your duo.",
-  //     [
-  //       {
-  //         text: "Delete",
-  //         style: "destructive",
-  //         onPress: async () => {
-  //           try {
-  //             const userId = CURRENT_USER_ID;
-  //             const currentUser = auth().currentUser;
-
-  //             if (!userId || !currentUser) {
-  //               Alert.alert("Error", "User not found");
-  //               return;
-  //             }
-
-  //             // Delete user profile from Firestore
-  //             await firestore().collection("profiles").doc(userId).delete();
-
-  //             // Delete any duo requests involving this user
-  //             const duoRequestsSnapshot = await firestore()
-  //               .collection("duoRequests")
-  //               .where("fromUserId", "==", userId)
-  //               .get();
-
-  //             const duoRequestsToSnapshot = await firestore()
-  //               .collection("duoRequests")
-  //               .where("toUserId", "==", userId)
-  //               .get();
-
-  //             // Delete all duo requests
-  //             const batch = firestore().batch();
-  //             duoRequestsSnapshot.forEach((doc) => {
-  //               batch.delete(doc.ref);
-  //             });
-  //             duoRequestsToSnapshot.forEach((doc) => {
-  //               batch.delete(doc.ref);
-  //             });
-  //             await batch.commit();
-
-  //             // Delete Firebase auth account
-  //             await currentUser.delete();
-
-  //             console.log("Account deleted successfully");
-  //             Alert.alert("Success", "Your account has been deleted");
-  //           } catch (error) {
-  //             console.error("Error deleting account:", error);
-  //             Alert.alert(
-  //               "Error",
-  //               "Failed to delete account. Please try again or contact support."
-  //             );
-  //           }
-  //         },
-  //       },
-  //       {
-  //         text: "Cancel",
-  //         style: "cancel",
-  //       },
-  //     ]
-  //   );
-  // };
-
-  // const handleDeleteAccount = () => {
-  //   Alert.alert(
-  //     "Did you mean sign out?",
-  //     "",
-  //     [
-  //       {
-  //         text: "Cancel",
-  //         style: "cancel",
-  //       },
-  //       {
-  //         text: "Sign Out",
-  //         onPress: () => {
-  //           handleLogout();
-  //         },
-  //       },
-  //       {
-  //         text: "Delete",
-  //         style: "destructive",
-  //         onPress: () => {
-  //           confirmFinalDelete();
-  //         },
-  //       },
-  //     ]
-  //   );
-  // };
-
   if (loading) {
     const loadingContent = (
       <SafeAreaView
@@ -248,6 +186,8 @@ export default function SettingsScreen({
       loadingContent
     );
   }
+
+  const percentage = ((maxDistance - minVal) / (maxVal - minVal)) * 100;
 
   const settingsContent = (
     <SafeAreaView
@@ -284,25 +224,40 @@ export default function SettingsScreen({
                 Show profiles within {maxDistance}km of your location
               </Text>
 
-              <Slider
-                style={styles.slider}
-                minimumValue={5}
-                maximumValue={200}
-                step={5}
-                value={maxDistance}
-                onValueChange={setMaxDistance}
-                onSlidingComplete={handleDistanceChange}
-                minimumTrackTintColor={theme.colors.primary}
-                maximumTrackTintColor={theme.colors.surfaceVariant}
-                thumbTintColor={theme.colors.primary}
-              />
+              {/* Slider Track */}
+              <View
+                style={styles.sliderWrapper}
+                {...panResponder.panHandlers}
+                ref={sliderRef}
+              >
+                <View style={styles.track}>
+                  <View
+                    style={[
+                      styles.fill,
+                      {
+                        width: `${percentage}%`,
+                        backgroundColor: "#8B4A61",
+                      },
+                    ]}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.thumb,
+                    {
+                      left: `${percentage}%`,
+                      marginLeft: -12,
+                    },
+                  ]}
+                />
+              </View>
 
               <View style={styles.sliderLabels}>
                 <Text variant="bodySmall" style={styles.sliderLabel}>
-                  5km
+                  {minVal}km
                 </Text>
                 <Text variant="bodySmall" style={styles.sliderLabel}>
-                  200km
+                  {maxVal}km
                 </Text>
               </View>
             </View>
@@ -427,17 +382,6 @@ export default function SettingsScreen({
         >
           Sign Out
         </Button>
-
-        {/* Delete Account */}
-        {/* <Button
-          mode="outlined"
-          icon="delete-forever"
-          onPress={handleDeleteAccount}
-          style={styles.deleteButton}
-          textColor="#d32f2f"
-        >
-          Delete Account
-        </Button> */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -464,9 +408,6 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: -8,
   },
-  headerWithBack: {
-    flex: 1,
-  },
   scrollView: {
     flex: 1,
   },
@@ -484,14 +425,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#666",
   },
-  slider: {
-    width: "100%",
-    height: 40,
+  sliderWrapper: {
+    height: 60,
+    justifyContent: "center",
+    marginVertical: 12,
+  },
+  track: {
+    height: 6,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  fill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  thumb: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#8B4A61",
+    top: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
   },
   sliderLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: -8,
+    marginTop: 8,
   },
   sliderLabel: {
     color: "#999",
@@ -514,9 +479,4 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderColor: "#ff6b6b",
   },
-  // deleteButton: {
-  //   marginHorizontal: 16,
-  //   marginBottom: 24,
-  //   borderColor: "#d32f2f",
-  // },
 });
