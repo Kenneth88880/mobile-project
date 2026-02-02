@@ -17,10 +17,7 @@ import {
   ActivityIndicator,
   useTheme,
 } from "react-native-paper";
-import {
-  EmptyState,
-  ProfileInfoCard,
-} from "../components/CommonComponents";
+import { EmptyState, ProfileInfoCard } from "../components/CommonComponents";
 import {
   getAllDuoPairs,
   saveRating,
@@ -34,15 +31,11 @@ import {
   hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
-import {
-  getDistanceToProfile,
-  isWithinDistance,
-} from "../utils/locationUtils";
+import { getDistanceToProfile, isWithinDistance } from "../utils/locationUtils";
 import { formatLastActive } from "../utils/locationTracker";
 
-export default function DatingScreen({ isActive = true }) {
+export default function DatingScreen({ isActive = true, devMode = false }) {
   const theme = useTheme();
-  const [duoPairs, setDuoPairs] = useState([]);
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -55,6 +48,11 @@ export default function DatingScreen({ isActive = true }) {
   const [hasRatedUser, setHasRatedUser] = useState(false);
   const [existingRating, setExistingRating] = useState(null);
   const [hoveredStar, setHoveredStar] = useState(0);
+  const [loadedPairs, setLoadedPairs] = useState([]);
+  const [hasMorePairs, setHasMorePairs] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [allFilteredPairs, setAllFilteredPairs] = useState([]);
+  const pairsPerPage = 5;
 
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -120,13 +118,13 @@ export default function DatingScreen({ isActive = true }) {
               "Your gender:",
               currentUserProfile.gender,
               "Your preference:",
-              currentUserPref
+              currentUserPref,
             );
             console.log(
               "Partner gender:",
               partnerProfile.gender,
               "Partner preference:",
-              partnerPref
+              partnerPref,
             );
 
             // Filter pairs based on mutual gender preferences
@@ -145,12 +143,12 @@ export default function DatingScreen({ isActive = true }) {
                 currentUserProfile,
                 partnerProfile,
                 user1,
-                user2
+                user2,
               );
 
               if (!preferencesMatch) {
                 console.log(
-                  `❌ Filtered out duo ${pair.id} - preferences don't match`
+                  `❌ Filtered out duo ${pair.id} - preferences don't match`,
                 );
               } else {
                 console.log(`✅ Duo ${pair.id} matches preferences!`);
@@ -160,7 +158,7 @@ export default function DatingScreen({ isActive = true }) {
             });
 
             console.log(
-              `Gender filtering: ${fetchedPairs.length} → ${filteredPairs.length} pairs`
+              `Gender filtering: ${fetchedPairs.length} → ${filteredPairs.length} pairs`,
             );
           } else {
             console.log("⚠️ No gender preferences set - showing all pairs");
@@ -197,11 +195,35 @@ export default function DatingScreen({ isActive = true }) {
         });
 
         console.log(
-          `Filtered ${fetchedPairs.length} duos to ${filteredPairs.length} within ${maxDistance}km`
+          `Filtered ${fetchedPairs.length} duos to ${filteredPairs.length} within ${maxDistance}km`,
         );
       }
 
-      setDuoPairs(filteredPairs);
+      // DEV MODE: Filter to only show test accounts if dev mode is enabled
+      if (devMode) {
+        filteredPairs = filteredPairs.filter((pair) => {
+          const user1 = pair.user1Profile;
+          const user2 = pair.user2Profile;
+
+          const user1IsTest = user1?.isTestAccount === true;
+          const user2IsTest = user2?.isTestAccount === true;
+
+          // Only show if at least one person is a test account
+          return user1IsTest || user2IsTest;
+        });
+
+        console.log(
+          `🤖 Dev mode: Filtered to ${filteredPairs.length} test accounts`,
+        );
+      }
+
+      // Store ALL filtered pairs for pagination
+      setAllFilteredPairs(filteredPairs);
+
+      // Load only first 5 pairs
+      const initialPairs = filteredPairs.slice(0, pairsPerPage);
+      setLoadedPairs(initialPairs);
+      setHasMorePairs(filteredPairs.length > pairsPerPage);
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);
@@ -209,6 +231,35 @@ export default function DatingScreen({ isActive = true }) {
       setDuoPairs([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMorePairs = async () => {
+    if (loadingMore || !hasMorePairs) return;
+
+    setLoadingMore(true);
+    try {
+      const nextIndex = loadedPairs.length;
+      const newPairs = allFilteredPairs.slice(
+        nextIndex,
+        nextIndex + pairsPerPage,
+      );
+
+      if (newPairs.length > 0) {
+        setLoadedPairs([...loadedPairs, ...newPairs]);
+        console.log(
+          `📊 Loaded ${newPairs.length} more pairs. Total: ${loadedPairs.length + newPairs.length}`,
+        );
+      }
+
+      if (nextIndex + pairsPerPage >= allFilteredPairs.length) {
+        setHasMorePairs(false);
+        console.log("✅ All pairs loaded!");
+      }
+    } catch (error) {
+      console.error("Error loading more pairs:", error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -281,7 +332,7 @@ export default function DatingScreen({ isActive = true }) {
           "Success",
           existingRating
             ? `You updated your rating to ${rating} stars!`
-            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
+            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`,
         );
 
         setShowRatingModal(false);
@@ -307,7 +358,7 @@ export default function DatingScreen({ isActive = true }) {
           const profileId = selectedProfile.userId || selectedProfile.id;
           const ratingCheck = await hasUserRatedProfile(
             currentUserId,
-            profileId
+            profileId,
           );
           setHasRatedUser(ratingCheck.exists);
           if (ratingCheck.exists) {
@@ -332,7 +383,7 @@ export default function DatingScreen({ isActive = true }) {
   const handleNextImage = () => {
     if (selectedProfile?.photos?.length > 1) {
       setCurrentImageIndex(
-        (prevIndex) => (prevIndex + 1) % selectedProfile.photos.length
+        (prevIndex) => (prevIndex + 1) % selectedProfile.photos.length,
       );
     }
   };
@@ -340,7 +391,7 @@ export default function DatingScreen({ isActive = true }) {
   const handlePrevImage = () => {
     if (selectedProfile?.photos?.length > 1) {
       setCurrentImageIndex((prevIndex) =>
-        prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1
+        prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1,
       );
     }
   };
@@ -362,9 +413,9 @@ export default function DatingScreen({ isActive = true }) {
   };
 
   const handleSwipeComplete = async (direction) => {
-    if (currentPairIndex >= duoPairs.length) return;
+    if (currentPairIndex >= loadedPairs.length) return;
 
-    const currentDuoPair = duoPairs[currentPairIndex];
+    const currentDuoPair = loadedPairs[currentPairIndex];
     const action = direction === "right" ? "like" : "pass";
 
     if (!currentDuo) {
@@ -405,7 +456,7 @@ export default function DatingScreen({ isActive = true }) {
             currentUserId,
             currentDuo.partnerId,
             currentDuoPair.users?.[0],
-            currentDuoPair.users?.[1]
+            currentDuoPair.users?.[1],
           );
           console.log("Duo like saved successfully!");
         } else {
@@ -415,8 +466,8 @@ export default function DatingScreen({ isActive = true }) {
         }
 
         // Remove the swiped pair from the list
-        setDuoPairs((prevPairs) =>
-          prevPairs.filter((pair) => pair.id !== currentDuoPair.id)
+        setLoadedPairs((prevPairs) =>
+          prevPairs.filter((pair) => pair.id !== currentDuoPair.id),
         );
 
         // Reset animation values for next card
@@ -426,7 +477,14 @@ export default function DatingScreen({ isActive = true }) {
         scale.setValue(1);
         setSwipeFeedback(null);
 
-        console.log(`Swipe complete. Remaining pairs: ${duoPairs.length - 1}`);
+        console.log(
+          `Swipe complete. Remaining pairs: ${loadedPairs.length - 1}`,
+        );
+
+        // Load more pairs when getting close to end
+        if (currentPairIndex >= loadedPairs.length - 2) {
+          await loadMorePairs();
+        }
       } catch (error) {
         console.error("Error in swipe complete:", error);
         Alert.alert("Error", "Failed to save your decision. Please try again.");
@@ -455,9 +513,9 @@ export default function DatingScreen({ isActive = true }) {
   }
 
   if (
-    !duoPairs ||
-    duoPairs.length === 0 ||
-    currentPairIndex >= duoPairs.length
+    !loadedPairs ||
+    loadedPairs.length === 0 ||
+    currentPairIndex >= loadedPairs.length
   ) {
     // Check if user has preferences set
     const hasPreferences =
@@ -475,8 +533,8 @@ export default function DatingScreen({ isActive = true }) {
             !currentDuo
               ? "You need a duo partner first! Go to Profile → Edit to find a partner."
               : hasPreferences
-              ? "No duos match your gender preferences right now. Check back later as more users join, or adjust your preferences in Profile!"
-              : "No more duo pairs to show. Check back later or invite friends to join!"
+                ? "No duos match your gender preferences right now. Check back later as more users join, or adjust your preferences in Profile!"
+                : "No more duo pairs to show. Check back later or invite friends to join!"
           }
           actionLabel="Reload"
           onAction={loadData}
@@ -485,7 +543,7 @@ export default function DatingScreen({ isActive = true }) {
     );
   }
 
-  const currentDuoPair = duoPairs[currentPairIndex];
+  const currentDuoPair = loadedPairs[currentPairIndex];
 
   // SAFETY: Get profiles safely with fallbacks
   const topProfile =
@@ -744,7 +802,7 @@ export default function DatingScreen({ isActive = true }) {
                   <Text variant="bodySmall" style={styles.overlayText}>
                     {formatLastActive(
                       topProfile.lastActive,
-                      topProfile.isOnline
+                      topProfile.isOnline,
                     )}
                   </Text>
                 )}
@@ -796,7 +854,7 @@ export default function DatingScreen({ isActive = true }) {
                   <Text variant="bodySmall" style={styles.overlayText}>
                     {formatLastActive(
                       bottomProfile.lastActive,
-                      bottomProfile.isOnline
+                      bottomProfile.isOnline,
                     )}
                   </Text>
                 )}
