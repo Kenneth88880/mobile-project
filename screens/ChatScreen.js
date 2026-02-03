@@ -175,13 +175,13 @@ const reportChat = async (chatId, reportingUserId) => {
 
     await chatRef.update({
       reports: reports,
-      hiddenFor: hiddenFor, // ✅ Hide chat from reporter's view
+      hiddenFor: hiddenFor, // Hide chat from reporter's view
       flaggedForModeration: true,
       lastReportedAt: firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`✅ Comprehensive report created for chat ${chatId}`);
-    console.log(`✅ Chat hidden from reporter`);
+    console.log(`Comprehensive report created for chat ${chatId}`);
+    console.log(`Chat hidden from reporter`);
     return true;
   } catch (error) {
     console.error("Error reporting chat:", error);
