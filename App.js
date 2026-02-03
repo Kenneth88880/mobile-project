@@ -22,7 +22,7 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import CheckoutScreen from "./screens/PaymentScreen";
+import CheckoutScreen from "./screens/stripeServer/CheckoutScreen";
 import Constants from "expo-constants";
 const STRIPE_PUBLISHABLE_KEY =
   Constants.expoConfig?.extra?.stripePublishableKey;
@@ -38,6 +38,16 @@ export default function App() {
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
+  const [publishableKey, setPublishableKey] = useState('');
+
+  const fetchPublishableKey = async () => {
+    const key = await fetchKey(); // fetch key from your server here
+    setPublishableKey(key);
+  };
+
+  useEffect(() => {
+    fetchPublishableKey();
+  }, []);
 
   LogBox.ignoreLogs([
     "This method is deprecated",
@@ -240,11 +250,11 @@ export default function App() {
     //  unfocusedIcon: "star-outline",
     //},
     // COMMENTED OUT - Payment feature disabled until Stripe is configured
-    // {
-    //   key: "payment",
-    //   focusedIcon: "credit-card",
-    //   unfocusedIcon: "credit-card-outline",
-    // },
+    {
+      key: "payment",
+      focusedIcon: "credit-card",
+      unfocusedIcon: "credit-card-outline",
+    },
     {
       key: "profile",
       focusedIcon: "account",
@@ -260,7 +270,7 @@ export default function App() {
     explore: () => <ExploreScreen isActive={activeTab === "explore"} />,
     messages: () => <ChatScreen isActive={activeTab === "messages"} />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
-    // payment: () => <CheckoutScreen />,  // COMMENTED OUT - Payment disabled
+    payment: () => <CheckoutScreen isActive={activeTab === "payment"} />,  // COMMENTED OUT - Payment disabled
     profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
@@ -311,7 +321,10 @@ export default function App() {
   if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        // urlScheme="your-url-scheme"
+                        >
           <SafeAreaView
             style={[
               styles.safeArea,
