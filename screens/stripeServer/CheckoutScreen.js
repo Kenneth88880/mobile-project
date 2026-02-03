@@ -1,108 +1,88 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  TouchableOpacity,
-  Linking,
-} from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, Alert, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useStripe } from '@stripe/stripe-react-native';
+import Constants from 'expo-constants';
 
-// TODO: Replace with your actual server URL
-// For local development on physical device, use your computer's IP address (not localhost)
-// Example: 'http://192.168.1.100:3000'
-const API_URL = 'http://YOUR_SERVER_IP:3000';
+const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
-export default function CheckoutScreen({ isActive }) {
+export default function CheckoutScreen() {
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
-  const handleCheckout = async () => {
-    setLoading(true);
+  const fetchPaymentSheetParams = async () => {
+    const response = await fetch(`${API_URL}/payment-sheet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    const { paymentIntent, ephemeralKey, customer } = await response.json();
 
+    return {
+      paymentIntent,
+      ephemeralKey,
+      customer,
+    };
+  };
+
+  const initializePaymentSheet = async () => {
     try {
-      console.log('Creating checkout session...');
-      
-      // Call your server to create a Checkout Session
-      const response = await fetch(`${API_URL}/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const {
+        paymentIntent,
+        ephemeralKey,
+        customer,
+      } = await fetchPaymentSheetParams();
+
+      const { error } = await initPaymentSheet({
+        merchantDisplayName: "Example, Inc.",
+        customerId: customer,
+        customerEphemeralKeySecret: ephemeralKey,
+        paymentIntentClientSecret: paymentIntent,
+        allowsDelayedPaymentMethods: true,
+        defaultBillingDetails: {
+          name: 'Jane Doe',
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
-      }
-
-      const { url } = await response.json();
-      
-      console.log('Checkout session created, opening URL:', url);
-
-      // Open the Stripe Checkout page in the browser
-      const supported = await Linking.canOpenURL(url);
-      
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open payment page');
+      if (!error) {
+        setLoading(true);
       }
     } catch (error) {
-      console.error('Checkout error:', error);
-      Alert.alert(
-        'Connection Error',
-        'Could not connect to payment server. Please check your internet connection and try again.'
-      );
+      console.error('Error initializing payment sheet:', error);
+      Alert.alert('Error', 'Failed to initialize payment. Please try again.');
     } finally {
-      setLoading(false);
+      setInitializing(false);
     }
   };
 
+  const openPaymentSheet = async () => {
+    const { error } = await presentPaymentSheet();
+
+    if (error) {
+      Alert.alert(`Error code: ${error.code}`, error.message);
+    } else {
+      Alert.alert('Success', 'Your order is confirmed!');
+    }
+  };
+
+  useEffect(() => {
+    initializePaymentSheet();
+  }, []);
+
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Premium Membership</Text>
-        <Text style={styles.description}>
-          Unlock exclusive features and get the best experience
-        </Text>
-        
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>$9.99</Text>
-          <Text style={styles.priceSubtext}>per month</Text>
-        </View>
-
-        <View style={styles.featuresContainer}>
-          <FeatureItem text="Unlimited matches" />
-          <FeatureItem text="Advanced filters" />
-          <FeatureItem text="See who likes you" />
-          <FeatureItem text="Ad-free experience" />
-        </View>
-
-        {loading ? (
-          <ActivityIndicator size="large" color="#635BFF" style={styles.loader} />
-        ) : (
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleCheckout}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>Subscribe Now</Text>
-          </TouchableOpacity>
-        )}
-
-        <Text style={styles.secureText}>
-          🔒 Secure payment powered by Stripe
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function FeatureItem({ text }) {
-  return (
-    <View style={styles.featureItem}>
-      <Text style={styles.featureIcon}>✓</Text>
-      <Text style={styles.featureText}>{text}</Text>
+      {initializing ? (
+        <ActivityIndicator size="large" color="#8B4A61" />
+      ) : (
+        <TouchableOpacity
+          style={[styles.button, !loading && styles.buttonDisabled]}
+          disabled={!loading}
+          onPress={openPaymentSheet}
+        >
+          <Text style={styles.buttonText}>Checkout</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -110,76 +90,21 @@ function FeatureItem({ text }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
     justifyContent: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#333',
-  },
-  description: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#666',
-    marginBottom: 30,
-  },
-  priceContainer: {
     alignItems: 'center',
-    marginBottom: 40,
-  },
-  price: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#635BFF',
-  },
-  priceSubtext: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 5,
-  },
-  featuresContainer: {
-    marginBottom: 40,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  featureIcon: {
-    fontSize: 20,
-    color: '#635BFF',
-    marginRight: 10,
-    fontWeight: 'bold',
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#333',
   },
   button: {
-    backgroundColor: '#635BFF',
-    paddingVertical: 16,
+    backgroundColor: '#8B4A61',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
     borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 15,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-  },
-  loader: {
-    marginVertical: 20,
-  },
-  secureText: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 14,
   },
 });
