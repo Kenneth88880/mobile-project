@@ -285,11 +285,16 @@ export default function App() {
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        // urlScheme="your-url-scheme"
+                        >
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
           {/* You can add a loading spinner here if desired */}
         </View>
+        </StripeProvider>
       </PaperProvider>
     );
   }
@@ -304,6 +309,10 @@ export default function App() {
 
     return (
       <PaperProvider theme={theme}>
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        // urlScheme="your-url-scheme"
+                        >
         <SignUpScreen
           isInSignupFlow={true}
           needsEmailVerification={needsEmailVerification}
@@ -313,6 +322,7 @@ export default function App() {
             // User must complete the signup process
           }}
         />
+        </StripeProvider>
       </PaperProvider>
     );
   }
@@ -358,11 +368,16 @@ export default function App() {
   // If no user, show sign in/sign up screens
   return (
     <PaperProvider theme={theme}>
+     <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        // urlScheme="your-url-scheme"
+                        >
       {showRegister ? (
         <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
       ) : (
         <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
       )}
+      </StripeProvider>
     </PaperProvider>
   );
 }
