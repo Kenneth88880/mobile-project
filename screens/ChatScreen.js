@@ -438,6 +438,11 @@ function ChatListScreen({ onChatSelect }) {
     return (
       <List.Item
         title={item.groupName || "Chat"}
+        titleStyle={
+          unreadCount > 0 && !isArchived
+            ? { fontWeight: "bold", color: theme.colors.onSurface }
+            : {}
+        }
         description={
           isArchived
             ? "🗄️ Archived - Read only"
@@ -490,8 +495,6 @@ function ChatListScreen({ onChatSelect }) {
         onPress={() => onChatSelect(item)}
         style={[
           styles.chatItem,
-          unreadCount > 0 &&
-            !isArchived && { backgroundColor: `${theme.colors.primary}15` },
           isArchived && {
             opacity: 0.7,
             backgroundColor: theme.colors.surfaceVariant,
@@ -1162,8 +1165,8 @@ function IndividualChatScreen({ chat, onBack }) {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "padding"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 20}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 80}
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
@@ -1948,10 +1951,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   messageBubble: {
-    padding: 12,
+    padding: 8,
+    paddingHorizontal: 12,
     borderRadius: 16,
     maxWidth: 280,
-    minWidth: 60,
+    minWidth: 40,
   },
   senderName: {
     marginBottom: 4,
