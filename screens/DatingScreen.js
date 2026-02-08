@@ -201,15 +201,23 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
       // DEV MODE: Filter to only show test accounts if dev mode is enabled
       if (devMode) {
-        filteredPairs = filteredPairs.filter((pair) => {
+        console.log("🔍 Dev mode filtering - checking profiles...");
+        filteredPairs = filteredPairs.filter((pair, index) => {
           const user1 = pair.user1Profile;
           const user2 = pair.user2Profile;
+
+          console.log(`Pair ${index}:`, {
+            user1Name: user1?.name,
+            user1IsTest: user1?.isTestAccount,
+            user2Name: user2?.name,
+            user2IsTest: user2?.isTestAccount,
+          });
 
           const user1IsTest = user1?.isTestAccount === true;
           const user2IsTest = user2?.isTestAccount === true;
 
-          // Only show if at least one person is a test account
-          return user1IsTest || user2IsTest;
+          // Only show if BOTH people in the duo are test accounts
+          return user1IsTest && user2IsTest;
         });
 
         console.log(

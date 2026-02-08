@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   FlatList,
@@ -7,7 +7,7 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
-  Image
+  Image,
 } from "react-native";
 import {
   Text,
@@ -26,6 +26,7 @@ import {
   Card,
   Button,
   Chip,
+  Dialog,
 } from "react-native-paper";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
@@ -47,7 +48,7 @@ const deleteChat = async (chatId) => {
       .get();
 
     const deleteMessagesPromises = messagesSnapshot.docs.map((msgDoc) =>
-      msgDoc.ref.delete()
+      msgDoc.ref.delete(),
     );
     await Promise.all(deleteMessagesPromises);
 
@@ -163,7 +164,7 @@ const reportChat = async (chatId, reportingUserId) => {
     const reports = chatData.reports || [];
     reports.push({
       reportedBy: reportingUserId,
-      reportedAt: Date.now(), 
+      reportedAt: Date.now(),
       reason: "User reported inappropriate content",
     });
 
@@ -245,6 +246,9 @@ function ChatListScreen({ onChatSelect }) {
   const [chats, setChats] = useState([]);
   const [archivedChats, setArchivedChats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [selectedChatName, setSelectedChatName] = useState("");
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -280,7 +284,6 @@ function ChatListScreen({ onChatSelect }) {
           // Sort both lists by last message time
           const sortChats = (chatsList) => {
             return chatsList.sort((a, b) => {
-              
               const aTime = a.lastMessageTime?.seconds || 0;
               const bTime = b.lastMessageTime?.seconds || 0;
               return bTime - aTime;
@@ -294,7 +297,7 @@ function ChatListScreen({ onChatSelect }) {
         (error) => {
           console.error("Error loading chats:", error);
           setLoading(false);
-        }
+        },
       );
 
     return () => unsubscribe();
@@ -357,7 +360,7 @@ function ChatListScreen({ onChatSelect }) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -389,12 +392,12 @@ function ChatListScreen({ onChatSelect }) {
                   if (success) {
                     Alert.alert(
                       "Report Submitted",
-                      "Thank you. Our moderation team will review this chat within 24 hours. The chat has been hidden from your view."
+                      "Thank you. Our moderation team will review this chat within 24 hours. The chat has been hidden from your view.",
                     );
                   } else {
                     Alert.alert(
                       "Error",
-                      "Failed to submit report. Please try again."
+                      "Failed to submit report. Please try again.",
                     );
                   }
                 }, 300);
@@ -403,35 +406,30 @@ function ChatListScreen({ onChatSelect }) {
                 setTimeout(() => {
                   Alert.alert(
                     "Error",
-                    "Something went wrong. Please try again."
+                    "Something went wrong. Please try again.",
                   );
                 }, 300);
               }
             }, 50);
           },
         },
-      ]
+      ],
     );
   };
 
   const showChatOptions = (chatId, chatName) => {
-    Alert.alert("Chat Options", null, [
-      { text: "Everyone Met", onPress: () => handleEveryoneMet(chatId) },
-      {
-        text: "Unmatch Duo",
-        onPress: () => handleUnmatchDuo(chatId, chatName),
-        style: "destructive",
-      },
-      {
-        text: "Report",
-        onPress: () => handleReport(chatId, chatName),
-        style: "destructive",
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setSelectedChatId(chatId);
+    setSelectedChatName(chatName);
+    setChatOptionsVisible(true);
   };
 
-    const renderItem = ({ item }) => {
+  const hideChatOptions = () => {
+    setChatOptionsVisible(false);
+    setSelectedChatId(null);
+    setSelectedChatName("");
+  };
+
+  const renderItem = ({ item }) => {
     const unreadCount = item.unreadCount?.[currentUserId] || 0;
     const isGroup = item.isGroupChat || false;
     const isArchived = item.status === "archived";
@@ -469,16 +467,16 @@ function ChatListScreen({ onChatSelect }) {
             />
           )
         }
-          right={() => (
-            <View style={styles.chatRight}>
-              {timestamp && (
-                <Text variant="bodySmall" style={[
-                  { marginBottom: 4 },
-                  isArchived && { opacity: 0.6 }
-                ]}>
-                  {timestamp}
-                </Text>
-              )}
+        right={() => (
+          <View style={styles.chatRight}>
+            {timestamp && (
+              <Text
+                variant="bodySmall"
+                style={[{ marginBottom: 4 }, isArchived && { opacity: 0.6 }]}
+              >
+                {timestamp}
+              </Text>
+            )}
             {unreadCount > 0 && !isArchived && (
               <Badge style={styles.badge}>{unreadCount}</Badge>
             )}
@@ -573,6 +571,51 @@ function ChatListScreen({ onChatSelect }) {
           ItemSeparatorComponent={() => <Divider />}
         />
       )}
+
+      {/* Chat Options Dialog */}
+      <Portal>
+        <Dialog visible={chatOptionsVisible} onDismiss={hideChatOptions}>
+          <Dialog.Title>Chat Options</Dialog.Title>
+          <Dialog.Content>
+            <Button
+              mode="contained-tonal"
+              onPress={() => {
+                hideChatOptions();
+                handleEveryoneMet(selectedChatId);
+              }}
+              style={{ marginBottom: 12 }}
+            >
+              EVERYONE MET
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                hideChatOptions();
+                handleUnmatchDuo(selectedChatId, selectedChatName);
+              }}
+              style={{ marginBottom: 12 }}
+              buttonColor={theme.colors.errorContainer}
+              textColor={theme.colors.error}
+            >
+              UNMATCH DUO
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                hideChatOptions();
+                handleReport(selectedChatId, selectedChatName);
+              }}
+              buttonColor={theme.colors.errorContainer}
+              textColor={theme.colors.error}
+            >
+              REPORT
+            </Button>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={hideChatOptions}>Cancel</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -600,7 +643,10 @@ function IndividualChatScreen({ chat, onBack }) {
     chat: null,
   });
   // to see and leave average rating
-  const [viewingProfileRating, setViewingProfileRating] = useState({ average: "0.0", count: 0 });
+  const [viewingProfileRating, setViewingProfileRating] = useState({
+    average: "0.0",
+    count: 0,
+  });
   const [userRating, setUserRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
@@ -639,7 +685,7 @@ function IndividualChatScreen({ chat, onBack }) {
             return {
               _id: doc.id,
               text: data.text,
-               imageUrl: data.imageUrl, // Include imageUrl field
+              imageUrl: data.imageUrl, // Include imageUrl field
               createdAt: data.createdAt?.toDate() || new Date(),
               user: {
                 _id: data.user._id,
@@ -655,13 +701,13 @@ function IndividualChatScreen({ chat, onBack }) {
           // Handle permission errors gracefully (happens when removed from chat)
           if (error.code === "permission-denied") {
             console.log(
-              "Permission denied - user removed from chat, navigating away"
+              "Permission denied - user removed from chat, navigating away",
             );
             onBack();
           } else {
             console.error("Error loading messages:", error);
           }
-        }
+        },
       );
 
     // Store unsubscribe function for cleanup
@@ -708,13 +754,13 @@ function IndividualChatScreen({ chat, onBack }) {
           // Handle permission errors gracefully (happens when removed from chat)
           if (error.code === "permission-denied") {
             console.log(
-              "Permission denied - user removed from chat, navigating away"
+              "Permission denied - user removed from chat, navigating away",
             );
             onBack();
           } else {
             console.error("Error loading chat:", error);
           }
-        }
+        },
       );
 
     // Store unsubscribe function for cleanup
@@ -798,7 +844,7 @@ function IndividualChatScreen({ chat, onBack }) {
               Alert.alert("Error", "Failed to update group picture");
             }
           }
-        }
+        },
       );
     } catch (error) {
       console.error("Error in handleChangeGroupPicture:", error);
@@ -874,16 +920,15 @@ function IndividualChatScreen({ chat, onBack }) {
     if (locationX > width / 2) {
       // Next image
       setProfileImageIndex((prev) =>
-        prev === viewingProfile.photos.length - 1 ? 0 : prev + 1
+        prev === viewingProfile.photos.length - 1 ? 0 : prev + 1,
       );
     } else {
       // Previous image
       setProfileImageIndex((prev) =>
-        prev === 0 ? viewingProfile.photos.length - 1 : prev - 1
+        prev === 0 ? viewingProfile.photos.length - 1 : prev - 1,
       );
     }
   };
-
 
   // Submit or update rating
   const handleSubmitRating = async (userId, rating) => {
@@ -910,26 +955,21 @@ function IndividualChatScreen({ chat, onBack }) {
       if (!existingRating.empty) {
         // Update existing rating
         const ratingDoc = existingRating.docs[0];
-        await firestore()
-          .collection("ratings")
-          .doc(ratingDoc.id)
-          .update({
-            rating: rating,
-            updatedAt: firestore.FieldValue.serverTimestamp(),
-          });
-        
+        await firestore().collection("ratings").doc(ratingDoc.id).update({
+          rating: rating,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+
         Alert.alert("Success", "Your rating has been updated!");
       } else {
         // Create new rating
-        await firestore()
-          .collection("ratings")
-          .add({
-            fromUserId: currentUserId,
-            toUserId: userId,
-            rating: rating,
-            createdAt: firestore.FieldValue.serverTimestamp(),
-          });
-        
+        await firestore().collection("ratings").add({
+          fromUserId: currentUserId,
+          toUserId: userId,
+          rating: rating,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+
         Alert.alert("Success", "Thank you for your rating!");
       }
 
@@ -960,13 +1000,13 @@ function IndividualChatScreen({ chat, onBack }) {
             size={onPress ? 36 : 20}
             color={i <= rating ? "#FFD700" : "#ddd"}
           />
-        </TouchableOpacity>
+        </TouchableOpacity>,
       );
     }
     return stars;
   };
 
-  // handles how images are sent into a group chat 
+  // handles how images are sent into a group chat
   const handleSendImage = async () => {
     try {
       launchImageLibrary(
@@ -1048,7 +1088,7 @@ function IndividualChatScreen({ chat, onBack }) {
               setUploadingImage(false);
             }
           }
-        }
+        },
       );
     } catch (error) {
       console.error("Error sending image:", error);
@@ -1064,7 +1104,7 @@ function IndividualChatScreen({ chat, onBack }) {
     if (currentChat.status === "archived") {
       Alert.alert(
         "Chat Archived",
-        "This chat is archived and read-only. You cannot send new messages."
+        "This chat is archived and read-only. You cannot send new messages.",
       );
       return;
     }
@@ -1213,9 +1253,9 @@ function IndividualChatScreen({ chat, onBack }) {
                 </View>
               )}
 
-              <View style={{ alignItems: isMyMessage ? 'flex-end' : 'flex-start' }}>
-                
-                
+              <View
+                style={{ alignItems: isMyMessage ? "flex-end" : "flex-start" }}
+              >
                 {item.text && !item.imageUrl && (
                   <Surface
                     style={[
@@ -1228,7 +1268,8 @@ function IndividualChatScreen({ chat, onBack }) {
                         borderBottomLeftRadius: isMyMessage ? 16 : 4,
                       },
                     ]}
-                    elevation={1}>
+                    elevation={1}
+                  >
                     <Text
                       variant="bodyMedium"
                       style={{
@@ -1242,43 +1283,42 @@ function IndividualChatScreen({ chat, onBack }) {
                   </Surface>
                 )}
 
-                  {item.imageUrl && (
-                    <Surface>
-                      <Image
-                        source={{ uri: item.imageUrl }}
-                        style={{ 
-                          width: 200, 
-                          height: 200, 
-                          borderRadius: 12,
-                          marginBottom: item.text ? 8 : 0,
-                          borderWidth: 0,        
-                          borderColor: 'transparent',
-                          backgroundColor: 'transparent'
-                        }}
-                        resizeMode="cover"
-                      />
-                    </Surface>                
+                {item.imageUrl && (
+                  <Surface>
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={{
+                        width: 200,
+                        height: 200,
+                        borderRadius: 12,
+                        marginBottom: item.text ? 8 : 0,
+                        borderWidth: 0,
+                        borderColor: "transparent",
+                        backgroundColor: "transparent",
+                      }}
+                      resizeMode="cover"
+                    />
+                  </Surface>
                 )}
 
-                  {isLatestMessage && (
-                    <Text
-                    
-                      variant="labelSmall"
-                      style={[
-                        styles.messageTime,
-                        {
-                          color: isMyMessage
-                            ? theme.colors.onPrimaryContainer
-                            : theme.colors.onSurfaceVariant,
-                        },
-                      ]}
-                    >
-                      {item.createdAt?.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  )}
+                {isLatestMessage && (
+                  <Text
+                    variant="labelSmall"
+                    style={[
+                      styles.messageTime,
+                      {
+                        color: isMyMessage
+                          ? theme.colors.onPrimaryContainer
+                          : theme.colors.onSurfaceVariant,
+                      },
+                    ]}
+                  >
+                    {item.createdAt?.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                )}
               </View>
 
               {isMyMessage && userProfiles[currentUserId] && (
@@ -1305,95 +1345,95 @@ function IndividualChatScreen({ chat, onBack }) {
         contentContainerStyle={styles.messagesList}
       />
 
-        <Surface style={{
-                backgroundColor: theme.colors.background,
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderTopColor: 'transparent',
-                borderColor: 'transparent',
-
-              }}>
-          
-          {currentChat.status === "archived" ? (
-
-              <View
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  backgroundColor: theme.colors.surfaceVariant,
-                  borderRadius: 8,
-                  alignItems: "center",
-                  alignContent: "center",  
-                }}
-              >
-                <Text
-                  variant="bodyMedium"
-                  style={{ color: theme.colors.onSurfaceVariant }}
-                >
-                  🗄️ This chat is archived and read-only
-                </Text>
-              </View>
-
-          ) : (
-            <View style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center',
-              justifyContent: 'space-between' // This will push button to the right
-            }}>
-            
-              <TextInput
-                value={inputText}
-                onChangeText={setInputText}
-                placeholder=" Type a message..."
-                multiline
-                maxLength={1000}
-                style={[styles.textInput, {
+      <Surface
+        style={{
+          backgroundColor: theme.colors.background,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          borderTopColor: "transparent",
+          borderColor: "transparent",
+        }}
+      >
+        {currentChat.status === "archived" ? (
+          <View
+            style={{
+              flex: 1,
+              padding: 12,
+              backgroundColor: theme.colors.surfaceVariant,
+              borderRadius: 8,
+              alignItems: "center",
+              alignContent: "center",
+            }}
+          >
+            <Text
+              variant="bodyMedium"
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
+              🗄️ This chat is archived and read-only
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between", // This will push button to the right
+            }}
+          >
+            <TextInput
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder=" Type a message..."
+              multiline
+              maxLength={1000}
+              style={[
+                styles.textInput,
+                {
                   borderRadius: 30,
                   borderTopLeftRadius: 30,
                   borderTopRightRadius: 30,
                   borderWidth: 1,
-                  borderColor: 'transparent',
-                }]}
-                dense
-                autoCorrect={true}
-                autoCapitalize="sentences"
-                spellCheck={true}
-                textContentType="none"
-                contentStyle={{ justifyContent: 'center' }}
-                underlineColor="transparent"
-                activeUnderlineColor="transparent"
-                
-                cursorColor= '#000000'
-                
-              />
-             <IconButton
-                style={{
-                  position: 'absolute',
-                  right: 35,
-                  marginLeft: 0,
-                  backgroundColor: 'transparent',
-                }}
-                icon="image"
-                size={24}
-                onPress={handleSendImage}
-              />
-              <IconButton
-                  style={{
-                    position: 'absolute',
-                    right: 5,
-                    marginLeft: 0,
-                    backgroundColor: 'transparent',
-                  }}
-                  icon="send"
-                  mode="contained"
-                  onPress={onSend}
-                  disabled={!inputText.trim()}
-                  size={20}
-                />
-            </View>
-          )}
+                  borderColor: "transparent",
+                },
+              ]}
+              dense
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              spellCheck={true}
+              textContentType="none"
+              contentStyle={{ justifyContent: "center" }}
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              cursorColor="#000000"
+            />
+            <IconButton
+              style={{
+                position: "absolute",
+                right: 35,
+                marginLeft: 0,
+                backgroundColor: "transparent",
+              }}
+              icon="image"
+              size={24}
+              onPress={handleSendImage}
+            />
+            <IconButton
+              style={{
+                position: "absolute",
+                right: 5,
+                marginLeft: 0,
+                backgroundColor: "transparent",
+              }}
+              icon="send"
+              mode="contained"
+              onPress={onSend}
+              disabled={!inputText.trim()}
+              size={20}
+            />
+          </View>
+        )}
       </Surface>
 
       {/* Edit Group Info Modal */}
@@ -1435,7 +1475,9 @@ function IndividualChatScreen({ chat, onBack }) {
                     color: uploadingChatImage ? "#999" : theme.colors.primary,
                   }}
                 >
-                  {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
+                  {uploadingChatImage
+                    ? "Uploading..."
+                    : "Tap to Change Picture"}
                 </Text>
               </TouchableOpacity>
 
@@ -1622,11 +1664,24 @@ function IndividualChatScreen({ chat, onBack }) {
 
                           {/* ⭐ NEW: Average Rating Display */}
                           <View style={{ marginTop: 12, alignItems: "center" }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-                              {renderStars(parseFloat(viewingProfileRating.average))}
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginBottom: 4,
+                              }}
+                            >
+                              {renderStars(
+                                parseFloat(viewingProfileRating.average),
+                              )}
                             </View>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                              {viewingProfileRating.average} ({viewingProfileRating.count} rating{viewingProfileRating.count !== 1 ? "s" : ""})
+                            <Text
+                              variant="bodySmall"
+                              style={{ color: theme.colors.onSurfaceVariant }}
+                            >
+                              {viewingProfileRating.average} (
+                              {viewingProfileRating.count} rating
+                              {viewingProfileRating.count !== 1 ? "s" : ""})
                             </Text>
                           </View>
 
@@ -1664,16 +1719,16 @@ function IndividualChatScreen({ chat, onBack }) {
                                       viewingProfile.gender === "male"
                                         ? "#4A90E2"
                                         : viewingProfile.gender === "female"
-                                        ? "#FF69B4"
-                                        : "#9B59B6",
+                                          ? "#FF69B4"
+                                          : "#9B59B6",
                                   }}
                                   textStyle={{ color: "#FFFFFF" }}
                                 >
                                   {viewingProfile.gender === "male"
                                     ? "Male"
                                     : viewingProfile.gender === "female"
-                                    ? "Female"
-                                    : "Non-Binary"}
+                                      ? "Female"
+                                      : "Non-Binary"}
                                 </Chip>
                               </View>
                             </View>
@@ -1725,18 +1780,38 @@ function IndividualChatScreen({ chat, onBack }) {
 
                       {/* ⭐ NEW: Rate This Person Section */}
                       {viewingProfile.id !== currentUserId && (
-                        <Card style={{ marginBottom: 16, backgroundColor: theme.colors.primaryContainer }}>
+                        <Card
+                          style={{
+                            marginBottom: 16,
+                            backgroundColor: theme.colors.primaryContainer,
+                          }}
+                        >
                           <Card.Content>
-                            <Text variant="titleMedium" style={{ marginBottom: 12, textAlign: "center" }}>
-                              {hasRated ? "Update Your Rating" : "Rate This Person"}
+                            <Text
+                              variant="titleMedium"
+                              style={{ marginBottom: 12, textAlign: "center" }}
+                            >
+                              {hasRated
+                                ? "Update Your Rating"
+                                : "Rate This Person"}
                             </Text>
-                            
-                            <View style={{ alignItems: "center", marginBottom: 12 }}>
-                              <View style={{ flexDirection: "row", justifyContent: "center" }}>
+
+                            <View
+                              style={{ alignItems: "center", marginBottom: 12 }}
+                            >
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  justifyContent: "center",
+                                }}
+                              >
                                 {renderStars(userRating, setUserRating)}
                               </View>
                               {userRating > 0 && (
-                                <Text variant="bodySmall" style={{ marginTop: 8, fontStyle: "italic" }}>
+                                <Text
+                                  variant="bodySmall"
+                                  style={{ marginTop: 8, fontStyle: "italic" }}
+                                >
                                   {userRating === 1 && "Poor"}
                                   {userRating === 2 && "Fair"}
                                   {userRating === 3 && "Good"}
@@ -1748,25 +1823,31 @@ function IndividualChatScreen({ chat, onBack }) {
 
                             <Button
                               mode="contained"
-                              onPress={() => handleSubmitRating(viewingProfile.id, userRating)}
+                              onPress={() =>
+                                handleSubmitRating(
+                                  viewingProfile.id,
+                                  userRating,
+                                )
+                              }
                               disabled={userRating === 0 || submittingRating}
                               loading={submittingRating}
                               icon={hasRated ? "update" : "star"}
                             >
                               {hasRated ? "Update Rating" : "Submit Rating"}
                             </Button>
-                            
+
                             {hasRated && (
-                              <Text 
-                                variant="bodySmall" 
-                                style={{ 
-                                  marginTop: 8, 
+                              <Text
+                                variant="bodySmall"
+                                style={{
+                                  marginTop: 8,
                                   textAlign: "center",
                                   fontStyle: "italic",
-                                  opacity: 0.7
+                                  opacity: 0.7,
                                 }}
                               >
-                                You previously rated this person {userRating} star{userRating !== 1 ? "s" : ""}
+                                You previously rated this person {userRating}{" "}
+                                star{userRating !== 1 ? "s" : ""}
                               </Text>
                             )}
                           </Card.Content>

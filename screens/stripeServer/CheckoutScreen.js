@@ -1,7 +1,14 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Alert, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useStripe } from '@stripe/stripe-react-native';
-import Constants from 'expo-constants';
+import { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { useStripe } from "@stripe/stripe-react-native";
+import Constants from "expo-constants";
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
@@ -12,9 +19,9 @@ export default function CheckoutScreen() {
 
   const fetchPaymentSheetParams = async () => {
     const response = await fetch(`${API_URL}/payment-sheet`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
     const { paymentIntent, ephemeralKey, customer } = await response.json();
@@ -28,11 +35,8 @@ export default function CheckoutScreen() {
 
   const initializePaymentSheet = async () => {
     try {
-      const {
-        paymentIntent,
-        ephemeralKey,
-        customer,
-      } = await fetchPaymentSheetParams();
+      const { paymentIntent, ephemeralKey, customer } =
+        await fetchPaymentSheetParams();
 
       const { error } = await initPaymentSheet({
         merchantDisplayName: "Example, Inc.",
@@ -41,16 +45,16 @@ export default function CheckoutScreen() {
         paymentIntentClientSecret: paymentIntent,
         allowsDelayedPaymentMethods: true,
         defaultBillingDetails: {
-          name: 'Jane Doe',
-        }
+          name: "Jane Doe",
+        },
       });
 
       if (!error) {
         setLoading(true);
       }
     } catch (error) {
-      console.error('Error initializing payment sheet:', error);
-      Alert.alert('Error', 'Failed to initialize payment. Please try again.');
+      console.error("Error initializing payment sheet:", error);
+      Alert.alert("Error", "Failed to initialize payment. Please try again.");
     } finally {
       setInitializing(false);
     }
@@ -62,7 +66,7 @@ export default function CheckoutScreen() {
     if (error) {
       Alert.alert(`Error code: ${error.code}`, error.message);
     } else {
-      Alert.alert('Success', 'Your order is confirmed!');
+      Alert.alert("Success", "Your order is confirmed!");
     }
   };
 
@@ -90,11 +94,11 @@ export default function CheckoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   button: {
-    backgroundColor: '#8B4A61',
+    backgroundColor: "#8B4A61",
     paddingVertical: 14,
     paddingHorizontal: 40,
     borderRadius: 8,
@@ -103,8 +107,8 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
