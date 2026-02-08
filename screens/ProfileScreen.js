@@ -13,7 +13,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Clipboard,
-  TextInput,
   Pressable,
 } from "react-native";
 import {
@@ -26,6 +25,7 @@ import {
   Divider,
   Surface,
   useTheme,
+  TextInput,
 } from "react-native-paper";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
@@ -852,12 +852,13 @@ export default function ProfileScreen({
       animationType="slide"
       onRequestClose={() => setShowPartnerSearch(false)}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
       >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: theme.colors.background }}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">Find a Duo Partner</Text>
@@ -1019,8 +1020,8 @@ export default function ProfileScreen({
               ))
             )}
           </ScrollView>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 
