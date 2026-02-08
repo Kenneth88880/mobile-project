@@ -23,6 +23,7 @@ import {
 import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
+  declineDuoLike,
   getCurrentDuoPartner,
   deleteDuoLike,
   getUserProfile,
@@ -31,10 +32,7 @@ import {
   hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
-import {
-  EmptyState,
-  ProfilePhoto,
-} from "../components/CommonComponents";
+import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 
 export default function RequestsScreen({ isActive = true }) {
   const theme = useTheme();
@@ -145,7 +143,7 @@ export default function RequestsScreen({ isActive = true }) {
         (error) => {
           console.error("Error loading pending requests:", error);
           setLoading(false);
-        }
+        },
       );
 
     return () => {
@@ -162,7 +160,7 @@ export default function RequestsScreen({ isActive = true }) {
           const profileId = selectedProfile.userId || selectedProfile.id;
           const ratingCheck = await hasUserRatedProfile(
             currentUserId,
-            profileId
+            profileId,
           );
           setHasRatedUser(ratingCheck.exists);
           if (ratingCheck.exists) {
@@ -195,42 +193,42 @@ export default function RequestsScreen({ isActive = true }) {
   };
 
   const handleAccept = async (likeId, fromDuoId) => {
-  if (!currentDuo) {
-    Alert.alert("Error", "You need to be in a duo to accept requests");
-    return;
-  }
-
-  try {
-    console.log("Accepting duo like:", {
-      likeId,
-      currentUserId,
-      currentDuoId: currentDuo.duoId,
-      fromDuoId,
-    });
-
-    const success = await acceptDuoLike(
-      likeId,
-      currentUserId,
-      currentDuo.duoId,
-      fromDuoId
-    );
-
-    console.log("Accept result:", success);
-
-    if (success) {
-      Alert.alert("Accepted!", "You've accepted this duo request");
-      // The listener should automatically update the UI
-    } else {
-      Alert.alert("Error", "Failed to accept request. Please try again.");
+    if (!currentDuo) {
+      Alert.alert("Error", "You need to be in a duo to accept requests");
+      return;
     }
-  } catch (error) {
-    console.error("Error accepting duo like:", error);
-    Alert.alert(
-      "Error",
-      `Failed to accept request: ${error.message || "Unknown error"}`
-    );
-  }
-};
+
+    try {
+      console.log("Accepting duo like:", {
+        likeId,
+        currentUserId,
+        currentDuoId: currentDuo.duoId,
+        fromDuoId,
+      });
+
+      const success = await acceptDuoLike(
+        likeId,
+        currentUserId,
+        currentDuo.duoId,
+        fromDuoId,
+      );
+
+      console.log("Accept result:", success);
+
+      if (success) {
+        Alert.alert("Accepted!", "You've accepted this duo request");
+        // The listener should automatically update the UI
+      } else {
+        Alert.alert("Error", "Failed to accept request. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error accepting duo like:", error);
+      Alert.alert(
+        "Error",
+        `Failed to accept request: ${error.message || "Unknown error"}`,
+      );
+    }
+  };
 
   const handleDecline = async (likeId, fromDuoId) => {
     if (!currentDuo) return;
@@ -244,16 +242,16 @@ export default function RequestsScreen({ isActive = true }) {
           text: "Decline",
           style: "destructive",
           onPress: async () => {
-            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
-            const success = await deleteDuoLike(likeId);
-            if (success) {
+            try {
+              await declineDuoLike(likeId, currentDuo.duoId, fromDuoId);
               Alert.alert("Declined", "Request has been removed");
-            } else {
+            } catch (error) {
+              console.error("Error declining duo like:", error);
               Alert.alert("Error", "Failed to decline request");
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -275,7 +273,7 @@ export default function RequestsScreen({ isActive = true }) {
         console.error("Profile has no userId:", profile);
         Alert.alert(
           "Error",
-          "Could not identify user. Profile data may be incomplete."
+          "Could not identify user. Profile data may be incomplete.",
         );
         return;
       }
@@ -400,7 +398,7 @@ export default function RequestsScreen({ isActive = true }) {
           "Success",
           existingRating
             ? `You updated your rating to ${rating} stars!`
-            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`
+            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`,
         );
 
         setShowRatingModal(false);
@@ -532,13 +530,13 @@ export default function RequestsScreen({ isActive = true }) {
                     onLoad={() => {
                       console.log(
                         "Image loaded successfully:",
-                        currentPhoto.substring(0, 50) + "..."
+                        currentPhoto.substring(0, 50) + "...",
                       );
                     }}
                     onError={(error) => {
                       console.error(
                         "Image load error:",
-                        error.nativeEvent?.error
+                        error.nativeEvent?.error,
                       );
                       console.log("Failed to load image URL:", currentPhoto);
                     }}
