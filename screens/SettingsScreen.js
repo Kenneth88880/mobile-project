@@ -132,6 +132,14 @@ export default function SettingsScreen({
       let newPreferences;
 
       if (currentPreferences.includes(gender)) {
+        // PREVENT REMOVING THE LAST PREFERENCE
+        if (currentPreferences.length === 1) {
+          Alert.alert(
+            "Gender Preference Required",
+            "You must have at least one gender preference selected.",
+          );
+          return;
+        }
         newPreferences = currentPreferences.filter((g) => g !== gender);
       } else {
         newPreferences = [...currentPreferences, gender];
