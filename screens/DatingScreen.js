@@ -52,7 +52,7 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
   const [hasMorePairs, setHasMorePairs] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [allFilteredPairs, setAllFilteredPairs] = useState([]);
-  const pairsPerPage = 5;
+  const pairsPerPage = 15; // Increased from 5 to 15 for faster swiping
 
   const pan = useRef(new Animated.ValueXY()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -71,7 +71,12 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const currentUserProfile = await getUserProfile(currentUserId);
+      // OPTIMIZATION: Load user profile and duo partner in parallel
+      const [currentUserProfile, duo] = await Promise.all([
+        getUserProfile(currentUserId),
+        getCurrentDuoPartner(currentUserId),
+      ]);
+
       const userLocation = {
         latitude: currentUserProfile?.latitude,
         longitude: currentUserProfile?.longitude,
@@ -82,12 +87,18 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         setCurrentUserLocation(userLocation);
       }
 
-      const duo = await getCurrentDuoPartner(currentUserId);
       setCurrentDuo(duo);
 
       // Get all duo pairs (already excludes swiped/liked)
       const fetchedPairs = await getAllDuoPairs(currentUserId);
 
+      // OPTIMIZATION: Show first batch immediately without filtering
+      // Then filter the rest in the background
+      const quickLoadPairs = fetchedPairs.slice(0, 5);
+      setLoadedPairs(quickLoadPairs);
+      setLoading(false); // Show UI immediately with first 5 profiles
+
+      // NOW do the expensive filtering in the background
       let filteredPairs = fetchedPairs || [];
 
       if (duo && duo.partnerId) {
@@ -113,20 +124,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
             partnerProfile?.gender &&
             hasPreferences
           ) {
-            console.log("✅ Filtering by gender preferences...");
-            console.log(
-              "Your gender:",
-              currentUserProfile.gender,
-              "Your preference:",
-              currentUserPref,
-            );
-            console.log(
-              "Partner gender:",
-              partnerProfile.gender,
-              "Partner preference:",
-              partnerPref,
-            );
-
             // Filter pairs based on mutual gender preferences
             filteredPairs = fetchedPairs.filter((pair) => {
               const user1 = pair.user1Profile || pair.user1 || {};
@@ -134,7 +131,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
               // Skip if other duo doesn't have genders set
               if (!user1.gender || !user2.gender) {
-                console.log(`⚠️ Skipping duo ${pair.id} - missing gender info`);
                 return false; // Don't show duos without gender set if filtering is active
               }
 
@@ -147,28 +143,20 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
               );
 
               if (!preferencesMatch) {
-                console.log(
-                  `❌ Filtered out duo ${pair.id} - preferences don't match`,
-                );
-              } else {
-                console.log(`✅ Duo ${pair.id} matches preferences!`);
+                // Filtered out - preferences don't match
               }
 
               return preferencesMatch;
             });
-
-            console.log(
-              `Gender filtering: ${fetchedPairs.length} → ${filteredPairs.length} pairs`,
-            );
           } else {
-            console.log("⚠️ No gender preferences set - showing all pairs");
+            // No gender preferences set - showing all pairs
           }
         } catch (error) {
           console.error("Error loading partner profile for filtering:", error);
           // On error, show all pairs without filtering
         }
       } else {
-        console.log("⚠️ No duo partner or gender not set - showing all pairs");
+        // No duo partner or gender not set - showing all pairs
       }
 
       // NEW: Filter by distance if user has maxDistance preference set
@@ -201,17 +189,9 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
       // DEV MODE: Filter to only show test accounts if dev mode is enabled
       if (devMode) {
-        console.log("🔍 Dev mode filtering - checking profiles...");
         filteredPairs = filteredPairs.filter((pair, index) => {
           const user1 = pair.user1Profile;
           const user2 = pair.user2Profile;
-
-          console.log(`Pair ${index}:`, {
-            user1Name: user1?.name,
-            user1IsTest: user1?.isTestAccount,
-            user2Name: user2?.name,
-            user2IsTest: user2?.isTestAccount,
-          });
 
           const user1IsTest = user1?.isTestAccount === true;
           const user2IsTest = user2?.isTestAccount === true;
@@ -219,27 +199,22 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
           // Only show if BOTH people in the duo are test accounts
           return user1IsTest && user2IsTest;
         });
-
-        console.log(
-          `🤖 Dev mode: Filtered to ${filteredPairs.length} test accounts`,
-        );
       }
 
       // Store ALL filtered pairs for pagination
       setAllFilteredPairs(filteredPairs);
 
-      // Load only first 5 pairs
-      const initialPairs = filteredPairs.slice(0, pairsPerPage);
-      setLoadedPairs(initialPairs);
+      // Update loaded pairs with properly filtered results
+      const properlyFilteredPairs = filteredPairs.slice(0, pairsPerPage);
+      setLoadedPairs(properlyFilteredPairs);
       setHasMorePairs(filteredPairs.length > pairsPerPage);
       setCurrentPairIndex(0);
     } catch (error) {
       console.error("Error in loadData:", error);
       // Don't alert on initial load - just show empty state
-      setDuoPairs([]);
-    } finally {
-      setLoading(false);
+      setLoadedPairs([]);
     }
+    // Note: setLoading(false) was already called earlier to show UI immediately
   };
 
   const loadMorePairs = async () => {
@@ -255,14 +230,10 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
       if (newPairs.length > 0) {
         setLoadedPairs([...loadedPairs, ...newPairs]);
-        console.log(
-          `📊 Loaded ${newPairs.length} more pairs. Total: ${loadedPairs.length + newPairs.length}`,
-        );
       }
 
       if (nextIndex + pairsPerPage >= allFilteredPairs.length) {
         setHasMorePairs(false);
-        console.log("✅ All pairs loaded!");
       }
     } catch (error) {
       console.error("Error loading more pairs:", error);
@@ -456,7 +427,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     ]).start(async () => {
       try {
         if (action === "like") {
-          console.log("Saving duo like...");
           await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
           await saveDuoLike(
             currentDuo.duoId,
@@ -466,11 +436,8 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
             currentDuoPair.users?.[0],
             currentDuoPair.users?.[1],
           );
-          console.log("Duo like saved successfully!");
         } else {
-          console.log("Saving duo pass...");
           await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
-          console.log("Duo pass saved successfully!");
         }
 
         // Remove the swiped pair from the list
@@ -485,13 +452,9 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         scale.setValue(1);
         setSwipeFeedback(null);
 
-        console.log(
-          `Swipe complete. Remaining pairs: ${loadedPairs.length - 1}`,
-        );
-
-        // Load more pairs when getting close to end
-        if (currentPairIndex >= loadedPairs.length - 2) {
-          await loadMorePairs();
+        // Preload more pairs earlier (when 5 left instead of waiting til end)
+        if (loadedPairs.length - 1 <= 5 && hasMorePairs && !loadingMore) {
+          loadMorePairs();
         }
       } catch (error) {
         console.error("Error in swipe complete:", error);
