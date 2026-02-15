@@ -23,6 +23,7 @@ import {
 import firestore from "@react-native-firebase/firestore";
 import {
   acceptDuoLike,
+  declineDuoLike,
   getCurrentDuoPartner,
   deleteDuoLike,
   getUserProfile,
@@ -126,7 +127,7 @@ export default function RequestsScreen({ isActive = true }) {
                 status: likeData.status,
               });
             } else {
-              console.error("⚠️ Missing profile data for like:", doc.id, {
+              console.error("Missing profile data for like:", doc.id, {
                 user1Profile: !!user1Profile,
                 user2Profile: !!user2Profile,
                 fromUser1: likeData.fromUser1,
@@ -191,96 +192,41 @@ export default function RequestsScreen({ isActive = true }) {
     setRefreshing(false);
   };
 
-  const handleAccept = async (request) => {
+  const handleAccept = async (likeId, fromDuoId) => {
+    if (!currentDuo) {
+      Alert.alert("Error", "You need to be in a duo to accept requests");
+      return;
+    }
+
     try {
-      setLoadingStates((prev) => ({ ...prev, [request.id]: true }));
-
-      const currentUserId = auth.currentUser?.uid;
-      if (!currentUserId) {
-        throw new Error("Not authenticated");
-      }
-
-      // Get current user's duo
-      const duoQuery = query(
-        collection(db, "duos"),
-        where("users", "array-contains", currentUserId),
-      );
-      const duoSnapshot = await getDocs(duoQuery);
-
-      if (duoSnapshot.empty) {
-        Alert.alert("Error", "You must be in a duo to accept requests");
-        return;
-      }
-
-      const duo = duoSnapshot.docs[0].data();
-      const duoUsers = duo.users; // This should be an array of [userId1, userId2]
-
-      // Get the partner's ID (the other user in the duo who isn't currentUserId)
-      const partnerId = duoUsers.find((id) => id !== currentUserId);
-
-      if (!partnerId) {
-        Alert.alert("Error", "Could not find your duo partner");
-        return;
-      }
-
-      // Update the request with acceptance
-      const requestRef = doc(db, "duoRequests", request.id);
-      const updatedAcceptedBy = [...(request.acceptedBy || []), currentUserId];
-
-      await updateDoc(requestRef, {
-        acceptedBy: updatedAcceptedBy,
-        status: "pending",
+      console.log("Accepting duo like:", {
+        likeId,
+        currentUserId,
+        currentDuoId: currentDuo.duoId,
+        fromDuoId,
       });
 
-      // Check if all 4 users have accepted (both users from each duo)
-      const allUsers = [
-        request.fromDuoUser1,
-        request.fromDuoUser2,
-        ...duoUsers,
-      ];
-
-      const allAccepted = allUsers.every((userId) =>
-        updatedAcceptedBy.includes(userId),
+      const success = await acceptDuoLike(
+        likeId,
+        currentUserId,
+        currentDuo.duoId,
+        fromDuoId,
       );
 
-      if (allAccepted) {
-        // ALL 4 USERS SAID YES - CREATE THE CHAT
-        console.log("All users accepted! Creating chat...");
+      console.log("Accept result:", success);
 
-        // Create the chat with all 4 participants
-        const chatDocRef = await addDoc(collection(db, "chats"), {
-          participants: allUsers, // All 4 user IDs
-          duoIds: [request.fromDuoId, duoSnapshot.docs[0].id],
-          createdAt: serverTimestamp(),
-          lastMessage: null,
-          lastMessageTime: serverTimestamp(),
-          archived: false,
-          archivedBy: [],
-        });
-
-        console.log("Chat created with ID:", chatDocRef.id);
-
-        // Update the request to completed status
-        await updateDoc(requestRef, {
-          status: "accepted",
-          chatId: chatDocRef.id,
-        });
-
-        Alert.alert(
-          "Match Created!",
-          "A chat has been created with your match. Check your messages!",
-          [{ text: "OK" }],
-        );
+      if (success) {
+        Alert.alert("Accepted!", "You've accepted this duo request");
+        // The listener should automatically update the UI
       } else {
-        Alert.alert("Request Accepted", "Waiting for others to accept...", [
-          { text: "OK" },
-        ]);
+        Alert.alert("Error", "Failed to accept request. Please try again.");
       }
     } catch (error) {
-      console.error("Error accepting request:", error);
-      Alert.alert("Error", "Failed to accept request: " + error.message);
-    } finally {
-      setLoadingStates((prev) => ({ ...prev, [request.id]: false }));
+      console.error("Error accepting duo like:", error);
+      Alert.alert(
+        "Error",
+        `Failed to accept request: ${error.message || "Unknown error"}`,
+      );
     }
   };
 
@@ -296,11 +242,11 @@ export default function RequestsScreen({ isActive = true }) {
           text: "Decline",
           style: "destructive",
           onPress: async () => {
-            await saveDuoSwipe(currentDuo.duoId, fromDuoId, "pass");
-            const success = await deleteDuoLike(likeId);
-            if (success) {
+            try {
+              await declineDuoLike(likeId, currentDuo.duoId, fromDuoId);
               Alert.alert("Declined", "Request has been removed");
-            } else {
+            } catch (error) {
+              console.error("Error declining duo like:", error);
               Alert.alert("Error", "Failed to decline request");
             }
           },
@@ -583,13 +529,13 @@ export default function RequestsScreen({ isActive = true }) {
                     resizeMode="cover"
                     onLoad={() => {
                       console.log(
-                        "✅ Image loaded successfully:",
+                        "Image loaded successfully:",
                         currentPhoto.substring(0, 50) + "...",
                       );
                     }}
                     onError={(error) => {
                       console.error(
-                        "❌ Image load error:",
+                        "Image load error:",
                         error.nativeEvent?.error,
                       );
                       console.log("Failed to load image URL:", currentPhoto);
