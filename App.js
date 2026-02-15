@@ -17,7 +17,7 @@ import firestore from "@react-native-firebase/firestore";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
-import ExploreScreen from "./screens/ExploreScreen";
+import ExploreScreenNew from "./screens/ExploreScreenNew";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
@@ -257,7 +257,7 @@ export default function App() {
       <DatingScreen isActive={activeTab === "dating"} devMode={devMode} />
     ),
     likes: () => <RequestsScreen isActive={activeTab === "likes"} />,
-    explore: () => <ExploreScreen isActive={activeTab === "explore"} />,
+    explore: () => <ExploreScreenNew isActive={activeTab === "explore"} />,
     messages: () => <ChatScreen isActive={activeTab === "messages"} />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
     // payment: () => <CheckoutScreen />,  // COMMENTED OUT - Payment disabled
