@@ -9,7 +9,9 @@ import {
 } from "react-native";
 import { Text, Searchbar, useTheme } from "react-native-paper";
 import PlaceItem from "./ExplorePage/PlaceItem";
-import Categories, { CATEGORIES } from "./ExplorePage/Categories";
+import PlaceInfo from "./ExplorePage/PlaceInfo";
+import Categories from "./ExplorePage/Categories";
+import MyDates from "./ExplorePage/MyDates";
 import places from "../archive/places.json";
 
 // Map places.json categories to our Google-Places-style category IDs.
@@ -77,6 +79,40 @@ export default function ExploreScreenNew({ isActive }) {
   const [activeTab, setActiveTab] = useState("explore");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [events, setEvents] = useState({});
+
+  const addEvent = (event) => {
+    setEvents((prev) => ({
+      ...prev,
+      [event.date]: [...(prev[event.date] || []), event],
+    }));
+  };
+
+  const updateEvent = (originalDate, index, updated) => {
+    setEvents((prev) => {
+      const next = { ...prev };
+      // Remove from original date
+      const list = [...(next[originalDate] || [])];
+      list.splice(index, 1);
+      if (list.length === 0) delete next[originalDate];
+      else next[originalDate] = list;
+      // Add to (possibly new) date
+      next[updated.date] = [...(next[updated.date] || []), updated];
+      return next;
+    });
+  };
+
+  const deleteEvent = (date, index) => {
+    setEvents((prev) => {
+      const next = { ...prev };
+      const list = [...(next[date] || [])];
+      list.splice(index, 1);
+      if (list.length === 0) delete next[date];
+      else next[date] = list;
+      return next;
+    });
+  };
 
   const filteredPlaces = useMemo(() => {
     let result = places;
@@ -97,27 +133,15 @@ export default function ExploreScreenNew({ isActive }) {
     return result;
   }, [selectedCategory, searchQuery]);
 
-  const renderPlaceItem = ({ item }) => <PlaceItem place={item} />;
+  const renderPlaceItem = ({ item }) => (
+    <PlaceItem place={item} onPress={() => setSelectedPlace(item)} />
+  );
 
   const ListHeader = (
     <>
       {/* Categories row */}
       <Categories selected={selectedCategory} onSelect={setSelectedCategory} />
 
-      {/* Active filter chip */}
-      {selectedCategory && (
-        <View style={styles.filterRow}>
-          <Text
-            style={[
-              styles.filterLabel,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          >
-            Showing:{" "}
-            {CATEGORIES.find((c) => c.id === selectedCategory)?.label ?? ""}
-          </Text>
-        </View>
-      )}
     </>
   );
 
@@ -198,12 +222,20 @@ export default function ExploreScreenNew({ isActive }) {
           }
         />
       ) : (
-        <View style={styles.empty}>
-          <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 15 }}>
-            My Dates — coming soon
-          </Text>
-        </View>
+        <MyDates
+          events={events}
+          onExplore={() => setActiveTab("explore")}
+          onUpdateEvent={updateEvent}
+          onDeleteEvent={deleteEvent}
+        />
       )}
+
+      <PlaceInfo
+        place={selectedPlace}
+        visible={!!selectedPlace}
+        onClose={() => setSelectedPlace(null)}
+        onCreateEvent={addEvent}
+      />
     </View>
   );
 }
@@ -241,14 +273,7 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 15,
   },
-  filterRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-  },
-  filterLabel: {
-    fontSize: 13,
-  },
-  listContent: {
+listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
