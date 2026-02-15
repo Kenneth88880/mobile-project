@@ -13,7 +13,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Clipboard,
-  TextInput,
   Pressable,
 } from "react-native";
 import {
@@ -26,6 +25,7 @@ import {
   Divider,
   Surface,
   useTheme,
+  TextInput,
 } from "react-native-paper";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
@@ -33,6 +33,8 @@ import {
   saveUserProfile,
   getAverageRating,
   getDuoPartnerProfile,
+  resetTestData,
+  getCurrentDuoPartner,
 } from "../services/profileService";
 import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
@@ -40,7 +42,7 @@ import auth from "@react-native-firebase/auth";
 import SettingsScreen from "./SettingsScreen";
 import { LongPressGestureHandler, State } from "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-
+import EditProfileModal from "../components/EditProfileModal";
 // Pre-defined tags users can choose from
 const AVAILABLE_TAGS = [
   "🎨 Art",
@@ -731,6 +733,40 @@ export default function ProfileScreen({
     }
   };
 
+  const handleResetTestData = async () => {
+    Alert.alert(
+      "Reset Test Data",
+      "This will clear all likes and swipes for your duo. You'll be able to match with test accounts again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const duo = await getCurrentDuoPartner(CURRENT_USER_ID);
+              if (!duo) {
+                Alert.alert("Error", "No duo found");
+                return;
+              }
+              await resetTestData(duo.duoId);
+              Alert.alert(
+                "Success",
+                "Test data has been reset! You can now match with test accounts again.",
+              );
+            } catch (error) {
+              console.error("Error resetting test data:", error);
+              Alert.alert(
+                "Error",
+                "Failed to reset test data: " + error.message,
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // Helper to render stars
   const renderStars = (average) => {
     const rating = parseFloat(average);
@@ -816,12 +852,13 @@ export default function ProfileScreen({
       animationType="slide"
       onRequestClose={() => setShowPartnerSearch(false)}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
       >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: theme.colors.background }}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">Find a Duo Partner</Text>
@@ -983,8 +1020,8 @@ export default function ProfileScreen({
               ))
             )}
           </ScrollView>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 
@@ -1584,12 +1621,32 @@ export default function ProfileScreen({
             <Button
               mode="contained"
               icon="pencil"
-              onPress={() => setIsEditing(true)}
+              onPress={() => {
+                console.log("Edit Profile button pressed!");
+                setIsEditing(true);
+                console.log("isEditing set to true");
+              }}
               style={styles.editButton}
             >
               Edit Profile
             </Button>
           </View>
+
+          {/* Dev Mode: Reset Test Data Button */}
+          {devMode && (
+            <View style={styles.actionButtons}>
+              <Button
+                mode="outlined"
+                icon="refresh"
+                onPress={handleResetTestData}
+                style={[styles.editButton, { marginTop: 8 }]}
+                buttonColor={theme.colors.errorContainer}
+                textColor={theme.colors.error}
+              >
+                Reset Test Data
+              </Button>
+            </View>
+          )}
 
           {/* Warning if user has no photos */}
           {profileLoaded &&
@@ -1860,224 +1917,16 @@ export default function ProfileScreen({
     );
   }
 
-  // ========================
-  // EDITING MODE (unchanged)
-  // ========================
+  // EditProfileModal - rendered outside conditional blocks so it persists
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        <View style={styles.header}>
-          <Text variant="headlineLarge">Edit Profile</Text>
-        </View>
-
-        <Card style={styles.card}>
-          <Card.Title title="Photos" />
-          <Card.Content>
-            <PhotoPicker
-              photos={profile.photos || []}
-              onPhotosChange={handlePhotosChange}
-              maxPhotos={6}
-            />
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Content>
-            <TextInput
-              label="Name"
-              value={profile.name}
-              onChangeText={(text) => setProfile({ ...profile, name: text })}
-              mode="outlined"
-              style={styles.input}
-              disabled={!!profile.name}
-              right={
-                profile.name ? <TextInput.Icon icon="lock" disabled /> : null
-              }
-            />
-            {profile.name && (
-              <Text
-                variant="bodySmall"
-                style={{
-                  marginTop: -8,
-                  marginBottom: 8,
-                  fontStyle: "italic",
-                  opacity: 0.7,
-                }}
-              >
-                Name cannot be changed once set
-              </Text>
-            )}
-            <TextInput
-              label="Age"
-              value={profile.age}
-              onChangeText={(text) => setProfile({ ...profile, age: text })}
-              keyboardType="numeric"
-              mode="outlined"
-              style={styles.input}
-              disabled={!!profile.age}
-              right={
-                profile.age ? <TextInput.Icon icon="lock" disabled /> : null
-              }
-            />
-            {profile.age && (
-              <Text
-                variant="bodySmall"
-                style={{
-                  marginTop: -8,
-                  marginBottom: 8,
-                  fontStyle: "italic",
-                  opacity: 0.7,
-                }}
-              >
-                Age cannot be changed once set
-              </Text>
-            )}
-            <TextInput
-              label="About Me"
-              value={profile.description}
-              onChangeText={(text) =>
-                setProfile({ ...profile, description: text })
-              }
-              multiline
-              numberOfLines={4}
-              mode="outlined"
-              style={styles.input}
-            />
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Title title="Gender" />
-          <Card.Content>
-            <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
-              Select your gender:
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              <Chip
-                selected={profile.gender === "male"}
-                onPress={() => setProfile({ ...profile, gender: "male" })}
-                style={{
-                  backgroundColor:
-                    profile.gender === "male" ? "#4A90E2" : undefined,
-                }}
-                textStyle={{
-                  color:
-                    profile.gender === "male"
-                      ? "#FFFFFF"
-                      : theme.colors.onSurface,
-                }}
-              >
-                Male
-              </Chip>
-              <Chip
-                selected={profile.gender === "female"}
-                onPress={() => setProfile({ ...profile, gender: "female" })}
-                style={{
-                  backgroundColor:
-                    profile.gender === "female" ? "#FF69B4" : undefined,
-                }}
-                textStyle={{
-                  color:
-                    profile.gender === "female"
-                      ? "#FFFFFF"
-                      : theme.colors.onSurface,
-                }}
-              >
-                Female
-              </Chip>
-              <Chip
-                selected={profile.gender === "non-binary"}
-                onPress={() => setProfile({ ...profile, gender: "non-binary" })}
-                style={{
-                  backgroundColor:
-                    profile.gender === "non-binary" ? "#9B59B6" : undefined,
-                }}
-                textStyle={{
-                  color:
-                    profile.gender === "non-binary"
-                      ? "#FFFFFF"
-                      : theme.colors.onSurface,
-                }}
-              >
-                Non-Binary
-              </Chip>
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Title
-            title={`Tags (${
-              Array.isArray(profile.tags) ? profile.tags.length : 0
-            }/5)`}
-            right={(props) => (
-              <IconButton
-                {...props}
-                icon="pencil"
-                onPress={() => setShowTagPicker(true)}
-              />
-            )}
-          />
-          <Card.Content>
-            {Array.isArray(profile.tags) && profile.tags.length > 0 ? (
-              <View style={styles.tagsDisplay}>
-                {profile.tags.map((tag, index) => (
-                  <Chip
-                    key={index}
-                    onClose={() => toggleTag(tag)}
-                    style={styles.tagDisplay}
-                  >
-                    {tag}
-                  </Chip>
-                ))}
-              </View>
-            ) : (
-              <Text>No tags selected. Tap the pencil to add tags.</Text>
-            )}
-          </Card.Content>
-        </Card>
-
-        <SettingsScreen
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          visible={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-        />
-        {TagPickerModal()}
-      </ScrollView>
-
-      {/* Fixed Bottom Buttons */}
-      <Surface
-        style={[
-          styles.bottomButtons,
-          {
-            backgroundColor: theme.colors.surface,
-            borderTopColor: theme.colors.outline,
-          },
-        ]}
-        elevation={4}
-      >
-        <Button
-          mode="outlined"
-          onPress={() => {
-            loadProfile();
-            setIsEditing(false);
-          }}
-          style={styles.bottomButton}
-        >
-          Cancel
-        </Button>
-        <Button
-          mode="contained"
-          onPress={handleSave}
-          style={styles.bottomButton}
-        >
-          Save
-        </Button>
-      </Surface>
-    </View>
+    <EditProfileModal
+      visible={isEditing}
+      onClose={() => {
+        console.log("Closing EditProfileModal");
+        setIsEditing(false);
+        loadProfile(); // Reload profile after editing
+      }}
+    />
   );
 }
 
