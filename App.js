@@ -22,12 +22,10 @@ import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import CheckoutScreen from "./screens/stripeServer/CheckoutScreen";
-import Constants from "expo-constants";
-const STRIPE_PUBLISHABLE_KEY =
-  Constants.expoConfig?.extra?.stripePublishableKey;
+import CheckoutScreen from "./screens/CheckoutScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
+import { URL } from "./services/stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
@@ -39,12 +37,14 @@ export default function App() {
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState('');
+  const API_URL = URL;
 
   const fetchPublishableKey = async () => {
-    const key = await fetchKey(); // fetch key from your server here
+    const key = await fetchKey(`${API_URL}/payment-sheet`); // fetch key from your server here
+    // console.log("✅✅✅✅✅Fetched publishable key:", key);
     setPublishableKey(key);
+    
   };
-
   useEffect(() => {
     fetchPublishableKey();
   }, []);
