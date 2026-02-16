@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import { URL } from "../services/stripeConfig";
 import { useStripe } from "@stripe/stripe-react-native";
-import Constants from "expo-constants";
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl;
+const API_URL = URL;
 
 export default function CheckoutScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -24,30 +24,35 @@ export default function CheckoutScreen() {
         "Content-Type": "application/json",
       },
     });
-    const { paymentIntent, ephemeralKey, customer } = await response.json();
+
+    const data = await response.json();
+    console.log("Server response:", JSON.stringify(data));
 
     return {
-      paymentIntent,
-      ephemeralKey,
-      customer,
+      paymentIntent: data.paymentIntent,
+      customerSessionClientSecret: data.customerSessionClientSecret,
+      customer: data.customer,
     };
   };
 
   const initializePaymentSheet = async () => {
     try {
-      const { paymentIntent, ephemeralKey, customer } =
+      const { paymentIntent, customerSessionClientSecret, customer } =
         await fetchPaymentSheetParams();
+      console.log("Params:", JSON.stringify({ paymentIntent, customerSessionClientSecret, customer }));
 
       const { error } = await initPaymentSheet({
         merchantDisplayName: "Example, Inc.",
         customerId: customer,
-        customerEphemeralKeySecret: ephemeralKey,
+        customerSessionClientSecret: customerSessionClientSecret,
         paymentIntentClientSecret: paymentIntent,
         allowsDelayedPaymentMethods: true,
         defaultBillingDetails: {
           name: "Jane Doe",
         },
       });
+
+      console.log("initPaymentSheet error:", error);
 
       if (!error) {
         setLoading(true);
@@ -62,7 +67,6 @@ export default function CheckoutScreen() {
 
   const openPaymentSheet = async () => {
     const { error } = await presentPaymentSheet();
-
     if (error) {
       Alert.alert(`Error code: ${error.code}`, error.message);
     } else {
