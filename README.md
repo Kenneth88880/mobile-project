@@ -2,12 +2,12 @@
 
 ## Things to do before release
 
-- Explore system, calander, maps, planning
 - Add report system
 - connect chat with explore screen to send and plan
 
 ## Things in progress
 
+- Explore system, calander, maps, planning
 - change chat text box to be smaller
 - change chat bubble text more soft/round
 - app efficiency

@@ -18,6 +18,8 @@ import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import { getPlacesPhotoUrl } from "./PlaceItem";
+import ShareToChat from "./ShareToChat";
+import { CURRENT_USER_ID } from "../../services/UserConfig";
 
 if (
   Platform.OS === "android" &&
@@ -36,6 +38,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const [eventHour, setEventHour] = useState("");
   const [eventMinute, setEventMinute] = useState("");
   const [selectedPeriod, setSelectedPeriod] = useState("PM");
+  const [shareVisible, setShareVisible] = useState(false);
 
   if (!place) return null;
 
@@ -216,6 +219,16 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
                   ]}
                 >
                   Directions
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: theme.colors.primaryContainer }]}
+                onPress={() => setShareVisible(true)}
+              >
+                <MaterialCommunityIcons name="share-variant" size={22} color={theme.colors.onPrimaryContainer} />
+                <Text style={[styles.actionLabel, { color: theme.colors.onPrimaryContainer }]}>
+                  Share
                 </Text>
               </TouchableOpacity>
 
@@ -517,6 +530,14 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
           </View>
         </ScrollView>
       </View>
+
+    <ShareToChat
+      visible={shareVisible}
+      place={place}
+      currentUserId={CURRENT_USER_ID}
+      onClose={() => setShareVisible(false)}
+    />
+
     </Modal>
   );
 }

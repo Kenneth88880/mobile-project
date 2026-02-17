@@ -434,7 +434,9 @@ function ChatListScreen({ onChatSelect }) {
     const isGroup = item.isGroupChat || false;
     const isArchived = item.status === "archived";
     const timestamp = formatTimeStamp(item.lastMessageTime);
-
+console.log("Message type:", item.type);
+console.log("Message suggestion:", JSON.stringify(item.suggestion));
+console.log("Image URL:", item.suggestion?.imageUrl);
     return (
       <List.Item
         title={item.groupName || "Chat"}
@@ -684,20 +686,20 @@ function IndividualChatScreen({ chat, onBack }) {
         (snapshot) => {
           const messagesList = snapshot.docs.map((doc) => {
             const data = doc.data();
-            //console.log("Message data:", data); // Debug log
+            console.log("Raw message data:", JSON.stringify(data)); // ← add this
             return {
               _id: doc.id,
               text: data.text,
-              imageUrl: data.imageUrl, // Include imageUrl field
+              imageUrl: data.imageUrl,
+              type: data.type,
+              suggestion: data.suggestion,
               createdAt: data.createdAt?.toDate() || new Date(),
               user: {
-                _id: data.user._id,
-                name: data.user.name,
+                _id: data.user?._id,   // ← add ? here
+                name: data.user?.name, // ← add ? here
               },
             };
           });
-
-          //console.log("Processed messages:", messagesList); // Debug log
           setMessages(messagesList);
         },
         (error) => {
@@ -1166,7 +1168,7 @@ function IndividualChatScreen({ chat, onBack }) {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 80}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
     >
       <Surface style={styles.chatHeader} elevation={2}>
         <IconButton icon="arrow-left" onPress={onBack} />
@@ -1259,7 +1261,7 @@ function IndividualChatScreen({ chat, onBack }) {
               <View
                 style={{ alignItems: isMyMessage ? "flex-end" : "flex-start" }}
               >
-                {item.text && !item.imageUrl && (
+                {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
                   <Surface
                     style={[
                       styles.messageBubble,
@@ -1301,6 +1303,61 @@ function IndividualChatScreen({ chat, onBack }) {
                       }}
                       resizeMode="cover"
                     />
+                  </Surface>
+                )}
+
+                {item.type === "place_suggestion" && item.suggestion && (
+                  <Surface
+                  
+                    style={[
+                      styles.messageBubble,
+                      {
+                        backgroundColor: isMyMessage
+                          ? theme.colors.primaryContainer
+                          : theme.colors.surfaceVariant,
+                        borderBottomRightRadius: isMyMessage ? 4 : 16,
+                        borderBottomLeftRadius: isMyMessage ? 16 : 4,
+                        padding: 0,
+                        overflow: "hidden",
+                        maxWidth: 240,
+                      },
+                    ]}
+                    elevation={1}
+                  > 
+                    {/* Place image */}
+                    {console.log("Suggestion imageUrl:", item.suggestion?.imageUrl)} 
+                    {item.suggestion.imageUrl ? (
+                      <Image
+                        source={{ uri: item.suggestion.imageUrl }}
+                        style={{ 
+                          width: 240, 
+                          height: 130,
+                          transform: [{ scaleY: -1 }],
+                          alignSelf: "center",
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+
+                    {/* Info below image */}
+                    <View style={{ padding: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.primary, marginBottom: 3 }}>
+                        📅 Date Suggestion
+                      </Text>
+                      <Text style={{ fontWeight: "700", fontSize: 14, color: theme.colors.onSurface }} numberOfLines={1}>
+                        {item.suggestion.place}
+                      </Text>
+                      {item.suggestion.category ? (
+                        <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 1 }}>
+                          {item.suggestion.category}
+                        </Text>
+                      ) : null}
+                      {item.suggestion.address ? (
+                        <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={2}>
+                          📌 {item.suggestion.address}
+                        </Text>
+                      ) : null}
+                    </View>
                   </Surface>
                 )}
 
@@ -1358,6 +1415,7 @@ function IndividualChatScreen({ chat, onBack }) {
           borderTopColor: "transparent",
           borderColor: "transparent",
         }}
+        elevation={0}
       >
         {currentChat.status === "archived" ? (
           <View
@@ -1397,7 +1455,7 @@ function IndividualChatScreen({ chat, onBack }) {
                   borderRadius: 30,
                   borderTopLeftRadius: 30,
                   borderTopRightRadius: 30,
-                  borderWidth: 1,
+                  borderWidth: 0,
                   borderColor: "transparent",
                 },
               ]}
@@ -1598,6 +1656,8 @@ function IndividualChatScreen({ chat, onBack }) {
                 <FlatList
                   data={[{ key: "profile" }]}
                   renderItem={() => (
+
+                    
                     <View style={{ padding: 16 }}>
                       {viewingProfile.photos &&
                       viewingProfile.photos.length > 0 ? (
