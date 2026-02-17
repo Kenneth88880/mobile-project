@@ -1,6 +1,9 @@
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onCall, HttpsError, onRequest} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
+const express = require("express");
+const app = express();
+app.use(express.json());
 
 admin.initializeApp();
 
@@ -143,5 +146,49 @@ exports.verifyEmailCode = onCall(async (request) => {
       throw error;
     }
     throw new HttpsError("internal", "Failed to verify code");
+  }
+});
+
+exports.api = onRequest(
+  { 
+    region: "us-central1",
+    secrets: ["STRIPE_SECRET_KEY"],
+  },
+  app
+);
+
+app.post("/payment-sheet", async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  try {
+    const customer = await stripe.customers.create();
+    const customerSession = await stripe.customerSessions.create({
+      customer: customer.id,
+      components: {
+        mobile_payment_element: {
+          enabled: true,
+          features: {
+            payment_method_save: "enabled",
+            payment_method_redisplay: "enabled",
+            payment_method_remove: "enabled",
+          },
+        },
+      },
+    });
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 999,
+      currency: "cad",
+      customer: customer.id,
+      automatic_payment_methods: { enabled: true },
+    });
+
+    res.json({
+      paymentIntent: paymentIntent.client_secret,
+      customerSessionClientSecret: customerSession.client_secret,
+      customer: customer.id,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
