@@ -160,6 +160,7 @@ exports.api = onRequest(
 app.post("/payment-sheet", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   try {
+    // console.log("Received request for payment sheet" + JSON.stringify(req.body));
     const customer = await stripe.customers.create();
     const customerSession = await stripe.customerSessions.create({
       customer: customer.id,
@@ -175,7 +176,7 @@ app.post("/payment-sheet", async (req, res) => {
       },
     });
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: 999,
+      amount: req.body.amount || 999, // default to $9.99 if amount not provided
       currency: "cad",
       customer: customer.id,
       automatic_payment_methods: { enabled: true },
