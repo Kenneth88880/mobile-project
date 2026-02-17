@@ -10,7 +10,7 @@ import {
 import { URL } from "../services/stripeConfig";
 import { useStripe } from "@stripe/stripe-react-native";
 
-const API_URL = URL;
+const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
 export default function CheckoutScreen() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
