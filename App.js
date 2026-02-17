@@ -287,7 +287,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={publishableKey}
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
@@ -311,7 +311,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={publishableKey}
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
         <SignUpScreen
           isInSignupFlow={true}
@@ -333,7 +333,7 @@ export default function App() {
       <PaperProvider theme={theme}>
         <StripeProvider publishableKey={publishableKey}
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
           <SafeAreaView
             style={[
@@ -370,7 +370,7 @@ export default function App() {
     <PaperProvider theme={theme}>
      <StripeProvider publishableKey={publishableKey}
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
       {showRegister ? (
         <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
