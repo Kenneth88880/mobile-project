@@ -3,7 +3,6 @@
 ## Things to do before release
 
 - Add report system
-- connect chat with explore screen to send and plan
 
 ## Things in progress
 
@@ -17,6 +16,7 @@
 - way to change group chat name
 - way to see group chat members
 - Report bug system (can't send images through)
+- connect chat with explore screen to send and plan
 
 ## Things that are done mostly
 
