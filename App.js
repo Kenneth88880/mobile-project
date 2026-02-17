@@ -37,7 +37,7 @@ export default function App() {
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState('');
-  const API_URL = URL;
+  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const fetchPublishableKey = async () => {
     const key = await fetchKey(`${API_URL}/payment-sheet`); // fetch key from your server here
