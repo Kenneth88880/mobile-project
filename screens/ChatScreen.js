@@ -251,6 +251,7 @@ function ChatListScreen({ onChatSelect }) {
   const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [selectedChatName, setSelectedChatName] = useState("");
+  const [selectedChatIsPrivate, setSelectedChatIsPrivate] = useState(false);
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -419,9 +420,10 @@ function ChatListScreen({ onChatSelect }) {
     );
   };
 
-  const showChatOptions = (chatId, chatName) => {
+  const showChatOptions = (chatId, chatName, isPrivate) => {
     setSelectedChatId(chatId);
     setSelectedChatName(chatName);
+    setSelectedChatIsPrivate(isPrivate);
     setChatOptionsVisible(true);
   };
 
@@ -429,6 +431,7 @@ function ChatListScreen({ onChatSelect }) {
     setChatOptionsVisible(false);
     setSelectedChatId(null);
     setSelectedChatName("");
+    setSelectedChatIsPrivate(false);
   };
 
   const renderItem = ({ item }) => {
@@ -493,7 +496,7 @@ function ChatListScreen({ onChatSelect }) {
             <IconButton
               icon="dots-vertical"
               size={20}
-              onPress={() => showChatOptions(item.id, item.groupName || "Chat")}
+              onPress={() => showChatOptions(item.id, item.groupName || "Chat", item.isPrivate || false)}
             />
           </View>
         )}
@@ -585,28 +588,32 @@ function ChatListScreen({ onChatSelect }) {
         <Dialog visible={chatOptionsVisible} onDismiss={hideChatOptions}>
           <Dialog.Title>Chat Options</Dialog.Title>
           <Dialog.Content>
-            <Button
-              mode="contained-tonal"
-              onPress={() => {
-                hideChatOptions();
-                handleEveryoneMet(selectedChatId);
-              }}
-              style={{ marginBottom: 12 }}
-            >
-              EVERYONE MET
-            </Button>
-            <Button
-              mode="outlined"
-              onPress={() => {
-                hideChatOptions();
-                handleUnmatchDuo(selectedChatId, selectedChatName);
-              }}
-              style={{ marginBottom: 12 }}
-              buttonColor={theme.colors.errorContainer}
-              textColor={theme.colors.error}
-            >
-              UNMATCH DUO
-            </Button>
+            {!selectedChatIsPrivate && (
+              <>
+                <Button
+                  mode="contained-tonal"
+                  onPress={() => {
+                    hideChatOptions();
+                    handleEveryoneMet(selectedChatId);
+                  }}
+                  style={{ marginBottom: 12 }}
+                >
+                  EVERYONE MET
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    hideChatOptions();
+                    handleUnmatchDuo(selectedChatId, selectedChatName);
+                  }}
+                  style={{ marginBottom: 12 }}
+                  buttonColor={theme.colors.errorContainer}
+                  textColor={theme.colors.error}
+                >
+                  UNMATCH DUO
+                </Button>
+              </>
+            )}
             <Button
               mode="outlined"
               onPress={() => {
