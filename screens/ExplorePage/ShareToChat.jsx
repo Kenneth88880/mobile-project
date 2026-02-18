@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   placePreview: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
