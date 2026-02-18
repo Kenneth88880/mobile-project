@@ -131,6 +131,8 @@ const reportChat = async (chatId, reportingUserId) => {
       chatId: chatId,
       chatName: chatData.groupName || "Unnamed Chat",
       isGroupChat: chatData.isGroupChat || false,
+      isPrivate: chatData.isPrivate || false,
+      creatorID: chatData.creatorID || null,
 
       // Reporter information
       reporter: {
@@ -434,12 +436,13 @@ function ChatListScreen({ onChatSelect }) {
     const isGroup = item.isGroupChat || false;
     const isArchived = item.status === "archived";
     const timestamp = formatTimeStamp(item.lastMessageTime);
-console.log("Message type:", item.type);
-console.log("Message suggestion:", JSON.stringify(item.suggestion));
-console.log("Image URL:", item.suggestion?.imageUrl);
+    const isPrivate = item.isPrivate || false;
+    console.log("Message type:", item.type);
+    console.log("Message suggestion:", JSON.stringify(item.suggestion));
+    console.log("Image URL:", item.suggestion?.imageUrl);
     return (
       <List.Item
-        title={item.groupName || "Chat"}
+        title={item.isGroupChat ? item.groupName || "Chat" : item.isPrivate ? item.curUserName || "Private Chat" : "Chat"}
         titleStyle={
           unreadCount > 0 && !isArchived
             ? { fontWeight: "bold", color: theme.colors.onSurface }
@@ -452,11 +455,11 @@ console.log("Image URL:", item.suggestion?.imageUrl);
         }
         descriptionNumberOfLines={1}
         left={() =>
-          isGroup ? (
+          (isGroup || isPrivate) ? (
             item.groupPhoto ? (
               <Avatar.Image
                 size={48}
-                source={{ uri: item.groupPhoto }}
+                source={{ uri: item.isGroupChat ? item.groupPhoto : currentUserId === item.creatorID ? item.otherPhoto : item.curPhoto }}
                 style={isArchived && { opacity: 0.6 }}
               />
             ) : (
@@ -935,6 +938,73 @@ function IndividualChatScreen({ chat, onBack }) {
     }
   };
 
+  const createPrivateChat = async (otherUserID) => {
+
+    try {
+
+      const otherUser = await firestore().collection("profiles").doc(otherUserID).get();
+      const otherUserName = otherUser.data().name;
+      const currentUser = await firestore().collection("profiles").doc(currentUserId).get();
+      const currentUserName = currentUser.data().name;
+
+      console.log("Other user data: ", otherUserName);
+
+      // prevents duplicate private dms by checking before
+      const existing = await firestore()
+      .collection("chats")
+      .where("participants", "array-contains", currentUserId)
+      .where("isPrivate", "==", true)
+      .get();
+
+      const existingDM = existing.docs.find((doc) =>
+        doc.data().participants.includes(otherUserID)
+      );
+
+      if (existingDM) {
+        // Just return the existing chat instead of creating a new one
+        Alert.alert("Chat Exists", "A private chat with this user already exists. Opening existing chat.");
+        return { id: existingDM.id, ...existingDM.data() };
+      }
+
+      const chatData = {
+        participants: [currentUserId, otherUserID],
+        curUserName: otherUserName || "Private Chat",
+        otherUserName: currentUserName || "Private Chat", 
+        curPhoto: otherUser.data().photos?.[0] || null,
+        otherPhoto: currentUser.data().photos?.[0] || null,
+        isGroupChat: false,
+        isPrivate: true,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        lastMessage: "",
+        creatorID: currentUserId,
+        lastMessageTime: firestore.FieldValue.serverTimestamp(),
+        type: "private",
+      };
+
+      const chatRef = await firestore().collection("chats").add(chatData);
+      console.log("Private chat created with ID:", chatRef.id);
+      // Close the profile modal
+      setViewingProfile(null);
+
+      return { id: chatRef.id, ...chatData };
+
+    } catch (error) {
+    
+      console.error("Error creating private chat:", error);
+      Alert.alert("Error", "Failed to create private chat");
+    
+    } 
+
+  }
+
+  const handleCreatePrivateChat = async (otherUserID) => {
+    const newChat = await createPrivateChat(otherUserID);
+    if (newChat) {
+      setViewingProfile(null);       // close profile modal
+      onChatSelect(newChat);         // navigate straight into the new DM
+    }
+  };
+
   // Submit or update rating
   const handleSubmitRating = async (userId, rating) => {
     if (rating === 0) {
@@ -1174,7 +1244,8 @@ function IndividualChatScreen({ chat, onBack }) {
         <IconButton icon="arrow-left" onPress={onBack} />
 
         {/* Group photo - tappable to change */}
-        {currentChat.isGroupChat && (
+        
+        {(currentChat.isGroupChat || currentChat.isPrivate) && (
           <TouchableOpacity
             onPress={handleChangeGroupPicture}
             disabled={uploadingChatImage || currentChat.status === "archived"}
@@ -1198,17 +1269,19 @@ function IndividualChatScreen({ chat, onBack }) {
         {/* Group name - tappable to edit */}
         <TouchableOpacity
           onPress={
-            currentChat.isGroupChat && currentChat.status !== "archived"
+            (currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived"
               ? handleEditGroupInfo
               : undefined
           }
           style={{ flex: 1, flexDirection: "column", alignItems: "flex-start" }}
           disabled={
-            !currentChat.isGroupChat || currentChat.status === "archived"
+            (!currentChat.isGroupChat && !currentChat.isPrivate) || currentChat.status === "archived"
           }
         >
-          <Text variant="titleLarge">{currentChat.groupName || "Chat"}</Text>
-          {currentChat.status === "archived" && (
+          <Text variant="titleLarge">
+            {currentChat.isGroupChat ? currentChat.groupName || "Chat" : ""}
+            {currentChat.isPrivate ? currentChat.creatorID === currentUserId ? currentChat.curUserName || "Private Chat" : currentChat.otherUserName || "Private Chat" : ""} </Text>
+            {currentChat.status === "archived" && (
             <Text
               variant="labelSmall"
               style={{ color: theme.colors.error, marginTop: 2 }}
@@ -1216,7 +1289,7 @@ function IndividualChatScreen({ chat, onBack }) {
               🗄️ Archived - Read Only
             </Text>
           )}
-          {currentChat.isGroupChat && currentChat.status !== "archived" && (
+          {(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" && (
             <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
               Tap to edit name
             </Text>
@@ -1841,7 +1914,6 @@ function IndividualChatScreen({ chat, onBack }) {
                         </Card.Content>
                       </Card>
 
-                      {/* ⭐ NEW: Rate This Person Section */}
                       {viewingProfile.id !== currentUserId && (
                         <Card
                           style={{
@@ -1913,9 +1985,27 @@ function IndividualChatScreen({ chat, onBack }) {
                                 star{userRating !== 1 ? "s" : ""}
                               </Text>
                             )}
+
+                            <Text
+                              variant="bodySmall"
+                              style={{
+                                marginTop: 8,
+                                textAlign: "center",
+                                fontStyle: "italic",
+                                opacity: 0.7,
+                              }}>
+                              <Button
+                                mode="contained"
+                                onPress ={() => handleCreatePrivateChat(viewingProfile.id)}>
+                                Create Private DM
+                              </Button>
+                            </Text> 
                           </Card.Content>
                         </Card>
+                        
                       )}
+                      
+
                     </View>
                   )}
                   keyExtractor={(item) => item.key}
@@ -1937,6 +2027,7 @@ export default function ChatScreen() {
       <IndividualChatScreen
         chat={selectedChat}
         onBack={() => setSelectedChat(null)}
+        onChatSelect={setSelectedChat}
       />
     );
   }
