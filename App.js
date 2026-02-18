@@ -7,6 +7,7 @@ import {
   BottomNavigation,
   Surface,
 } from "react-native-paper";
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
@@ -289,11 +290,13 @@ export default function App() {
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
                         urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          {/* You can add a loading spinner here if desired */}
-        </View>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <View
+              style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            >
+              {/* You can add a loading spinner here if desired */}
+            </View>
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -313,15 +316,17 @@ export default function App() {
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
                         urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
-        <SignUpScreen
-          isInSignupFlow={true}
-          needsEmailVerification={needsEmailVerification}
-          userEmail={user.email}
-          onNavigateToSignIn={() => {
-            // Don't allow navigation to sign in if already signed up
-            // User must complete the signup process
-          }}
-        />
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <SignUpScreen
+              isInSignupFlow={true}
+              needsEmailVerification={needsEmailVerification}
+              userEmail={user.email}
+              onNavigateToSignIn={() => {
+                // Don't allow navigation to sign in if already signed up
+                // User must complete the signup process
+              }}
+            />
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -335,31 +340,33 @@ export default function App() {
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
                         urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
-          <SafeAreaView
-            style={[
-              styles.safeArea,
-              { backgroundColor: theme.colors.elevation.level2 },
-            ]}
-            edges={["top", "left", "right"]}
-          >
-            <StatusBar style={isDarkMode ? "light" : "dark"} />
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaView
+              style={[
+                styles.safeArea,
+                { backgroundColor: theme.colors.elevation.level2 },
+              ]}
+              edges={["top", "left", "right"]}
+            >
+              <StatusBar style={isDarkMode ? "light" : "dark"} />
 
-            <BottomNavigation
-              navigationState={{
-                index: routes.findIndex((r) => r.key === activeTab),
-                routes,
-              }}
-              onIndexChange={(index) => setActiveTab(routes[index].key)}
-              renderScene={renderScene}
-              barStyle={{
-                backgroundColor: theme.colors.elevation.level2,
-                height: 70,
-              }}
-              activeColor={theme.colors.primary}
-              inactiveColor={theme.colors.onSurfaceVariant}
-              safeAreaInsets={{ bottom: 0 }}
-            />
-          </SafeAreaView>
+              <BottomNavigation
+                navigationState={{
+                  index: routes.findIndex((r) => r.key === activeTab),
+                  routes,
+                }}
+                onIndexChange={(index) => setActiveTab(routes[index].key)}
+                renderScene={renderScene}
+                barStyle={{
+                  backgroundColor: theme.colors.elevation.level2,
+                  height: 70,
+                }}
+                activeColor={theme.colors.primary}
+                inactiveColor={theme.colors.onSurfaceVariant}
+                safeAreaInsets={{ bottom: 0 }}
+              />
+            </SafeAreaView>
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -372,11 +379,13 @@ export default function App() {
                         // </PaperProvider>merchantIdentifier="merchant.identifier"
                         urlScheme="doubly-yrvn0tmogrdrliugnun4w"
                         >
-      {showRegister ? (
-        <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-      ) : (
-        <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-      )}
+          <GestureHandlerRootView style={{ flex: 1 }}>
+          {showRegister ? (
+            <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+          ) : (
+            <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+          )}
+          </GestureHandlerRootView>
       </StripeProvider>
     </PaperProvider>
   );
