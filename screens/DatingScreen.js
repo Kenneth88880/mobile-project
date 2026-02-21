@@ -189,7 +189,7 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
       // DEV MODE: Filter to only show test accounts if dev mode is enabled
       if (devMode) {
-        filteredPairs = filteredPairs.filter((pair, index) => {
+        filteredPairs = filteredPairs.filter((pair) => {
           const user1 = pair.user1Profile;
           const user2 = pair.user2Profile;
 
@@ -198,6 +198,15 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
           // Only show if BOTH people in the duo are test accounts
           return user1IsTest && user2IsTest;
+        });
+      } else {
+        // REGULAR USERS: Filter OUT any duo that contains a test account
+        filteredPairs = filteredPairs.filter((pair) => {
+          const user1 = pair.user1Profile;
+          const user2 = pair.user2Profile;
+
+          // Exclude if EITHER person in the duo is a test account
+          return user1?.isTestAccount !== true && user2?.isTestAccount !== true;
         });
       }
 
