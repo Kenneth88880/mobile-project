@@ -68,3 +68,7 @@ firebaseConfig.js
 
 # 
 database.rules.json
+
+#creates test accounts without the need of validation
+verifyUser.cjs
+serviceAccountKey.json.json
