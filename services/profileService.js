@@ -880,6 +880,7 @@ export const acceptDuoLike = async (
         duoIds: [fromDuoId, currentDuoId],
         groupName: groupName,
         isGroupChat: true,
+        isPrivate: false,
         createdAt: firestore.FieldValue.serverTimestamp(),
         lastMessage: "",
         lastMessageTime: firestore.FieldValue.serverTimestamp(),
