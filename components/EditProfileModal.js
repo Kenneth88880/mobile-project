@@ -21,29 +21,7 @@ import {
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import PhotoPicker from "../components/PhotoPicker";
-
-const PREDEFINED_TAGS = [
-  "Gaming",
-  "Music",
-  "Foodie",
-  "Travel",
-  "Sports",
-  "Reading",
-  "Movies",
-  "Fitness",
-  "Art",
-  "Photography",
-  "Cooking",
-  "Dancing",
-  "Hiking",
-  "Yoga",
-  "Coffee",
-  "Wine",
-  "Tech",
-  "Fashion",
-  "Pets",
-  "Nature",
-];
+import { AVAILABLE_TAGS } from "../tags";
 
 export default function EditProfileModal({ visible, onClose }) {
   const theme = useTheme();
@@ -103,8 +81,8 @@ export default function EditProfileModal({ visible, onClose }) {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter((t) => t !== tag));
     } else {
-      if (selectedTags.length >= 10) {
-        Alert.alert("Maximum Tags", "You can select up to 10 tags.", [
+      if (selectedTags.length >= 5) {
+        Alert.alert("Maximum Tags", "You can select up to 5 tags.", [
           { text: "OK" },
         ]);
         return;
@@ -368,10 +346,10 @@ export default function EditProfileModal({ visible, onClose }) {
                 { color: theme.colors.onSurfaceVariant },
               ]}
             >
-              Selected: {selectedTags.length}/10
+              Selected: {selectedTags.length}/5
             </Text>
             <View style={styles.tagsContainer}>
-              {PREDEFINED_TAGS.map((tag) => (
+              {AVAILABLE_TAGS.map((tag) => (
                 <Chip
                   key={tag}
                   mode="outlined"
