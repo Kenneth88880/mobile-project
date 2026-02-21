@@ -38,7 +38,7 @@ export default function App() {
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
-  const [publishableKey, setPublishableKey] = useState('');
+  const [publishableKey, setPublishableKey] = useState("");
 
   const fetchPublishableKey = async () => {
     const key = await fetchKey(); // fetch key from your server here
@@ -250,11 +250,11 @@ export default function App() {
     //  unfocusedIcon: "star-outline",
     //},
     // COMMENTED OUT - Payment feature disabled until Stripe is configured
-    {
-      key: "payment",
-      focusedIcon: "credit-card",
-      unfocusedIcon: "credit-card-outline",
-    },
+    //{
+    //  key: "payment",
+    //  focusedIcon: "credit-card",
+    //  unfocusedIcon: "credit-card-outline",
+    //},
     {
       key: "profile",
       focusedIcon: "account",
@@ -270,7 +270,7 @@ export default function App() {
     explore: () => <ExploreScreen isActive={activeTab === "explore"} />,
     messages: () => <ChatScreen isActive={activeTab === "messages"} />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
-    payment: () => <CheckoutScreen isActive={activeTab === "payment"} />,  // COMMENTED OUT - Payment disabled
+    //payment: () => <CheckoutScreen isActive={activeTab === "payment"} />,  // COMMENTED OUT - Payment disabled
     profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
@@ -285,15 +285,16 @@ export default function App() {
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey}
-                        // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
-                        >
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        <StripeProvider
+          publishableKey={publishableKey}
+          // </PaperProvider>merchantIdentifier="merchant.identifier"
+          // urlScheme="your-url-scheme"
         >
-          {/* You can add a loading spinner here if desired */}
-        </View>
+          <View
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          >
+            {/* You can add a loading spinner here if desired */}
+          </View>
         </StripeProvider>
       </PaperProvider>
     );
@@ -309,19 +310,20 @@ export default function App() {
 
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey}
-                        // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
-                        >
-        <SignUpScreen
-          isInSignupFlow={true}
-          needsEmailVerification={needsEmailVerification}
-          userEmail={user.email}
-          onNavigateToSignIn={() => {
-            // Don't allow navigation to sign in if already signed up
-            // User must complete the signup process
-          }}
-        />
+        <StripeProvider
+          publishableKey={publishableKey}
+          // </PaperProvider>merchantIdentifier="merchant.identifier"
+          // urlScheme="your-url-scheme"
+        >
+          <SignUpScreen
+            isInSignupFlow={true}
+            needsEmailVerification={needsEmailVerification}
+            userEmail={user.email}
+            onNavigateToSignIn={() => {
+              // Don't allow navigation to sign in if already signed up
+              // User must complete the signup process
+            }}
+          />
         </StripeProvider>
       </PaperProvider>
     );
@@ -331,10 +333,11 @@ export default function App() {
   if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey}
-                        // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
-                        >
+        <StripeProvider
+          publishableKey={publishableKey}
+          // </PaperProvider>merchantIdentifier="merchant.identifier"
+          // urlScheme="your-url-scheme"
+        >
           <SafeAreaView
             style={[
               styles.safeArea,
@@ -368,15 +371,16 @@ export default function App() {
   // If no user, show sign in/sign up screens
   return (
     <PaperProvider theme={theme}>
-     <StripeProvider publishableKey={publishableKey}
-                        // </PaperProvider>merchantIdentifier="merchant.identifier"
-                        // urlScheme="your-url-scheme"
-                        >
-      {showRegister ? (
-        <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-      ) : (
-        <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-      )}
+      <StripeProvider
+        publishableKey={publishableKey}
+        // </PaperProvider>merchantIdentifier="merchant.identifier"
+        // urlScheme="your-url-scheme"
+      >
+        {showRegister ? (
+          <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+        ) : (
+          <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+        )}
       </StripeProvider>
     </PaperProvider>
   );
