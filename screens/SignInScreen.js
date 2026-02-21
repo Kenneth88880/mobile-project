@@ -6,7 +6,12 @@ import {
   TouchableOpacity,
 } from "react-native";
 import React from "react";
-import { TextInput, Button, useTheme, SegmentedButtons } from "react-native-paper";
+import {
+  TextInput,
+  Button,
+  useTheme,
+  SegmentedButtons,
+} from "react-native-paper";
 import auth from "@react-native-firebase/auth";
 import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 
@@ -19,7 +24,8 @@ const SignInScreen = ({ onNavigateToRegister }) => {
   const [password, setPassword] = React.useState("");
   const [phoneNumber, setPhoneNumber] = React.useState("+1");
   const [confirmation, setConfirmation] = React.useState(null);
-  const [showPhoneVerification, setShowPhoneVerification] = React.useState(false);
+  const [showPhoneVerification, setShowPhoneVerification] =
+    React.useState(false);
 
   // handles phone number input to maintain +1 prefix and limit to 10 digits
   const handlePhoneNumberChange = (text) => {
@@ -38,6 +44,26 @@ const SignInScreen = ({ onNavigateToRegister }) => {
     setPhoneNumber("+1" + limitedDigits);
   };
 
+  // Converts Firebase auth error codes into friendly messages
+  const getAuthErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        return "Incorrect email or password. Please try again.";
+      case "auth/invalid-email":
+        return "That doesn't look like a valid email address.";
+      case "auth/user-disabled":
+        return "This account has been disabled. Please contact support.";
+      case "auth/too-many-requests":
+        return "Too many failed attempts. Please wait a moment and try again.";
+      case "auth/network-request-failed":
+        return "No internet connection. Please check your network and try again.";
+      default:
+        return "Something went wrong. Please try again.";
+    }
+  };
+
   // handles email sign in
   const handleEmailSignIn = () => {
     auth()
@@ -46,10 +72,8 @@ const SignInScreen = ({ onNavigateToRegister }) => {
         console.log("Logged in with:", userCredential.user.email);
       })
       .catch((error) => {
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        alert("Login failed: " + errorMessage);
-        console.log(errorCode + errorMessage);
+        console.log(error.code, error.message);
+        alert(getAuthErrorMessage(error.code));
       });
   };
 
@@ -61,7 +85,8 @@ const SignInScreen = ({ onNavigateToRegister }) => {
         auth().settings.appVerificationDisabledForTesting = true;
       }
 
-      const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
+      const confirmationResult =
+        await auth().signInWithPhoneNumber(phoneNumber);
       setConfirmation(confirmationResult);
       setShowPhoneVerification(true);
     } catch (error) {
@@ -116,7 +141,7 @@ const SignInScreen = ({ onNavigateToRegister }) => {
       </Text>
 
       <View style={styles.inputContainer}>
-{/* TODO: Re-enable phone auth toggle later
+        {/* TODO: Re-enable phone auth toggle later
         <SegmentedButtons
           value={authMethod}
           onValueChange={setAuthMethod}

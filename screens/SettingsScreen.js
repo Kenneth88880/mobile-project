@@ -7,6 +7,7 @@ import {
   Modal,
   SafeAreaView,
   PanResponder,
+  TextInput as RNTextInput,
 } from "react-native";
 import {
   Text,
@@ -20,6 +21,7 @@ import {
   Button,
 } from "react-native-paper";
 import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import {
   getUserProfile,
@@ -39,6 +41,8 @@ export default function SettingsScreen({
   const [genderPreference, setGenderPreference] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const sliderRef = useRef(null);
   const distanceRef = useRef(50);
@@ -156,6 +160,36 @@ export default function SettingsScreen({
     } catch (error) {
       console.error("Error updating gender preference:", error);
       Alert.alert("Error", "Failed to update gender preference");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.toLowerCase() !== "delete") return;
+
+    try {
+      // SOFT DELETE: preserve data as evidence, just mark as deleted
+      await firestore().collection("profiles").doc(CURRENT_USER_ID).update({
+        deleted: true,
+        deletedAt: firestore.FieldValue.serverTimestamp(),
+        deletedBy: "user",
+        // Keep all other data intact for evidence/moderation purposes
+      });
+
+      // Delete the Firebase Auth account so they can't log back in
+      await auth().currentUser.delete();
+
+      // Auth state change will automatically redirect to sign in screen
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      // If the user's auth token is stale, they need to re-authenticate
+      if (error.code === "auth/requires-recent-login") {
+        Alert.alert(
+          "Re-authentication Required",
+          "For security, please sign out and sign back in before deleting your account.",
+        );
+      } else {
+        Alert.alert("Error", "Failed to delete account. Please try again.");
+      }
     }
   };
 
@@ -380,6 +414,20 @@ export default function SettingsScreen({
           </Card.Content>
         </Card>
 
+        {/* Delete Account Button */}
+        <Button
+          mode="outlined"
+          icon="account-remove"
+          onPress={() => {
+            setDeleteConfirmText("");
+            setShowDeleteModal(true);
+          }}
+          style={styles.deleteButton}
+          textColor="#ff4444"
+        >
+          Delete Account
+        </Button>
+
         {/* Sign Out Button */}
         <Button
           mode="outlined"
@@ -391,6 +439,73 @@ export default function SettingsScreen({
           Sign Out
         </Button>
       </ScrollView>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View
+            style={[
+              styles.deleteModalCard,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <Text variant="headlineSmall" style={styles.deleteModalTitle}>
+              Delete Account
+            </Text>
+            <Text variant="bodyMedium" style={styles.deleteModalBody}>
+              This action is permanent. You will not be able to log back in.
+            </Text>
+            <Text variant="bodyMedium" style={styles.deleteModalBody}>
+              Type{" "}
+              <Text style={{ fontWeight: "bold", color: "#ff4444" }}>
+                delete
+              </Text>{" "}
+              below to confirm:
+            </Text>
+            <RNTextInput
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="Type delete here"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                styles.deleteInput,
+                {
+                  borderColor: theme.colors.outline,
+                  color: theme.colors.onSurface,
+                },
+              ]}
+            />
+            <View style={styles.deleteModalButtons}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText("");
+                }}
+                style={styles.deleteCancelButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleDeleteAccount}
+                disabled={deleteConfirmText.toLowerCase() !== "delete"}
+                buttonColor="#ff4444"
+                style={styles.deleteConfirmButton}
+              >
+                Delete
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 
@@ -486,5 +601,49 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 24,
     borderColor: "#ff6b6b",
+  },
+  deleteButton: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderColor: "#ff4444",
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  deleteModalCard: {
+    width: "100%",
+    borderRadius: 12,
+    padding: 24,
+  },
+  deleteModalTitle: {
+    fontWeight: "bold",
+    color: "#ff4444",
+    marginBottom: 12,
+  },
+  deleteModalBody: {
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  deleteInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  deleteModalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  deleteCancelButton: {
+    flex: 1,
+  },
+  deleteConfirmButton: {
+    flex: 1,
   },
 });
