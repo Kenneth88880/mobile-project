@@ -1,90 +1,14 @@
 import React, { useState } from "react";
+import { View, StyleSheet, ScrollView, SafeAreaView } from "react-native";
 import {
-  View,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-} from "react-native";
-import { Text, Chip, Button, useTheme, Surface, IconButton } from "react-native-paper";
-
-// Same tags as in ProfileScreen
-const AVAILABLE_TAGS = [
-  "🎨 Art",
-  "🔭 Astronomy",
-  "🏖️ Beach",
-  "🍹 Beach Bars",
-  "🍺 Beer",
-  "🎲 Board Games",
-  "🎳 Bowling",
-  "🍔 Burgers",
-  "🏕️ Camping",
-  "💼 Career Focused",
-  "🎠 Carnivals",
-  "🐱 Cat Lover",
-  "😌 Chill Vibes",
-  "🌆 City Life",
-  "☕ Coffee",
-  "🍹 Cocktails",
-  "🍳 Cooking",
-  "🏞️ Country Life",
-  "🚴 Cycling",
-  "🎯 Darts",
-  "🍰 Desserts",
-  "🐶 Dog Lover",
-  "🌅 Early Bird",
-  "👨‍👩‍👧‍👦 Family Oriented",
-  "🎪 Festivals",
-  "🎣 Fishing",
-  "🏋️ Fitness",
-  "🎮 Gaming",
-  "🏌️ Golf",
-  "🥗 Healthy Eating",
-  "🌋 Hiking",
-  "🏡 Homebody",
-  "🏠 Homeowner",
-  "🎤 Karaoke",
-  "🚣 Kayaking",
-  "🪁 Kite Flying",
-  "🎸 Live Music",
-  "🗻 Mountain Climbing",
-  "🎬 Movies",
-  "🎵 Music",
-  "🌿 Nature",
-  "🌙 Night Owl",
-  "🌃 Nightlife",
-  "🌊 Ocean Views",
-  "🎉 Party",
-  "🐾 Pet Lover",
-  "📸 Photography",
-  "🍕 Pizza",
-  "🎱 Pool/Billiards",
-  "🧩 Puzzles",
-  "📚 Reading",
-  "🚗 Road Trips",
-  "🧗 Rock Climbing",
-  "🏃 Running",
-  "⛵ Sailing",
-  "🤿 Scuba Diving",
-  "⛷️ Skiing",
-  "🛹 Skateboarding",
-  "🏂 Snowboarding",
-  "🎿 Snowshoeing",
-  "⚽ Sports",
-  "🌌 Stargazing",
-  "🎓 Student Life",
-  "🏖️ Sunbathing",
-  "🏄 Surfing",
-  "🍣 Sushi",
-  "🏊 Swimming",
-  "🌮 Tacos",
-  "🎭 Theater",
-  "🎢 Theme Parks",
-  "✈️ Travel",
-  "🥑 Vegan",
-  "🌱 Vegetarian",
-  "🍷 Wine",
-  "🧘 Yoga",
-];
+  Text,
+  Chip,
+  Button,
+  useTheme,
+  Surface,
+  IconButton,
+} from "react-native-paper";
+import { AVAILABLE_TAGS } from "../../tags";
 
 const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
   const theme = useTheme();
@@ -127,7 +51,9 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
         </View>
       )}
       <View style={styles.progressCounter}>
-        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+        <Text
+          style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}
+        >
           6/6
         </Text>
       </View>
@@ -135,11 +61,23 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
         <Text style={[styles.title, { color: theme.colors.primary }]}>
           Pick your interests
         </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+        <Text
+          style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+        >
           Select at least 3, up to 5 tags
         </Text>
-        <Surface style={[styles.counterCard, { backgroundColor: theme.colors.secondaryContainer }]}>
-          <Text style={[styles.counterText, { color: theme.colors.onSecondaryContainer }]}>
+        <Surface
+          style={[
+            styles.counterCard,
+            { backgroundColor: theme.colors.secondaryContainer },
+          ]}
+        >
+          <Text
+            style={[
+              styles.counterText,
+              { color: theme.colors.onSecondaryContainer },
+            ]}
+          >
             {selectedTags.length} / 5 selected
             {selectedTags.length < 3 && (
               <Text style={{ fontSize: 14 }}> (minimum 3)</Text>
@@ -167,7 +105,15 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outline }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: theme.colors.surface,
+            borderTopColor: theme.colors.outline,
+          },
+        ]}
+      >
         <Button
           mode="contained"
           onPress={handleNext}
