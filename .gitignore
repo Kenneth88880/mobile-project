@@ -60,6 +60,11 @@ colours/
 
 # .env containing api keys
 .env
+stripeServer/.env
+functions/.env
 
 # firebase bug email reports
 firebaseConfig.js
+
+# 
+database.rules.json
