@@ -7,6 +7,7 @@ import {
   BottomNavigation,
   Surface,
 } from "react-native-paper";
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
@@ -17,17 +18,15 @@ import firestore from "@react-native-firebase/firestore";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
-import ExploreScreen from "./screens/ExploreScreen";
+import ExploreScreenNew from "./screens/ExploreScreenNew";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import PremiumScreen from "./screens/PremiumScreen";
-import CheckoutScreen from "./screens/stripeServer/CheckoutScreen";
-import Constants from "expo-constants";
-const STRIPE_PUBLISHABLE_KEY =
-  Constants.expoConfig?.extra?.stripePublishableKey;
+import CheckoutScreen from "./screens/CheckoutScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
+import { URL } from "./services/stripeConfig";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
@@ -38,13 +37,15 @@ export default function App() {
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
-  const [publishableKey, setPublishableKey] = useState("");
+  const [publishableKey, setPublishableKey] = useState('');
+  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const fetchPublishableKey = async () => {
-    const key = await fetchKey(); // fetch key from your server here
+    const key = await fetchKey(`${API_URL}/payment-sheet`); // fetch key from your server here
+    // console.log("✅✅✅✅✅Fetched publishable key:", key);
     setPublishableKey(key);
+    
   };
-
   useEffect(() => {
     fetchPublishableKey();
   }, []);
@@ -267,7 +268,7 @@ export default function App() {
       <DatingScreen isActive={activeTab === "dating"} devMode={devMode} />
     ),
     likes: () => <RequestsScreen isActive={activeTab === "likes"} />,
-    explore: () => <ExploreScreen isActive={activeTab === "explore"} />,
+    explore: () => <ExploreScreenNew isActive={activeTab === "explore"} />,
     messages: () => <ChatScreen isActive={activeTab === "messages"} />,
     //premium: () => <PremiumScreen />, //commenting out premiium tab
     //payment: () => <CheckoutScreen isActive={activeTab === "payment"} />,  // COMMENTED OUT - Payment disabled
@@ -285,16 +286,17 @@ export default function App() {
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          // urlScheme="your-url-scheme"
-        >
-          <View
-            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-          >
-            {/* You can add a loading spinner here if desired */}
-          </View>
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+                        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <View
+              style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            >
+              {/* You can add a loading spinner here if desired */}
+            </View>
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -310,20 +312,21 @@ export default function App() {
 
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          // urlScheme="your-url-scheme"
-        >
-          <SignUpScreen
-            isInSignupFlow={true}
-            needsEmailVerification={needsEmailVerification}
-            userEmail={user.email}
-            onNavigateToSignIn={() => {
-              // Don't allow navigation to sign in if already signed up
-              // User must complete the signup process
-            }}
-          />
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+                        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <SignUpScreen
+              isInSignupFlow={true}
+              needsEmailVerification={needsEmailVerification}
+              userEmail={user.email}
+              onNavigateToSignIn={() => {
+                // Don't allow navigation to sign in if already signed up
+                // User must complete the signup process
+              }}
+            />
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -333,36 +336,37 @@ export default function App() {
   if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          // urlScheme="your-url-scheme"
-        >
-          <SafeAreaView
-            style={[
-              styles.safeArea,
-              { backgroundColor: theme.colors.elevation.level2 },
-            ]}
-            edges={["top", "left", "right"]}
-          >
-            <StatusBar style={isDarkMode ? "light" : "dark"} />
+        <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+                        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaView
+              style={[
+                styles.safeArea,
+                { backgroundColor: theme.colors.elevation.level2 },
+              ]}
+              edges={["top", "left", "right"]}
+            >
+              <StatusBar style={isDarkMode ? "light" : "dark"} />
 
-            <BottomNavigation
-              navigationState={{
-                index: routes.findIndex((r) => r.key === activeTab),
-                routes,
-              }}
-              onIndexChange={(index) => setActiveTab(routes[index].key)}
-              renderScene={renderScene}
-              barStyle={{
-                backgroundColor: theme.colors.elevation.level2,
-                height: 70,
-              }}
-              activeColor={theme.colors.primary}
-              inactiveColor={theme.colors.onSurfaceVariant}
-              safeAreaInsets={{ bottom: 0 }}
-            />
-          </SafeAreaView>
+              <BottomNavigation
+                navigationState={{
+                  index: routes.findIndex((r) => r.key === activeTab),
+                  routes,
+                }}
+                onIndexChange={(index) => setActiveTab(routes[index].key)}
+                renderScene={renderScene}
+                barStyle={{
+                  backgroundColor: theme.colors.elevation.level2,
+                  height: 70,
+                }}
+                activeColor={theme.colors.primary}
+                inactiveColor={theme.colors.onSurfaceVariant}
+                safeAreaInsets={{ bottom: 0 }}
+              />
+            </SafeAreaView>
+          </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
@@ -371,16 +375,17 @@ export default function App() {
   // If no user, show sign in/sign up screens
   return (
     <PaperProvider theme={theme}>
-      <StripeProvider
-        publishableKey={publishableKey}
-        // </PaperProvider>merchantIdentifier="merchant.identifier"
-        // urlScheme="your-url-scheme"
-      >
-        {showRegister ? (
-          <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-        ) : (
-          <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-        )}
+     <StripeProvider publishableKey={publishableKey}
+                        // </PaperProvider>merchantIdentifier="merchant.identifier"
+                        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+                        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+          {showRegister ? (
+            <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+          ) : (
+            <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+          )}
+          </GestureHandlerRootView>
       </StripeProvider>
     </PaperProvider>
   );
