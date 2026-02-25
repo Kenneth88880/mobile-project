@@ -5,10 +5,7 @@ require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 def ccache_enabled?(podfile_properties)
-  # Environment variable takes precedence
   return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
-  
-  # Fall back to Podfile properties
   podfile_properties['apple.ccacheEnabled'] == 'true'
 end
 
@@ -24,7 +21,7 @@ target 'Doubly' do
   use_expo_modules!
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
-    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"]
   else
     config_command = [
       'npx',
@@ -44,12 +41,19 @@ target 'Doubly' do
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
-    # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
 
   post_install do |installer|
+    installer.pods_project.targets.each do |pod_target|
+      pod_target.build_configurations.each do |build_config|
+        build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        build_config.build_settings['GCC_C_LANGUAGE_STANDARD'] = 'gnu11'
+        build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+      end
+    end
+
     react_native_post_install(
       installer,
       config[:reactNativePath],
@@ -57,4 +61,4 @@ target 'Doubly' do
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
   end
-end
+end  
