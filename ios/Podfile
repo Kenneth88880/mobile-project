@@ -45,20 +45,27 @@ target 'Doubly' do
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
 
-  post_install do |installer|
-    installer.pods_project.targets.each do |pod_target|
-      pod_target.build_configurations.each do |build_config|
-        build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        build_config.build_settings['GCC_C_LANGUAGE_STANDARD'] = 'gnu11'
-        build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+post_install do |installer|
+  installer.pods_project.targets.each do |pod_target|
+    pod_target.build_configurations.each do |build_config|
+      build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      build_config.build_settings['GCC_C_LANGUAGE_STANDARD'] = 'gnu11'
+      build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+      
+      # Disable -Werror for firebase pods to fix RCT_EXPORT_METHOD errors
+      if pod_target.name.start_with?('RNFB')
+        build_config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+        build_config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+        flags = build_config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+        build_config.build_settings['OTHER_CFLAGS'] = "#{flags} -Wno-error"
       end
     end
-
-    react_native_post_install(
-      installer,
-      config[:reactNativePath],
-      :mac_catalyst_enabled => false,
-      :ccache_enabled => ccache_enabled?(podfile_properties),
-    )
   end
-end  
+
+  react_native_post_install(
+    installer,
+    config[:reactNativePath],
+    :mac_catalyst_enabled => false,
+    :ccache_enabled => ccache_enabled?(podfile_properties),
+  )
+end
