@@ -38,6 +38,12 @@ target 'Doubly' do
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
+  # Fix for react-native-firebase with New Architecture + static frameworks
+  pod 'RNFBApp', :path => '../node_modules/@react-native-firebase/app/ios', :modular_headers => false
+  pod 'RNFBStorage', :path => '../node_modules/@react-native-firebase/storage/ios', :modular_headers => false
+  pod 'RNFBFirestore', :path => '../node_modules/@react-native-firebase/firestore/ios', :modular_headers => false
+  pod 'RNFBAuth', :path => '../node_modules/@react-native-firebase/auth/ios', :modular_headers => false
+
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
@@ -45,20 +51,12 @@ target 'Doubly' do
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
 
-  post_install do |installer|
+    post_install do |installer|
     installer.pods_project.targets.each do |pod_target|
       pod_target.build_configurations.each do |build_config|
         build_config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
         build_config.build_settings['GCC_C_LANGUAGE_STANDARD'] = 'gnu11'
         build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
-
-        # Disable -Werror for firebase pods to fix RCT_EXPORT_METHOD errors
-        if pod_target.name.start_with?('RNFB')
-          build_config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-          build_config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
-          flags = build_config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
-          build_config.build_settings['OTHER_CFLAGS'] = "#{flags} -Wno-error"
-        end
       end
     end
 
