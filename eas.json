@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "buildConfiguration": "Debug"
+        "buildConfiguration": "Debug",
+        "image": "macos-sequoia-15.3-xcode-16.2"
       },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
@@ -17,7 +18,9 @@
     },
     "preview": {
       "distribution": "internal",
-      "ios": {},
+      "ios": {
+        "image": "macos-sequoia-15.3-xcode-16.2"
+      },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
@@ -25,7 +28,9 @@
     },
     "production": {
       "autoIncrement": true,
-      "ios": {},
+      "ios": {
+        "image": "macos-sequoia-15.3-xcode-16.2"
+      },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
