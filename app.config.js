@@ -64,7 +64,6 @@ export default {
         {
           ios: {
             useFrameworks: "static",
-            newArchEnabled: false,
           },
         },
       ],
