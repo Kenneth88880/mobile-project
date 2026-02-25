@@ -63,7 +63,8 @@ export default {
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "dynamic",
+            useFrameworks: "static",
+            newArchEnabled: false,
           },
         },
       ],
