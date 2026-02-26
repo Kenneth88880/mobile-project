@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, Alert, KeyboardAvoidingView, Platform, StyleSheet, 
-         TouchableOpacity, Image, Dimensions } from "react-native";
+         TouchableOpacity, Image, Keyboard } from "react-native";
 import {
   Text,
   TextInput,
@@ -20,7 +20,7 @@ import {
   Chip,
   Dialog,
 } from "react-native-paper";
-import { PanGestureHandler, GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -34,7 +34,6 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
 import { getAverageRating } from "../services/profileService";
-const { width: screenWidth } = Dimensions.get('window');
 const getUserID = () => CURRENT_USER_ID;
 
 // Delete a specific chat
@@ -193,12 +192,46 @@ const reportChat = async (chatId, reportingUserId) => {
 
 // Update chat name
 const updateChatName = async (chatId, newName) => {
+
+  const currentUserId = getUserID();
+  const currentChatInfo = await firestore().collection("chats").doc(chatId).get().then(doc => {
+    return doc.data();
+  });
+
   try {
-    await firestore().collection("chats").doc(chatId).update({
-      groupName: newName,
-      updatedAt: firestore.FieldValue.serverTimestamp(),
-    });
-    return true;
+
+    if (currentChatInfo.isPrivate) {
+
+      if (currentUserId === currentChatInfo.creatorID) {
+
+        await firestore().collection("chats").doc(chatId).update({
+          curUserName: newName,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+
+      } else {
+
+        await firestore().collection("chats").doc(chatId).update({
+          otherUserName: newName,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+
+        
+        
+      }
+
+    } else {
+
+      await firestore().collection("chats").doc(chatId).update({
+        groupName: newName,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+      return true;
+
+    }
+
   } catch (error) {
     console.error("Error updating chat name:", error);
     return false;
@@ -910,7 +943,28 @@ function IndividualChatScreen({ chat, onBack }) {
   }, []);
 
   const handleEditGroupInfo = () => {
-    setEditingName(currentChat.groupName || "");
+    
+    // console.log("Current chat data for editing:", currentChat);
+    if (currentChat.isPrivate) {
+
+      // console.log("Editing private chat name, current user ID:", currentUserId === currentChat.creatorID);
+      if (currentUserId === currentChat.creatorID) {
+
+        // console.log("hello im here");
+        setEditingName(currentChat.curUserName || "");
+
+      } else {
+
+        setEditingName(currentChat.otherUserName || "");
+
+      }
+
+    } else {
+
+      setEditingName(currentChat.groupName || "");
+
+    }
+
     setShowEditModal(true);
   };
 
@@ -919,7 +973,8 @@ function IndividualChatScreen({ chat, onBack }) {
       Alert.alert("Error", "Group name cannot be empty");
       return;
     }
-
+    Keyboard.dismiss();
+    await new Promise((resolve) => setTimeout(resolve, 150));
     const success = await updateChatName(chat.id, editingName.trim());
     if (success) {
       setShowEditModal(false);
@@ -1386,10 +1441,12 @@ function IndividualChatScreen({ chat, onBack }) {
     <GestureDetector gesture={panGesture}>
       <Animated.View style={[{ flex: 1 }, animatedStyle]}>
 
+        {/* ✅ FIX: disabled when edit modal is open to prevent message bar jumping */}
         <KeyboardAvoidingView
           style={[styles.container, { backgroundColor: theme.colors.background }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
+          enabled={!showEditModal}
         >
           <Surface style={styles.chatHeader} elevation={2}>
             <IconButton icon="arrow-left" onPress={onBack} />
@@ -2246,11 +2303,15 @@ function IndividualChatScreen({ chat, onBack }) {
                                     fontStyle: "italic",
                                     opacity: 0.7,
                                   }}>
-                                  <Button
+                                  
+                                  { /* so you can't create private DMS in a private DM */}
+                                  {currentChat.isPrivate !== true && (<Button
                                     mode="contained"
                                     onPress ={() => handleCreatePrivateChat(viewingProfile.id)}>
                                     Create Private DM
                                   </Button>
+                                )}
+                                  
                                 </Text> 
                               </Card.Content>
                             </Card>
