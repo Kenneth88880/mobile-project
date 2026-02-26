@@ -460,10 +460,11 @@ function ChatListScreen({ onChatSelect }) {
   };
 
   const hideChatOptions = () => {
+    
     setChatOptionsVisible(false);
     setSelectedChatId(null);
     setSelectedChatName("");
-    setSelectedChatIsPrivate(false);
+
   };
 
   const renderItem = ({ item }) => {
@@ -490,11 +491,11 @@ function ChatListScreen({ onChatSelect }) {
         }
         descriptionNumberOfLines={1}
         left={() =>
-          (isGroup || isPrivate) ? (
+          (isGroup) ? (
             item.groupPhoto ? (
               <Avatar.Image
                 size={48}
-                source={{ uri: item.isGroupChat ? item.groupPhoto : currentUserId === item.creatorID ? item.otherPhoto : item.curPhoto }}
+                source={{ uri: item.groupPhoto }}
                 style={isArchived && { opacity: 0.6 }}
               />
             ) : (
@@ -504,12 +505,19 @@ function ChatListScreen({ onChatSelect }) {
                 style={isArchived && { opacity: 0.6 }}
               />
             )
-          ) : (
+          ) : (isPrivate) ? (
             <Avatar.Image
               size={48}
-              source={{ uri: "https://i.pravatar.cc/150" }}
+              source={{ uri: currentUserId === item.creatorID ? item.curPhoto : item.otherPhoto }}
               style={isArchived && { opacity: 0.6 }}
             />
+          ) : (
+
+            <Avatar.Icon
+                size={48}
+                icon="account-group"
+                style={isArchived && { opacity: 0.6 }}
+              />
           )
         }
         right={() => (
@@ -618,46 +626,47 @@ function ChatListScreen({ onChatSelect }) {
       {/* Chat Options Dialog */}
       <Portal>
         <Dialog visible={chatOptionsVisible} onDismiss={hideChatOptions}>
+          
           <Dialog.Title>Chat Options</Dialog.Title>
-          <Dialog.Content>
-            {!selectedChatIsPrivate && (
-              <>
-                <Button
-                  mode="contained-tonal"
-                  onPress={() => {
-                    hideChatOptions();
-                    handleEveryoneMet(selectedChatId);
-                  }}
-                  style={{ marginBottom: 12 }}
-                >
-                  EVERYONE MET
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={() => {
-                    hideChatOptions();
-                    handleUnmatchDuo(selectedChatId, selectedChatName);
-                  }}
-                  style={{ marginBottom: 12 }}
-                  buttonColor={theme.colors.errorContainer}
-                  textColor={theme.colors.error}
-                >
-                  UNMATCH DUO
-                </Button>
-              </>
-            )}
-            <Button
-              mode="outlined"
-              onPress={() => {
-                hideChatOptions();
-                handleReport(selectedChatId, selectedChatName);
-              }}
-              buttonColor={theme.colors.errorContainer}
-              textColor={theme.colors.error}
-            >
-              REPORT
-            </Button>
-          </Dialog.Content>
+            <Dialog.Content>
+              {!selectedChatIsPrivate && (
+                <>
+                  <Button
+                    mode="contained-tonal"
+                    onPress={() => {
+                      hideChatOptions();
+                      handleEveryoneMet(selectedChatId);
+                    }}
+                    style={{ marginBottom: 12 }}
+                  >
+                    EVERYONE MET
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={() => {
+                      hideChatOptions();
+                      handleUnmatchDuo(selectedChatId, selectedChatName);
+                    }}
+                    style={{ marginBottom: 12 }}
+                    buttonColor={theme.colors.errorContainer}
+                    textColor={theme.colors.error}
+                  >
+                    UNMATCH DUO
+                  </Button>
+                </>
+              )}
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  hideChatOptions();
+                  handleReport(selectedChatId, selectedChatName);
+                }}
+                buttonColor={theme.colors.errorContainer}
+                textColor={theme.colors.error}
+              >
+                REPORT
+              </Button>
+            </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={hideChatOptions}>Cancel</Button>
           </Dialog.Actions>
@@ -970,7 +979,7 @@ function IndividualChatScreen({ chat, onBack }) {
 
   const handleSaveGroupName = async () => {
     if (!editingName.trim()) {
-      Alert.alert("Error", "Group name cannot be empty");
+      Alert.alert("Error", "Name cannot be empty");
       return;
     }
     Keyboard.dismiss();
@@ -978,9 +987,9 @@ function IndividualChatScreen({ chat, onBack }) {
     const success = await updateChatName(chat.id, editingName.trim());
     if (success) {
       setShowEditModal(false);
-      Alert.alert("Success", "Group name updated!");
+      Alert.alert("Success", "Name updated!");
     } else {
-      Alert.alert("Error", "Failed to update group name");
+      Alert.alert("Error", "Failed to update name");
     }
   };
 
@@ -1453,7 +1462,7 @@ function IndividualChatScreen({ chat, onBack }) {
 
             {/* Group photo - tappable to change */}
             
-            {(currentChat.isGroupChat || currentChat.isPrivate) && (
+            {(currentChat.isGroupChat || !currentChat.isPrivate) && (
               <TouchableOpacity
                 onPress={handleChangeGroupPicture}
                 disabled={uploadingChatImage || currentChat.status === "archived"}
@@ -1472,6 +1481,18 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Avatar.Icon size={36} icon="account-group" />
                 )}
               </TouchableOpacity>
+            )}
+
+            {(!currentChat.isGroupChat && currentChat.isPrivate) && (
+              <Surface style={{ marginRight: 8 }}>
+                <Avatar.Image
+              
+                    size={36}
+                    source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }}
+
+                />
+              </Surface>
+              
             )}
 
             {/* Group name - tappable to edit */}
@@ -1891,6 +1912,7 @@ function IndividualChatScreen({ chat, onBack }) {
                 borderRadius: 8,
               }}
             >
+              {(!currentChat.isPrivate) && (
               <Card>
                 <Card.Title title="Edit Group Info" />
                 <Card.Content>
@@ -1918,7 +1940,7 @@ function IndividualChatScreen({ chat, onBack }) {
                         color: uploadingChatImage ? "#999" : theme.colors.primary,
                       }}
                     >
-                      {uploadingChatImage
+                      {uploadingChatImage 
                         ? "Uploading..."
                         : "Tap to Change Picture"}
                     </Text>
@@ -1938,6 +1960,32 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Button onPress={handleSaveGroupName}>Save</Button>
                 </Card.Actions>
               </Card>
+              )}
+
+              {(currentChat.isPrivate) && (
+                
+                <Card>
+                <Card.Title title="DM Name" />
+                <Card.Content>
+                  <TextInput
+                    mode="outlined"
+                    label="Name"
+                    value={editingName}
+                    onChangeText={setEditingName}
+                    maxLength={50}
+                    style={{ marginTop: 8 }}
+                  />
+                </Card.Content>
+                <Card.Actions>
+                  <Button onPress={() => {
+                    Keyboard.dismiss();
+                    setTimeout(() => {setShowEditModal(false)}, 150);
+                  }}>Cancel</Button>
+                  <Button onPress={handleSaveGroupName}>Save</Button>
+                </Card.Actions>
+              </Card>
+            )}
+
             </Modal>
           </Portal>
 
