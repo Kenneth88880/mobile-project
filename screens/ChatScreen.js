@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, Alert, KeyboardAvoidingView, Platform, StyleSheet, 
-         TouchableOpacity, Image, Dimensions } from "react-native";
+         TouchableOpacity, Image, Keyboard } from "react-native";
 import {
   Text,
   TextInput,
@@ -20,7 +20,7 @@ import {
   Chip,
   Dialog,
 } from "react-native-paper";
-import { PanGestureHandler, GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -34,7 +34,7 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
 import { getAverageRating } from "../services/profileService";
-const { width: screenWidth } = Dimensions.get('window');
+import { SwipeableMessageRight, SwipeableMessageLeft } from "./ChatScreen/SwipeableMessage.js"; 
 const getUserID = () => CURRENT_USER_ID;
 
 // Delete a specific chat
@@ -193,12 +193,46 @@ const reportChat = async (chatId, reportingUserId) => {
 
 // Update chat name
 const updateChatName = async (chatId, newName) => {
+
+  const currentUserId = getUserID();
+  const currentChatInfo = await firestore().collection("chats").doc(chatId).get().then(doc => {
+    return doc.data();
+  });
+
   try {
-    await firestore().collection("chats").doc(chatId).update({
-      groupName: newName,
-      updatedAt: firestore.FieldValue.serverTimestamp(),
-    });
-    return true;
+
+    if (currentChatInfo.isPrivate) {
+
+      if (currentUserId === currentChatInfo.creatorID) {
+
+        await firestore().collection("chats").doc(chatId).update({
+          curUserName: newName,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+
+      } else {
+
+        await firestore().collection("chats").doc(chatId).update({
+          otherUserName: newName,
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+
+        
+        
+      }
+
+    } else {
+
+      await firestore().collection("chats").doc(chatId).update({
+        groupName: newName,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
+      return true;
+
+    }
+
   } catch (error) {
     console.error("Error updating chat name:", error);
     return false;
@@ -427,10 +461,11 @@ function ChatListScreen({ onChatSelect }) {
   };
 
   const hideChatOptions = () => {
+    
     setChatOptionsVisible(false);
     setSelectedChatId(null);
     setSelectedChatName("");
-    setSelectedChatIsPrivate(false);
+
   };
 
   const renderItem = ({ item }) => {
@@ -439,9 +474,6 @@ function ChatListScreen({ onChatSelect }) {
     const isArchived = item.status === "archived";
     const timestamp = formatTimeStamp(item.lastMessageTime);
     const isPrivate = item.isPrivate || false;
-    console.log("Message type:", item.type);
-    console.log("Message suggestion:", JSON.stringify(item.suggestion));
-    console.log("Image URL:", item.suggestion?.imageUrl);
     return (
       <List.Item
         title={item.isGroupChat ? item.groupName || "Chat" : item.isPrivate ? item.curUserName || "Private Chat" : "Chat"}
@@ -457,11 +489,11 @@ function ChatListScreen({ onChatSelect }) {
         }
         descriptionNumberOfLines={1}
         left={() =>
-          (isGroup || isPrivate) ? (
+          (isGroup) ? (
             item.groupPhoto ? (
               <Avatar.Image
                 size={48}
-                source={{ uri: item.isGroupChat ? item.groupPhoto : currentUserId === item.creatorID ? item.otherPhoto : item.curPhoto }}
+                source={{ uri: item.groupPhoto }}
                 style={isArchived && { opacity: 0.6 }}
               />
             ) : (
@@ -471,12 +503,19 @@ function ChatListScreen({ onChatSelect }) {
                 style={isArchived && { opacity: 0.6 }}
               />
             )
-          ) : (
+          ) : (isPrivate) ? (
             <Avatar.Image
               size={48}
-              source={{ uri: "https://i.pravatar.cc/150" }}
+              source={{ uri: currentUserId === item.creatorID ? item.curPhoto : item.otherPhoto }}
               style={isArchived && { opacity: 0.6 }}
             />
+          ) : (
+
+            <Avatar.Icon
+                size={48}
+                icon="account-group"
+                style={isArchived && { opacity: 0.6 }}
+              />
           )
         }
         right={() => (
@@ -585,121 +624,53 @@ function ChatListScreen({ onChatSelect }) {
       {/* Chat Options Dialog */}
       <Portal>
         <Dialog visible={chatOptionsVisible} onDismiss={hideChatOptions}>
+          
           <Dialog.Title>Chat Options</Dialog.Title>
-          <Dialog.Content>
-            {!selectedChatIsPrivate && (
-              <>
-                <Button
-                  mode="contained-tonal"
-                  onPress={() => {
-                    hideChatOptions();
-                    handleEveryoneMet(selectedChatId);
-                  }}
-                  style={{ marginBottom: 12 }}
-                >
-                  EVERYONE MET
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={() => {
-                    hideChatOptions();
-                    handleUnmatchDuo(selectedChatId, selectedChatName);
-                  }}
-                  style={{ marginBottom: 12 }}
-                  buttonColor={theme.colors.errorContainer}
-                  textColor={theme.colors.error}
-                >
-                  UNMATCH DUO
-                </Button>
-              </>
-            )}
-            <Button
-              mode="outlined"
-              onPress={() => {
-                hideChatOptions();
-                handleReport(selectedChatId, selectedChatName);
-              }}
-              buttonColor={theme.colors.errorContainer}
-              textColor={theme.colors.error}
-            >
-              REPORT
-            </Button>
-          </Dialog.Content>
+            <Dialog.Content>
+              {!selectedChatIsPrivate && (
+                <>
+                  <Button
+                    mode="contained-tonal"
+                    onPress={() => {
+                      hideChatOptions();
+                      handleEveryoneMet(selectedChatId);
+                    }}
+                    style={{ marginBottom: 12 }}
+                  >
+                    EVERYONE MET
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={() => {
+                      hideChatOptions();
+                      handleUnmatchDuo(selectedChatId, selectedChatName);
+                    }}
+                    style={{ marginBottom: 12 }}
+                    buttonColor={theme.colors.errorContainer}
+                    textColor={theme.colors.error}
+                  >
+                    UNMATCH DUO
+                  </Button>
+                </>
+              )}
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  hideChatOptions();
+                  handleReport(selectedChatId, selectedChatName);
+                }}
+                buttonColor={theme.colors.errorContainer}
+                textColor={theme.colors.error}
+              >
+                REPORT
+              </Button>
+            </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={hideChatOptions}>Cancel</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
     </View>
-  );
-}
-
-function SwipeableMessageRight({ children, onSwipe }) {
-  const translateX = useSharedValue(0);
-
-  const gesture = Gesture.Pan()
-    .activeOffsetX([10, 999])
-    .failOffsetY([-10, 10])
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = Math.min(e.translationX * 0.4, 60);
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > 60) runOnJS(onSwipe)();
-      translateX.value = withSpring(0);
-    })
-    .onFinalize(() => {
-      translateX.value = withSpring(0);
-    });
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={style}>{children}</Animated.View>
-    </GestureDetector>
-  );
-}
-
-function SwipeableMessageLeft({ children, onSwipe }) {
-  const translateX = useSharedValue(0);
-  const isMovingLeft = useSharedValue(false);
-
-  const gesture = Gesture.Pan()
-    .activeOffsetX([-10, 999])
-    .failOffsetY([-10, 10])
-    .onBegin(() => {
-      isMovingLeft.value = false;
-    })
-    .onUpdate((e) => {
-      if (e.translationX < -10) {
-        isMovingLeft.value = true;
-      }
-      if (isMovingLeft.value && e.translationX < 0) {
-        translateX.value = Math.max(e.translationX * 0.4, -60);
-      }
-    })
-    .onEnd((e) => {
-      if (isMovingLeft.value && e.translationX < -60) runOnJS(onSwipe)();
-      translateX.value = withSpring(0);
-      isMovingLeft.value = false;
-    })
-    .onFinalize(() => {
-      translateX.value = withSpring(0);
-      isMovingLeft.value = false;
-    });
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={style}>{children}</Animated.View>
-    </GestureDetector>
   );
 }
 
@@ -910,22 +881,44 @@ function IndividualChatScreen({ chat, onBack }) {
   }, []);
 
   const handleEditGroupInfo = () => {
-    setEditingName(currentChat.groupName || "");
+    
+    // console.log("Current chat data for editing:", currentChat);
+    if (currentChat.isPrivate) {
+
+      // console.log("Editing private chat name, current user ID:", currentUserId === currentChat.creatorID);
+      if (currentUserId === currentChat.creatorID) {
+
+        // console.log("hello im here");
+        setEditingName(currentChat.curUserName || "");
+
+      } else {
+
+        setEditingName(currentChat.otherUserName || "");
+
+      }
+
+    } else {
+
+      setEditingName(currentChat.groupName || "");
+
+    }
+
     setShowEditModal(true);
   };
 
   const handleSaveGroupName = async () => {
     if (!editingName.trim()) {
-      Alert.alert("Error", "Group name cannot be empty");
+      Alert.alert("Error", "Name cannot be empty");
       return;
     }
-
+    Keyboard.dismiss();
+    await new Promise((resolve) => setTimeout(resolve, 150));
     const success = await updateChatName(chat.id, editingName.trim());
     if (success) {
       setShowEditModal(false);
-      Alert.alert("Success", "Group name updated!");
+      Alert.alert("Success", "Name updated!");
     } else {
-      Alert.alert("Error", "Failed to update group name");
+      Alert.alert("Error", "Failed to update name");
     }
   };
 
@@ -1031,7 +1024,7 @@ function IndividualChatScreen({ chat, onBack }) {
   };
 
  const handleReplyBubbleTap = (replyTo) => {
-  // Match by messageId first, fall back to imageUrl for old messages
+
     const index = messages.findIndex((m) => 
       replyTo.messageId 
         ? m._id === replyTo.messageId
@@ -1386,17 +1379,19 @@ function IndividualChatScreen({ chat, onBack }) {
     <GestureDetector gesture={panGesture}>
       <Animated.View style={[{ flex: 1 }, animatedStyle]}>
 
+        {/* ✅ FIX: disabled when edit modal is open to prevent message bar jumping */}
         <KeyboardAvoidingView
           style={[styles.container, { backgroundColor: theme.colors.background }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
+          enabled={!showEditModal}
         >
           <Surface style={styles.chatHeader} elevation={2}>
             <IconButton icon="arrow-left" onPress={onBack} />
 
             {/* Group photo - tappable to change */}
             
-            {(currentChat.isGroupChat || currentChat.isPrivate) && (
+            {(currentChat.isGroupChat || !currentChat.isPrivate) && (
               <TouchableOpacity
                 onPress={handleChangeGroupPicture}
                 disabled={uploadingChatImage || currentChat.status === "archived"}
@@ -1415,6 +1410,18 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Avatar.Icon size={36} icon="account-group" />
                 )}
               </TouchableOpacity>
+            )}
+
+            {(!currentChat.isGroupChat && currentChat.isPrivate) && (
+              <Surface style={{ marginRight: 8 }}>
+                <Avatar.Image
+              
+                    size={36}
+                    source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }}
+
+                />
+              </Surface>
+              
             )}
 
             {/* Group name - tappable to edit */}
@@ -1438,11 +1445,6 @@ function IndividualChatScreen({ chat, onBack }) {
                   style={{ color: theme.colors.error, marginTop: 2 }}
                 >
                   🗄️ Archived - Read Only
-                </Text>
-              )}
-              {(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" && (
-                <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                  Tap to edit name
                 </Text>
               )}
             </TouchableOpacity>
@@ -1471,7 +1473,7 @@ function IndividualChatScreen({ chat, onBack }) {
                   }}
                 >
                   <SwipeableMessageLeft onSwipe={() => setReplyingTo(item)}>
-                    <View style={{ alignItems: "flex-end" }}>
+                    <View style={{ alignItems: "flex-end"}}>
 
                       {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
                         <View style={{ alignItems: "flex-end" }}>
@@ -1834,6 +1836,7 @@ function IndividualChatScreen({ chat, onBack }) {
                 borderRadius: 8,
               }}
             >
+              {(!currentChat.isPrivate) && (
               <Card>
                 <Card.Title title="Edit Group Info" />
                 <Card.Content>
@@ -1861,7 +1864,7 @@ function IndividualChatScreen({ chat, onBack }) {
                         color: uploadingChatImage ? "#999" : theme.colors.primary,
                       }}
                     >
-                      {uploadingChatImage
+                      {uploadingChatImage 
                         ? "Uploading..."
                         : "Tap to Change Picture"}
                     </Text>
@@ -1881,6 +1884,34 @@ function IndividualChatScreen({ chat, onBack }) {
                   <Button onPress={handleSaveGroupName}>Save</Button>
                 </Card.Actions>
               </Card>
+              )}
+
+              {(currentChat.isPrivate) && (
+                
+                <Card>
+                <Card.Title title="DM Name" />
+                <Card.Content>
+                  <TextInput
+                    mode="outlined"
+                    label="Name"
+                    value={editingName}
+                    onChangeText={setEditingName}
+                    maxLength={50}
+                    style={{ marginTop: 8 }}
+                  />
+                </Card.Content>
+                <Card.Actions>
+                  <Button onPress={() => {
+                    Keyboard.dismiss();
+                    
+                    // avoids a crazy message bar bug
+                    setTimeout(() => {setShowEditModal(false)}, 150);
+                  }}>Cancel</Button>
+                  <Button onPress={handleSaveGroupName}>Save</Button>
+                </Card.Actions>
+              </Card>
+            )}
+
             </Modal>
           </Portal>
 
@@ -2246,11 +2277,15 @@ function IndividualChatScreen({ chat, onBack }) {
                                     fontStyle: "italic",
                                     opacity: 0.7,
                                   }}>
-                                  <Button
+                                  
+                                  { /* so you can't create private DMS in a private DM */}
+                                  {currentChat.isPrivate !== true && (<Button
                                     mode="contained"
                                     onPress ={() => handleCreatePrivateChat(viewingProfile.id)}>
                                     Create Private DM
                                   </Button>
+                                )}
+                                  
                                 </Text> 
                               </Card.Content>
                             </Card>
@@ -2338,6 +2373,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: "flex-end",
     paddingHorizontal: 4,
+    gap: 8,
   },
   myMessageRow: {
     alignSelf: "flex-end",
