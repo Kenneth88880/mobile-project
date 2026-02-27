@@ -1979,6 +1979,8 @@ function IndividualChatScreen({ chat, onBack }) {
                 <Card.Actions>
                   <Button onPress={() => {
                     Keyboard.dismiss();
+                    
+                    // avoids a crazy message bar bug
                     setTimeout(() => {setShowEditModal(false)}, 150);
                   }}>Cancel</Button>
                   <Button onPress={handleSaveGroupName}>Save</Button>
