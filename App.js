@@ -1,20 +1,19 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, Platform, LogBox } from "react-native";
+import { StyleSheet, View, LogBox, Dimensions } from "react-native";
 import {
   PaperProvider,
   MD3LightTheme,
   MD3DarkTheme,
   BottomNavigation,
-  Surface,
 } from "react-native-paper";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// ✅ FIXED: Using React Native Firebase instead of web SDK
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
+import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useSharedValue, withTiming, withSpring, runOnJS, useAnimatedStyle } from "react-native-reanimated";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
@@ -22,13 +21,27 @@ import ExploreScreenNew from "./screens/ExploreScreenNew";
 import ProfileScreen from "./screens/ProfileScreen";
 import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
-import PremiumScreen from "./screens/PremiumScreen";
-import CheckoutScreen from "./screens/CheckoutScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
+import PremiumScreen from "./screens/PremiumScreen";
+import CheckoutScreen from "./screens/CheckoutScreen";
+
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+const AnimatedView = ({ offset, translateX, children }) => {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value + offset }],
+  }));
+  return (
+    <Animated.View style={[{ position: "absolute", width: SCREEN_WIDTH, height: "100%" }, animatedStyle]}>
+      {children}
+    </Animated.View>
+  );
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
+  const [displayTab, setDisplayTab] = useState("dating");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [user, setUser] = useState(null);
   const [isNewUser, setIsNewUser] = useState(false);
@@ -37,71 +50,49 @@ export default function App() {
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
-  const API_URL =
-    "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
-  const fetchPublishableKey = async () => {
-    const key = await fetchKey(`${API_URL}/payment-sheet`); // fetch key from your server here
-    // console.log("✅✅✅✅✅Fetched publishable key:", key);
-    setPublishableKey(key);
-  };
-  useEffect(() => {
-    fetchPublishableKey();
-  }, []);
+  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
+
+  const translateX = useSharedValue(0);
+
+  // here to define all possilbe tabs
+  const routes = [
+    { key: "dating",   focusedIcon: "home",    unfocusedIcon: "home-outline" },
+    { key: "likes",    focusedIcon: "heart",   unfocusedIcon: "heart-outline" },
+    { key: "explore",  focusedIcon: "compass", unfocusedIcon: "compass-outline" },
+    { key: "messages", focusedIcon: "message", unfocusedIcon: "message-outline" },
+    // { key: "premium",  focusedIcon: "star",    unfocusedIcon: "star-outline" },
+    // { key: "payment",  focusedIcon: "credit-card", unfocusedIcon: "credit-card-outline" },
+    { key: "profile",  focusedIcon: "account", unfocusedIcon: "account-outline" },
+  ];
 
   LogBox.ignoreLogs([
     "This method is deprecated",
     "Non-serializable values were found in the navigation state",
+    "setLayoutAnimationEnabledExperimental is currently a no-op in the New Architecture",
   ]);
 
-  // Configure Firebase auth for development
+  // used to get the publishable key for Stripe on app load, and also to set up auth state listener and profile completeness listener
+  useEffect(() => {
+    fetchPublishableKey();
+  }, []);
+
+  // app verification for dev 
   useEffect(() => {
     if (__DEV__) {
       auth().settings.appVerificationDisabledForTesting = true;
     }
   }, []);
 
-  // Load theme preference on app start
+  // themes and dev mode
   useEffect(() => {
     loadThemePreference();
     loadDevModePreference();
   }, []);
 
-  const loadThemePreference = async () => {
-    try {
-      const savedTheme = await AsyncStorage.getItem("theme");
-      if (savedTheme !== null) {
-        setIsDarkMode(savedTheme === "dark");
-      }
-    } catch (error) {
-      console.error("Error loading theme preference:", error);
-    }
-  };
-
-  const loadDevModePreference = async () => {
-    try {
-      const savedDevMode = await AsyncStorage.getItem("devMode");
-      if (savedDevMode !== null) {
-        setDevMode(savedDevMode === "true");
-      }
-    } catch (error) {
-      console.error("Error loading dev mode preference:", error);
-    }
-  };
-
-  const handleDevModeChange = async (newValue) => {
-    setDevMode(newValue);
-    try {
-      await AsyncStorage.setItem("devMode", newValue.toString());
-    } catch (error) {
-      console.error("Error saving dev mode preference:", error);
-    }
-  };
-
+  // user profile 
   useEffect(() => {
     let profileUnsubscribe = null;
-
-    // ✅ FIXED: React Native Firebase auth listener
     const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
       console.log("Auth state changed:", user ? user.uid : "null");
       setUser(user);
@@ -109,11 +100,7 @@ export default function App() {
         const { creationTime, lastSignInTime } = user.metadata;
         setIsNewUser(creationTime === lastSignInTime);
         setCurrentUserId(user.uid);
-
-        // Check if profile is complete initially
         await checkProfileComplete(user.uid);
-
-        // Listen for profile changes in real-time
         profileUnsubscribe = firestore()
           .collection("profiles")
           .doc(user.uid)
@@ -121,7 +108,6 @@ export default function App() {
             (doc) => {
               if (doc.exists) {
                 const profileData = doc.data();
-                // Safely check if profile is complete
                 const isComplete = !!(
                   profileData &&
                   profileData.name &&
@@ -145,40 +131,59 @@ export default function App() {
               console.error("Error listening to profile changes:", error);
               setProfileComplete(false);
               setCheckingProfile(false);
-            },
+            }
           );
       } else {
         setCurrentUserId(null);
         setProfileComplete(false);
         setCheckingProfile(false);
-
-        // Unsubscribe from profile listener if user logs out
-        if (profileUnsubscribe) {
-          profileUnsubscribe();
-          profileUnsubscribe = null;
-        }
+        if (profileUnsubscribe) { profileUnsubscribe(); profileUnsubscribe = null; }
       }
     });
-
     return () => {
       authUnsubscribe();
-      if (profileUnsubscribe) {
-        profileUnsubscribe();
-      }
+      if (profileUnsubscribe) profileUnsubscribe();
     };
   }, []);
+
+  // tabs
+  useEffect(() => {
+    if (displayTab === activeTab) {
+      translateX.value = 0;
+    }
+  }, [displayTab]);
+
+  const fetchPublishableKey = async () => {
+    const key = await fetchKey(`${API_URL}/payment-sheet`);
+    setPublishableKey(key);
+  };
+
+  const loadThemePreference = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem("theme");
+      if (savedTheme !== null) setIsDarkMode(savedTheme === "dark");
+    } catch (error) { console.error(error); }
+  };
+
+  const loadDevModePreference = async () => {
+    try {
+      const savedDevMode = await AsyncStorage.getItem("devMode");
+      if (savedDevMode !== null) setDevMode(savedDevMode === "true");
+    } catch (error) { console.error(error); }
+  };
+
+  const handleDevModeChange = async (newValue) => {
+    setDevMode(newValue);
+    try { await AsyncStorage.setItem("devMode", newValue.toString()); }
+    catch (error) { console.error(error); }
+  };
 
   const checkProfileComplete = async (userId) => {
     try {
       setCheckingProfile(true);
-      const profileDoc = await firestore()
-        .collection("profiles")
-        .doc(userId)
-        .get();
-
+      const profileDoc = await firestore().collection("profiles").doc(userId).get();
       if (profileDoc.exists) {
         const profileData = profileDoc.data();
-        // Profile is complete if it has name, age, gender, genderPreference, photos, and tags
         const isComplete = !!(
           profileData &&
           profileData.name &&
@@ -203,73 +208,71 @@ export default function App() {
     }
   };
 
-  // Removed old isNewUser logic - now handled by profile completion check
-
-  const theme = useMemo(
-    () => (isDarkMode ? darkTheme : lightTheme),
-    [isDarkMode],
-  );
+  const theme = useMemo(() => (isDarkMode ? darkTheme : lightTheme), [isDarkMode]);
 
   const toggleTheme = async () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
-    try {
-      await AsyncStorage.setItem("theme", newTheme ? "dark" : "light");
-    } catch (error) {
-      console.error("Error saving theme preference:", error);
-    }
+    try { await AsyncStorage.setItem("theme", newTheme ? "dark" : "light"); }
+    catch (error) { console.error(error); }
   };
 
-  const routes = [
-    {
-      key: "dating",
-      focusedIcon: "home",
-      unfocusedIcon: "home-outline",
-    },
-    {
-      key: "likes",
-      focusedIcon: "heart",
-      unfocusedIcon: "heart-outline",
-    },
-    {
-      key: "explore",
-      focusedIcon: "compass",
-      unfocusedIcon: "compass-outline",
-    },
-    {
-      key: "messages",
-      focusedIcon: "message",
-      unfocusedIcon: "message-outline",
-    },
-    // Commented out premium tab
-    //{
-    //  key: "premium",
-    //  focusedIcon: "star",
-    //  unfocusedIcon: "star-outline",
-    //},
-    // COMMENTED OUT - Payment feature disabled until Stripe is configured
-    //{
-    //  key: "payment",
-    //  focusedIcon: "credit-card",
-    //  unfocusedIcon: "credit-card-outline",
-    //},
-    {
-      key: "profile",
-      focusedIcon: "account",
-      unfocusedIcon: "account-outline",
-    },
-  ];
+  const swipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-15, 15])
+      .onUpdate((event) => {
+        const currentIndex = routes.findIndex((r) => r.key === activeTab);
+        const isAtStart = currentIndex === 0 && event.translationX > 0;
+        const isAtEnd = currentIndex === routes.length - 1 && event.translationX < 0;
+        translateX.value = isAtStart || isAtEnd
+          ? event.translationX * 0.2
+          : event.translationX;
+      })
+      .onEnd((event) => {
+        const { translationX, velocityX } = event;
+        const currentIndex = routes.findIndex((r) => r.key === activeTab);
 
-  const renderScene = BottomNavigation.SceneMap({
-    dating: () => (
-      <DatingScreen isActive={activeTab === "dating"} devMode={devMode} />
-    ),
-    likes: () => <RequestsScreen isActive={activeTab === "likes"} />,
-    explore: () => <ExploreScreenNew isActive={activeTab === "explore"} />,
-    messages: () => <ChatScreen isActive={activeTab === "messages"} />,
-    //premium: () => <PremiumScreen />, //commenting out premiium tab
-    //payment: () => <CheckoutScreen isActive={activeTab === "payment"} />,  // COMMENTED OUT - Payment disabled
-    profile: () => (
+        // Swipe left = next tab (translationX is negative)
+        const goNext = (translationX < -30 || velocityX < -300) && currentIndex < routes.length - 1;
+        // Swipe right = prev tab (translationX is positive)
+        const goPrev = (translationX > 30 || velocityX > 300) && currentIndex > 0;
+
+        if (goNext) {
+
+          const nextKey = routes[currentIndex + 1].key;
+          runOnJS(setActiveTab)(nextKey);
+          translateX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
+            'worklet';
+            runOnJS(setDisplayTab)(nextKey);
+          });
+
+        } else if (goPrev) {
+
+          const nextKey = routes[currentIndex - 1].key;
+          runOnJS(setActiveTab)(nextKey);
+          translateX.value = withTiming(SCREEN_WIDTH, { duration: 200 }, () => {
+            'worklet';
+            runOnJS(setDisplayTab)(nextKey);
+          });
+
+        } else {
+
+          translateX.value = withSpring(0, { damping: 15, stiffness: 150 });
+          
+        }
+      }),
+    [activeTab, displayTab, routes, translateX]
+  );
+
+  const sceneMap = {
+    dating:   () => <DatingScreen devMode={devMode} />,
+    likes:    () => <RequestsScreen />,
+    explore:  () => <ExploreScreenNew />,
+    messages: () => <ChatScreen />,
+    // premium: () => <PremiumScreen />,
+    // payment: () => <CheckoutScreen />,
+    profile:  () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
         toggleTheme={toggleTheme}
@@ -277,57 +280,32 @@ export default function App() {
         setDevMode={handleDevModeChange}
       />
     ),
-  });
+  };
 
-  // Show loading while checking profile
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-        >
+        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              {/* You can add a loading spinner here if desired */}
-            </View>
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }} />
           </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
     );
   }
 
-  // If user is authenticated but profile is not complete, show SignUpScreen
   if (user && !profileComplete) {
-    // Check if user signed up with email and hasn't verified yet
     const needsEmailVerification =
-      user.providerData.some(
-        (provider) => provider.providerId === "password",
-      ) && !user.emailVerified;
-
+      user.providerData.some((p) => p.providerId === "password") && !user.emailVerified;
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-        >
+        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
           <GestureHandlerRootView style={{ flex: 1 }}>
             <SignUpScreen
               isInSignupFlow={true}
               needsEmailVerification={needsEmailVerification}
               userEmail={user.email}
-              onNavigateToSignIn={() => {
-                // Don't allow navigation to sign in if already signed up
-                // User must complete the signup process
-              }}
+              onNavigateToSignIn={() => {}}
             />
           </GestureHandlerRootView>
         </StripeProvider>
@@ -335,40 +313,46 @@ export default function App() {
     );
   }
 
-  // If user is authenticated and profile is complete, show main app
   if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          // </PaperProvider>merchantIdentifier="merchant.identifier"
-          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-        >
+        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
           <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView
-              style={[
-                styles.safeArea,
-                { backgroundColor: theme.colors.elevation.level2 },
-              ]}
+              style={[styles.safeArea, { backgroundColor: theme.colors.elevation.level2 }]}
               edges={["top", "left", "right"]}
             >
               <StatusBar style={isDarkMode ? "light" : "dark"} />
 
-              <BottomNavigation
-                navigationState={{
-                  index: routes.findIndex((r) => r.key === activeTab),
-                  routes,
-                }}
-                onIndexChange={(index) => setActiveTab(routes[index].key)}
-                renderScene={renderScene}
-                barStyle={{
-                  backgroundColor: theme.colors.elevation.level2,
-                  height: 70,
-                }}
-                activeColor={theme.colors.primary}
-                inactiveColor={theme.colors.onSurfaceVariant}
-                safeAreaInsets={{ bottom: 0 }}
-              />
+              <GestureDetector gesture={swipeGesture}>
+                <View style={{ flex: 1 }}>
+                  {routes.map((route) => {
+                    const currentIndex = routes.findIndex((r) => r.key === displayTab);
+                    const routeIndex   = routes.findIndex((r) => r.key === route.key);
+                    const offset       = (routeIndex - currentIndex) * SCREEN_WIDTH;
+                    return (
+                      <AnimatedView key={route.key} offset={offset} translateX={translateX}>
+                        {sceneMap[route.key]()}
+                      </AnimatedView>
+                    );
+                  })}
+                </View>
+              </GestureDetector>
+
+              <View style={{ backgroundColor: theme.colors.elevation.level2, height: 70 }}>
+                <BottomNavigation
+                  navigationState={{ index: routes.findIndex((r) => r.key === activeTab), routes }}
+                  onIndexChange={(index) => {
+                    setActiveTab(routes[index].key);
+                    setDisplayTab(routes[index].key);
+                  }}
+                  renderScene={() => null}
+                  barStyle={{ backgroundColor: theme.colors.elevation.level2, height: 70 }}
+                  activeColor={theme.colors.primary}
+                  inactiveColor={theme.colors.onSurfaceVariant}
+                  safeAreaInsets={{ bottom: 0 }}
+                />
+              </View>
             </SafeAreaView>
           </GestureHandlerRootView>
         </StripeProvider>
@@ -376,20 +360,14 @@ export default function App() {
     );
   }
 
-  // If no user, show sign in/sign up screens
   return (
     <PaperProvider theme={theme}>
-      <StripeProvider
-        publishableKey={publishableKey}
-        // </PaperProvider>merchantIdentifier="merchant.identifier"
-        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-      >
+      <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
         <GestureHandlerRootView style={{ flex: 1 }}>
-          {showRegister ? (
-            <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-          ) : (
-            <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-          )}
+          {showRegister
+            ? <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+            : <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+          }
         </GestureHandlerRootView>
       </StripeProvider>
     </PaperProvider>
@@ -397,15 +375,9 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
 });
 
-// Custom theme colors based on Material Design colors from colours/light.css
 const lightTheme = {
   ...MD3LightTheme,
   colors: {
@@ -454,7 +426,6 @@ const lightTheme = {
   },
 };
 
-// Custom theme colors based on Material Design colors from colours/dark.css
 const darkTheme = {
   ...MD3DarkTheme,
   colors: {
