@@ -769,8 +769,8 @@ function IndividualChatScreen({ chat, onBack }) {
         (snapshot) => {
           const messagesList = snapshot.docs.map((doc) => {
             const data = doc.data();
-            console.log("Raw message data:", JSON.stringify(data)); // ← add this
-            console.log("message replyTo:", data.replyTo);
+            // console.log("Raw message data:", JSON.stringify(data)); // ← add this
+            // console.log("message replyTo:", data.replyTo);
             return {
               _id: doc.id,
               text: data.text,
@@ -867,7 +867,7 @@ function IndividualChatScreen({ chat, onBack }) {
 
   // Cleanup all listeners - call this before reporting to prevent crashes
   const cleanupListeners = useCallback(() => {
-    console.log("Cleaning up all listeners before report...");
+    // console.log("Cleaning up all listeners before report...");
 
     if (unsubscribersRef.current.messages) {
       unsubscribersRef.current.messages();
