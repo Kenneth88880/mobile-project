@@ -7,12 +7,11 @@ import {
   BottomNavigation,
   Surface,
 } from "react-native-paper";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// ✅ FIXED: Using React Native Firebase instead of web SDK
+
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 
@@ -26,6 +25,9 @@ import PremiumScreen from "./screens/PremiumScreen";
 import CheckoutScreen from "./screens/CheckoutScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
+
+import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dating");
@@ -42,7 +44,7 @@ export default function App() {
 
   const fetchPublishableKey = async () => {
     const key = await fetchKey(`${API_URL}/payment-sheet`); // fetch key from your server here
-    // console.log("✅✅✅✅✅Fetched publishable key:", key);
+
     setPublishableKey(key);
   };
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function App() {
   LogBox.ignoreLogs([
     "This method is deprecated",
     "Non-serializable values were found in the navigation state",
+    "setLayoutAnimationEnabledExperimental is currently a no-op in the New Architecture",
   ]);
 
   // Configure Firebase auth for development
@@ -261,6 +264,29 @@ export default function App() {
       unfocusedIcon: "account-outline",
     },
   ];
+  
+  const swipeGesture = useMemo(() => 
+
+    Gesture.Pan().activeOffsetX([-10,10]).failOffsetY([-15,15]).onEnd((event) => {
+
+      const { translationX, velocityX } = event;
+
+      const isSwipeLeft = translationX < -30 && velocityX < -300;
+      const isSwipeRight = translationX > 30 && velocityX > 300;
+
+      const currentIndex = routes.findIndex((r) => r.key === activeTab);
+
+      if (isSwipeLeft && currentIndex < routes.length - 1) {
+
+        runOnJS(setActiveTab)(routes[currentIndex + 1].key);
+
+      } else if (isSwipeRight && currentIndex > 0) {
+
+        runOnJS(setActiveTab)(routes[currentIndex - 1].key);
+
+      }
+
+  }), [activeTab, routes]);
 
   const renderScene = BottomNavigation.SceneMap({
     dating: () => (
@@ -355,22 +381,23 @@ export default function App() {
               edges={["top", "left", "right"]}
             >
               <StatusBar style={isDarkMode ? "light" : "dark"} />
-
-              <BottomNavigation
-                navigationState={{
-                  index: routes.findIndex((r) => r.key === activeTab),
-                  routes,
-                }}
-                onIndexChange={(index) => setActiveTab(routes[index].key)}
-                renderScene={renderScene}
-                barStyle={{
-                  backgroundColor: theme.colors.elevation.level2,
-                  height: 70,
-                }}
-                activeColor={theme.colors.primary}
-                inactiveColor={theme.colors.onSurfaceVariant}
-                safeAreaInsets={{ bottom: 0 }}
-              />
+                <GestureDetector gesture={swipeGesture}>
+                  <BottomNavigation
+                    navigationState={{
+                      index: routes.findIndex((r) => r.key === activeTab),
+                      routes,
+                    }}
+                    onIndexChange={(index) => setActiveTab(routes[index].key)}
+                    renderScene={renderScene}
+                    barStyle={{
+                      backgroundColor: theme.colors.elevation.level2,
+                      height: 70,
+                    }}
+                    activeColor={theme.colors.primary}
+                    inactiveColor={theme.colors.onSurfaceVariant}
+                    safeAreaInsets={{ bottom: 0 }}
+                  />
+                </GestureDetector>
             </SafeAreaView>
           </GestureHandlerRootView>
         </StripeProvider>
