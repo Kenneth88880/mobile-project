@@ -34,6 +34,7 @@ import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
 import { getAverageRating } from "../services/profileService";
+import { SwipeableMessageRight, SwipeableMessageLeft } from "./ChatScreen/SwipeableMessage.js"; 
 const getUserID = () => CURRENT_USER_ID;
 
 // Delete a specific chat
@@ -473,9 +474,6 @@ function ChatListScreen({ onChatSelect }) {
     const isArchived = item.status === "archived";
     const timestamp = formatTimeStamp(item.lastMessageTime);
     const isPrivate = item.isPrivate || false;
-    console.log("Message type:", item.type);
-    console.log("Message suggestion:", JSON.stringify(item.suggestion));
-    console.log("Image URL:", item.suggestion?.imageUrl);
     return (
       <List.Item
         title={item.isGroupChat ? item.groupName || "Chat" : item.isPrivate ? item.curUserName || "Private Chat" : "Chat"}
@@ -673,75 +671,6 @@ function ChatListScreen({ onChatSelect }) {
         </Dialog>
       </Portal>
     </View>
-  );
-}
-
-function SwipeableMessageRight({ children, onSwipe }) {
-  const translateX = useSharedValue(0);
-
-  const gesture = Gesture.Pan()
-    .activeOffsetX([10, 999])
-    .failOffsetY([-10, 10])
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = Math.min(e.translationX * 0.4, 60);
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > 60) runOnJS(onSwipe)();
-      translateX.value = withSpring(0);
-    })
-    .onFinalize(() => {
-      translateX.value = withSpring(0);
-    });
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={style}>{children}</Animated.View>
-    </GestureDetector>
-  );
-}
-
-function SwipeableMessageLeft({ children, onSwipe }) {
-  const translateX = useSharedValue(0);
-  const isMovingLeft = useSharedValue(false);
-
-  const gesture = Gesture.Pan()
-    .activeOffsetX([-10, 999])
-    .failOffsetY([-10, 10])
-    .onBegin(() => {
-      isMovingLeft.value = false;
-    })
-    .onUpdate((e) => {
-      if (e.translationX < -10) {
-        isMovingLeft.value = true;
-      }
-      if (isMovingLeft.value && e.translationX < 0) {
-        translateX.value = Math.max(e.translationX * 0.4, -60);
-      }
-    })
-    .onEnd((e) => {
-      if (isMovingLeft.value && e.translationX < -60) runOnJS(onSwipe)();
-      translateX.value = withSpring(0);
-      isMovingLeft.value = false;
-    })
-    .onFinalize(() => {
-      translateX.value = withSpring(0);
-      isMovingLeft.value = false;
-    });
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={style}>{children}</Animated.View>
-    </GestureDetector>
   );
 }
 
@@ -1095,7 +1024,7 @@ function IndividualChatScreen({ chat, onBack }) {
   };
 
  const handleReplyBubbleTap = (replyTo) => {
-  // Match by messageId first, fall back to imageUrl for old messages
+
     const index = messages.findIndex((m) => 
       replyTo.messageId 
         ? m._id === replyTo.messageId
@@ -1544,7 +1473,7 @@ function IndividualChatScreen({ chat, onBack }) {
                   }}
                 >
                   <SwipeableMessageLeft onSwipe={() => setReplyingTo(item)}>
-                    <View style={{ alignItems: "flex-end" }}>
+                    <View style={{ alignItems: "flex-end"}}>
 
                       {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
                         <View style={{ alignItems: "flex-end" }}>
@@ -2444,6 +2373,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: "flex-end",
     paddingHorizontal: 4,
+    gap: 8,
   },
   myMessageRow: {
     alignSelf: "flex-end",
