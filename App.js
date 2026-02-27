@@ -57,9 +57,7 @@ export default function App() {
   // Configure Firebase auth for development
   useEffect(() => {
     if (__DEV__) {
-      // Disable app verification for development to avoid SMS limits and reCAPTCHA blocking
       auth().settings.appVerificationDisabledForTesting = true;
-      console.log("Firebase auth: app verification disabled for testing");
     }
   }, []);
 
