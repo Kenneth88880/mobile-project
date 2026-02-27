@@ -1518,11 +1518,6 @@ function IndividualChatScreen({ chat, onBack }) {
                   🗄️ Archived - Read Only
                 </Text>
               )}
-              {(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" && (
-                <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                  Tap to edit name
-                </Text>
-              )}
             </TouchableOpacity>
 
             <IconButton
