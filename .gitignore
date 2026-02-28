@@ -49,7 +49,7 @@ stripeConfig.js
 google-services.json
 
 #keys for all our services
-GoogleService-Info.plist
+#GoogleService-Info.plist
 
 #eas.json
 eas.json
