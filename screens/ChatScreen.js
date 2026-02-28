@@ -1889,7 +1889,7 @@ function IndividualChatScreen({ chat, onBack }) {
               {(currentChat.isPrivate) && (
                 
                 <Card>
-                <Card.Title title="DM Name" />
+                <Card.Title title="Name" />
                 <Card.Content>
                   <TextInput
                     mode="outlined"
