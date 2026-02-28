@@ -40,18 +40,20 @@ yarn-error.*
  /ios
 /android
 
-# firebase api key (DO NOT KEEP)
-firebaseConfig.js
-
 # stripe api keys (DO NOT KEEP)
 stripeConfig.js
 
 # GOOGLE stuff
+
 #GoogleService-Info.plist
 google-services.json
 
+#keys for all our services
+GoogleService-Info.plist
+
 #eas.json
 eas.json
+
 # stripe api keys (DO NOT KEEP)
 stripeConfig.js
 
@@ -62,9 +64,6 @@ colours/
 .env
 stripeServer/.env
 functions/.env
-
-# firebase bug email reports
-firebaseConfig.js
 
 # 
 database.rules.json
