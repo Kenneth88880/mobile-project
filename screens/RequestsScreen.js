@@ -747,14 +747,14 @@ export default function RequestsScreen({ isActive = true }) {
             });
 
             // Debug: Check if profiles exist
-            console.log("Profile check:", {
-              hasUser1: !!like.user1,
-              hasUser2: !!like.user2,
-              user1Name: like.user1?.name,
-              user2Name: like.user2?.name,
-              user1Age: like.user1?.age,
-              user2Age: like.user2?.age,
-            });
+            // console.log("Profile check:", {
+            //   hasUser1: !!like.user1,
+            //   hasUser2: !!like.user2,
+            //   user1Name: like.user1?.name,
+            //   user2Name: like.user2?.name,
+            //   user1Age: like.user1?.age,
+            //   user2Age: like.user2?.age,
+            // });
 
             return (
               <Card key={like.id} style={styles.requestCard}>
