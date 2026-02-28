@@ -196,7 +196,7 @@ function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userPr
         }}
       >
         <Card>
-          <Card.Title title={currentChat.isPrivate ? "Name" : "Edit Group Info"} />
+          <Card.Title title={currentChat.isPrivate ? "Nickname" : "Edit Group Info"} />
           <Card.Content>
             {!currentChat.isPrivate && (
               <TouchableOpacity
@@ -694,7 +694,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
       const existingDM = existing.docs.find((doc) => doc.data().participants.includes(otherUserID));
 
       if (existingDM) {
-        Alert.alert("Chat Exists", "A private chat with this user already exists. Opening existing chat.");
         return { id: existingDM.id, ...existingDM.data() };
       }
 
