@@ -394,7 +394,7 @@ function ChatListScreen({ onChatSelect }) {
 
     return (
       <List.Item
-        title={item.isGroupChat ? item.groupName || "Chat" : item.isPrivate ? item.curUserName || "Private Chat" : "Chat"}
+        title={item.isGroupChat ? item.groupName : currentUserId === item.creatorID ? item.curUserName : item.otherUserName }
         titleStyle={unreadCount > 0 && !isArchived ? { fontWeight: "bold", color: theme.colors.onSurface } : {}}
         description={isArchived ? "🗄️ Archived - Read only" : item.lastMessageText || "No messages yet"}
         descriptionNumberOfLines={1}
