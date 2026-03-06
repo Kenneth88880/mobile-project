@@ -51,6 +51,7 @@ export default {
       ],
     },
     plugins: [
+      "@react-native-firebase/app",
       [
         "@stripe/stripe-react-native",
         {
