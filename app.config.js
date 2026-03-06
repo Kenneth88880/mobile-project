@@ -73,7 +73,6 @@ export default {
         projectId: "5d554221-bb9c-4245-884a-1b887d6673aa",
       },
       googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
-      URL_SCHEME: process.env.URL_SCHEME,
     },
   },
 };
