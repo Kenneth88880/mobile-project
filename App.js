@@ -26,7 +26,6 @@ import SignUpScreen from "./screens/SignUpScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import CheckoutScreen from "./screens/CheckoutScreen";
 
-
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const AnimatedView = ({ offset, translateX, children }) => {
@@ -52,6 +51,7 @@ export default function App() {
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
 
+  
   const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const translateX = useSharedValue(0);
