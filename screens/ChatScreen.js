@@ -874,9 +874,9 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             )}
 
             {(!currentChat.isGroupChat && currentChat.isPrivate) && (
-              <Surface style={{ marginRight: 8 }}>
+              <View style={{ marginRight: 8 }}>
                 <Avatar.Image size={36} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
-              </Surface>
+              </View>
             )}
 
             <TouchableOpacity
