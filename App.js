@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { StyleSheet, View, LogBox, Dimensions } from "react-native";
 import {
   PaperProvider,
@@ -56,6 +56,9 @@ export default function App() {
 
   const translateX = useSharedValue(0);
   const isAnimating = useSharedValue(false);
+
+  // Tracks when the user is dragging the category bar in ExploreScreenNew
+  const categoryScrollingRef = useRef(false);
 
   const routes = [
     { key: "dating",   focusedIcon: "home",    unfocusedIcon: "home-outline" },
@@ -213,11 +216,10 @@ export default function App() {
 
   const swipeGesture = useMemo(() =>
     Gesture.Pan()
-      .activeOffsetX([-10, 10])
+      .activeOffsetX([-40, 40])
       .failOffsetY([-15, 15])
       .onUpdate((event) => {
-        // Ignore drag updates while an animation is in progress
-        if (isAnimating.value) return;
+        if (isAnimating.value || categoryScrollingRef.current) return;
 
         const currentIndex = routes.findIndex((r) => r.key === activeTab);
         const isAtStart = currentIndex === 0 && event.translationX > 0;
@@ -227,8 +229,7 @@ export default function App() {
           : event.translationX;
       })
       .onEnd((event) => {
-        // Ignore release while an animation is in progress
-        if (isAnimating.value) return;
+        if (isAnimating.value || categoryScrollingRef.current) return;
 
         const { translationX, velocityX } = event;
         const currentIndex = routes.findIndex((r) => r.key === activeTab);
@@ -264,7 +265,12 @@ export default function App() {
   const sceneMap = {
     dating:   () => <DatingScreen devMode={devMode} />,
     likes:    () => <RequestsScreen />,
-    explore:  () => <ExploreScreenNew />,
+    explore:  () => (
+      <ExploreScreenNew
+        onCategoryScrollStart={() => { categoryScrollingRef.current = true; }}
+        onCategoryScrollEnd={() => { categoryScrollingRef.current = false; }}
+      />
+    ),
     messages: () => <ChatScreen />,
     profile:  () => (
       <ProfileScreen
@@ -276,10 +282,6 @@ export default function App() {
     ),
   };
 
-  // Only render screens that are adjacent to either the displayed tab or the
-  // active (destination) tab. This keeps both the origin and destination screens
-  // mounted during the entire swipe animation, preventing ghost flashes in
-  // either swipe direction.
   const visibleRoutes = useMemo(() => {
     const displayIndex = routes.findIndex((r) => r.key === displayTab);
     const activeIndex  = routes.findIndex((r) => r.key === activeTab);
