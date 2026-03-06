@@ -26,6 +26,7 @@ import SignUpScreen from "./screens/SignUpScreen";
 import PremiumScreen from "./screens/PremiumScreen";
 import CheckoutScreen from "./screens/CheckoutScreen";
 
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const AnimatedView = ({ offset, translateX, children }) => {
