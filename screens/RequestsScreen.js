@@ -25,9 +25,7 @@ import {
   acceptDuoLike,
   declineDuoLike,
   getCurrentDuoPartner,
-  deleteDuoLike,
   getUserProfile,
-  saveDuoSwipe,
   saveRating,
   hasUserRatedProfile,
 } from "../services/profileService";
@@ -92,25 +90,25 @@ export default function RequestsScreen({ isActive = true }) {
           const likes = [];
           for (const doc of snapshot.docs) {
             const likeData = doc.data();
-            console.log("Processing like:", doc.id, likeData);
+            // console.log("Processing like:", doc.id, likeData);
 
-            // Better logging for debugging
-            console.log("Fetching profiles for:", {
-              fromUser1: likeData.fromUser1,
-              fromUser2: likeData.fromUser2,
-            });
+            // // Better logging for debugging
+            // console.log("Fetching profiles for:", {
+            //   fromUser1: likeData.fromUser1,
+            //   fromUser2: likeData.fromUser2,
+            // });
 
             const user1Profile = await getUserProfile(likeData.fromUser1);
             const user2Profile = await getUserProfile(likeData.fromUser2);
 
-            console.log("Profiles loaded:", {
-              user1: user1Profile
-                ? `${user1Profile.name} (${user1Profile.userId})`
-                : "MISSING",
-              user2: user2Profile
-                ? `${user2Profile.name} (${user2Profile.userId})`
-                : "MISSING",
-            });
+            // console.log("Profiles loaded:", {
+            //   user1: user1Profile
+            //     ? `${user1Profile.name} (${user1Profile.userId})`
+            //     : "MISSING",
+            //   user2: user2Profile
+            //     ? `${user2Profile.name} (${user2Profile.userId})`
+            //     : "MISSING",
+            // });
 
             if (user1Profile && user2Profile) {
               likes.push({
@@ -136,7 +134,7 @@ export default function RequestsScreen({ isActive = true }) {
             }
           }
 
-          console.log("Total duo likes loaded:", likes.length);
+          // console.log("Total duo likes loaded:", likes.length);
           setDuoLikes(likes);
           setLoading(false);
         },
@@ -730,21 +728,21 @@ export default function RequestsScreen({ isActive = true }) {
               sendingDuoAcceptances === 2 && yourDuoFullyAccepted;
 
             // Debug logging for acceptance tracking
-            console.log("Rendering like card:", {
-              likeId: like.id,
-              user1: like.user1?.name,
-              user2: like.user2?.name,
-              fromUser1Id: like.fromUser1Id,
-              fromUser2Id: like.fromUser2Id,
-              fromUser1Accepted,
-              fromUser2Accepted,
-              currentUserAccepted,
-              partnerAccepted,
-              sendingDuoAcceptances,
-              yourDuoFullyAccepted,
-              allAccepted,
-              acceptedBy: like.acceptedBy,
-            });
+            // console.log("Rendering like card:", {
+            //   likeId: like.id,
+            //   user1: like.user1?.name,
+            //   user2: like.user2?.name,
+            //   fromUser1Id: like.fromUser1Id,
+            //   fromUser2Id: like.fromUser2Id,
+            //   fromUser1Accepted,
+            //   fromUser2Accepted,
+            //   currentUserAccepted,
+            //   partnerAccepted,
+            //   sendingDuoAcceptances,
+            //   yourDuoFullyAccepted,
+            //   allAccepted,
+            //   acceptedBy: like.acceptedBy,
+            // });
 
             // Debug: Check if profiles exist
             // console.log("Profile check:", {
