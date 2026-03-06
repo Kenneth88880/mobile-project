@@ -72,7 +72,6 @@ export default {
       eas: {
         projectId: "5d554221-bb9c-4245-884a-1b887d6673aa",
       },
-      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
       googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
     },
   },
