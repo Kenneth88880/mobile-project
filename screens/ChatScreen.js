@@ -874,10 +874,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             )}
 
             {(!currentChat.isGroupChat && currentChat.isPrivate) && (
-              <View style={{ marginRight: 8 }}>
-                <Avatar.Image size={36} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
-              </View>
-            )}
+            <View style={{ marginRight: 8 }}>
+              <Avatar.Image size={36} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
+            </View>
+          )}
 
             <TouchableOpacity
               onPress={(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" ? handleEditGroupInfo : undefined}
@@ -915,9 +915,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                           <View style={{ alignItems: "flex-end" }}>
                             {item.replyTo && (
                               <TouchableOpacity onPress={() => handleReplyBubbleTap(item.replyTo)}>
-                                <View style={{ backgroundColor: theme.colors.primary, opacity: 0.6, borderRadius: 12, borderBottomRightRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginRight: 8 }}>
-                                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff", marginBottom: 2 }}>{item.replyTo.senderName}</Text>
-                                  <Text style={{ fontSize: 12, color: "#fff" }} numberOfLines={1}>{item.replyTo.text}</Text>
+                                <View style={{ backgroundColor: 
+                                  theme.dark === true ? "rgb(255, 176, 201)" : "rgb(139, 74, 97)", opacity: 0.6, borderRadius: 12, borderBottomRightRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginRight: 8 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: "700", color: theme.dark === true ? "#fff" : "#000", marginBottom: 2 }}>{item.replyTo.senderName}</Text>
+                                  <Text style={{ fontSize: 12, color: theme.dark === true ? "#fff" : "#000" }} numberOfLines={1}>{item.replyTo.text}</Text>
                                 </View>
                               </TouchableOpacity>
                             )}
@@ -975,9 +976,9 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                         <View style={{ alignItems: "flex-start" }}>
                           {item.replyTo && (
                             <TouchableOpacity onPress={() => handleReplyBubbleTap(item.replyTo)}>
-                              <View style={{ backgroundColor: theme.colors.onSurfaceVariant, opacity: 0.6, borderRadius: 12, borderBottomLeftRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginLeft: 8, borderLeftWidth: 3, borderLeftColor: theme.colors.primary }}>
-                                <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.primary, marginBottom: 2 }}>{item.replyTo.senderName}</Text>
-                                <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant }} numberOfLines={1}>{item.replyTo.text}</Text>
+                              <View style={{ backgroundColor: theme.dark === true ? "rgb(255, 176, 201)" : "rgb(139, 74, 97)", opacity: 0.6, borderRadius: 12, borderBottomLeftRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginLeft: 8, borderLeftWidth: 3, borderLeftColor: theme.colors.primary }}>
+                                <Text style={{ fontSize: 11, fontWeight: "700", color: theme.dark === true ? "#fff" : "#000", marginBottom: 2 }}>{item.replyTo.senderName}</Text>
+                                <Text style={{ fontSize: 12, color: theme.dark === true ? "#fff" : "#000" }} numberOfLines={1}>{item.replyTo.text}</Text>
                               </View>
                             </TouchableOpacity>
                           )}
