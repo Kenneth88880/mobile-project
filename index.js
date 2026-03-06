@@ -8,7 +8,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.log("CAUGHT ERROR:", error.message);
-    console.log("STACK:", error.stack);
+    console.log("STACK:", error.stack); // This will show us the exact file
     console.log("INFO:", info.componentStack);
   }
 
@@ -27,8 +27,11 @@ class ErrorBoundary extends React.Component {
             padding: 20,
           }}
         >
-          <Text style={{ color: "red", fontSize: 16 }}>
+          <Text style={{ color: "red", fontSize: 12 }}>
             {this.state.error.message}
+          </Text>
+          <Text style={{ color: "black", fontSize: 10, marginTop: 10 }}>
+            {this.state.error.stack}
           </Text>
         </View>
       );
