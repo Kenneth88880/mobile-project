@@ -1,11 +1,3 @@
-/**
- * ShareToChat
- * Instagram-style bottom sheet:
- * - Tap chats to select/deselect (with checkbox + avatar ring)
- * - "Send to X chats" button appears when at least one is selected
- * - Sends to all selected chats at once with correct image URL
- */
-
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
