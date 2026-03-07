@@ -11,6 +11,9 @@
         "buildConfiguration": "Debug",
         "image": "macos-sequoia-15.6-xcode-26.0"
       },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
         "STRIPE_PUBLISHABLE_KEY": "@STRIPE_PUBLISHABLE_KEY"
