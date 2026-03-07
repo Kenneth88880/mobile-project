@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -13,6 +13,7 @@ import {
 import { Text, useTheme } from "react-native-paper";
 import { Calendar } from "react-native-calendars";
 import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 /** Convert "3:30 PM" → minutes since midnight for sorting. */
@@ -61,6 +62,7 @@ export default function MyDates({
   const [editMinute, setEditMinute] = useState("");
   const [editPeriod, setEditPeriod] = useState("PM");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState(today);
 
   const allEvents = useMemo(() => {
     const flat = Object.values(events).flat();
@@ -104,26 +106,77 @@ export default function MyDates({
     setShowDatePicker(false);
   };
 
-  const calendarSwipeGesture = useMemo(() =>
+  const numToMonth = (num) => {
+
+    'worklet';
+    if (num > 12 || num < 1) {
+
+      num = num % 12;
+
+    } 
+
+    switch (num) {
+      case 1:
+        return "January";
+      case 2:
+        return "February";
+      case 3:
+        return "March";
+      case 4:
+        return "April";
+      case 5:
+        return "May";
+      case 6:
+        return "June";
+      case 7:
+        return "July";
+      case 8:
+        return "August";
+      case 9:
+        return "September";
+      case 10:
+        return "October";
+      case 11:
+        return "November";
+      case 12:
+        return "December";
+    }
+
+
+  }
+
+  const goToPrevMonth = useCallback(() => {
+    setDisplayMonth((prev) => {
+      const [y, m] = prev.split("-").map(Number);
+      const date = new Date(y, m - 2, 1);
+      return date.toISOString().split("T")[0];
+    });
+  }, []);
+
+  const goToNextMonth = useCallback(() => {
+    setDisplayMonth((prev) => {
+      const [y, m] = prev.split("-").map(Number);
+      const date = new Date(y, m, 1);
+      return date.toISOString().split("T")[0];
+    });
+  }, []);
+
   
+  const calendarSwipeGesture = useMemo(() =>
     Gesture.Pan()
-        .activeOffsetX([-10, 10])
-        .failOffsetY([-15, 15])
-        .onUpdate((event) => {
-          if (event.translationX > 10) {
-            console.log("this is the calendar swipe right")
-          } else if (event.translationX < -10) {
-            console.log("this is the calendar swipe left")
-          }
-        })
-        .onEnd((event) => {
-          if (event.translationX > 10) {
-            console.log("this is the calendar swipe right")
-          } else if (event.translationX < -10) {
-            console.log("this is the calendar swipe left")
-          }
-        }),
-    [editingEvent, handleDelete, openEditModal],
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-15, 15])
+      .onEnd((event) => {
+        'worklet';
+        if (event.translationX > 10) {
+          console.log("this is the event swipe right")
+          runOnJS(goToPrevMonth)();
+        } else if (event.translationX < -10) {
+          console.log("this is the event swipe left")
+          runOnJS(goToNextMonth)();
+        }
+      }),
+    [goToPrevMonth, goToNextMonth],
   );
 
   const myEventSwipeGesture = useMemo(() =>
@@ -304,7 +357,8 @@ export default function MyDates({
             <GestureDetector gesture={calendarSwipeGesture}>
               <View collapsable={false}>
                 <Calendar
-                  current={today}
+                  current={displayMonth}
+                  onMonthChange={(month) => setDisplayMonth(month.dateString)}
                   onDayPress={(day) => setSelectedDate(day.dateString)}
                   markedDates={markedDates}
                   theme={calendarTheme}
