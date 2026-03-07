@@ -13,7 +13,7 @@ import {
 import { Text, useTheme } from "react-native-paper";
 import { Calendar } from "react-native-calendars";
 import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import { runOnJS } from "react-native-worklets";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 /** Convert "3:30 PM" → minutes since midnight for sorting. */
@@ -45,6 +45,24 @@ function parseTime(timeStr) {
   return { hour: match[1], minute: match[2], period: match[3].toUpperCase() };
 }
 
+/** Add/subtract days from a YYYY-MM-DD string. */
+function offsetDate(dateStr, days) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split("T")[0];
+}
+
+/** Add/subtract months from a YYYY-MM-DD string, keeping day clamped. */
+function offsetMonth(dateStr, months) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1 + months, 1);
+  // Clamp day to last day of new month
+  const maxDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(d, maxDay));
+  return date.toISOString().split("T")[0];
+}
+
 export default function MyDates({
   events = {},
   onExplore,
@@ -54,15 +72,15 @@ export default function MyDates({
   const theme = useTheme();
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
+  const [displayMonth, setDisplayMonth] = useState(today);
 
   // Edit modal state
-  const [editingEvent, setEditingEvent] = useState(null); // { event, originalDate, index }
+  const [editingEvent, setEditingEvent] = useState(null);
   const [editDate, setEditDate] = useState("");
   const [editHour, setEditHour] = useState("");
   const [editMinute, setEditMinute] = useState("");
   const [editPeriod, setEditPeriod] = useState("PM");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [displayMonth, setDisplayMonth] = useState(today);
 
   const allEvents = useMemo(() => {
     const flat = Object.values(events).flat();
@@ -81,7 +99,77 @@ export default function MyDates({
     [allEvents, today],
   );
 
-  // Find the original index of an event within its date group
+  // ─── Swipe: Calendar → change month ────────────────────────────────────────
+  const goToPrevMonth = useCallback(() => {
+    setSelectedDate((prevSelected) => {
+      const next = offsetMonth(prevSelected, -1);
+      // If the new month is the current month, snap to today
+      const nextMonth = next.slice(0, 7);
+      const result = nextMonth === today.slice(0, 7) ? today : next;
+      setDisplayMonth(result.slice(0, 7) + "-01");
+      return result;
+    });
+  }, [today]);
+
+  const goToNextMonth = useCallback(() => {
+    setSelectedDate((prevSelected) => {
+      const next = offsetMonth(prevSelected, 1);
+      const nextMonth = next.slice(0, 7);
+      const result = nextMonth === today.slice(0, 7) ? today : next;
+      setDisplayMonth(result.slice(0, 7) + "-01");
+      return result;
+    });
+  }, [today]);
+
+  const calendarSwipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-20, 20])
+      .failOffsetY([-20, 20])
+      .onEnd((e) => {
+        "worklet";
+        if (e.translationX < -50) {
+          runOnJS(goToNextMonth)();
+        } else if (e.translationX > 50) {
+          runOnJS(goToPrevMonth)();
+        }
+      }),
+    [goToPrevMonth, goToNextMonth],
+  );
+
+  // ─── Swipe: My Events → change selected day ─────────────────────────────────
+  const goToPrevDay = useCallback(() => {
+    setSelectedDate((prev) => {
+      const next = offsetDate(prev, -1);
+      // Keep displayMonth in sync if we cross a month boundary
+      setDisplayMonth(next.slice(0, 7) + "-01");
+      return next;
+    });
+  }, []);
+
+  const goToNextDay = useCallback(() => {
+    setSelectedDate((prev) => {
+      const next = offsetDate(prev, 1);
+      setDisplayMonth(next.slice(0, 7) + "-01");
+      return next;
+    });
+  }, []);
+
+  const myEventSwipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-20, 20])
+      .failOffsetY([-20, 20])
+      .onEnd((e) => {
+        "worklet";
+        if (e.translationX < -50) {
+          runOnJS(goToNextDay)();
+        } else if (e.translationX > 50) {
+          runOnJS(goToPrevDay)();
+        }
+      }),
+    [goToPrevDay, goToNextDay],
+  );
+
+  // ─── Edit helpers ────────────────────────────────────────────────────────────
   const findEventIndex = (event) => {
     const dateEvents = events[event.date] || [];
     return dateEvents.indexOf(event);
@@ -105,100 +193,6 @@ export default function MyDates({
     setEditPeriod("PM");
     setShowDatePicker(false);
   };
-
-  const numToMonth = (num) => {
-
-    'worklet';
-    if (num > 12 || num < 1) {
-
-      num = num % 12;
-
-    } 
-
-    switch (num) {
-      case 1:
-        return "January";
-      case 2:
-        return "February";
-      case 3:
-        return "March";
-      case 4:
-        return "April";
-      case 5:
-        return "May";
-      case 6:
-        return "June";
-      case 7:
-        return "July";
-      case 8:
-        return "August";
-      case 9:
-        return "September";
-      case 10:
-        return "October";
-      case 11:
-        return "November";
-      case 12:
-        return "December";
-    }
-
-
-  }
-
-  const goToPrevMonth = useCallback(() => {
-    setDisplayMonth((prev) => {
-      const [y, m] = prev.split("-").map(Number);
-      const date = new Date(y, m - 2, 1);
-      return date.toISOString().split("T")[0];
-    });
-  }, []);
-
-  const goToNextMonth = useCallback(() => {
-    setDisplayMonth((prev) => {
-      const [y, m] = prev.split("-").map(Number);
-      const date = new Date(y, m, 1);
-      return date.toISOString().split("T")[0];
-    });
-  }, []);
-
-  
-  const calendarSwipeGesture = useMemo(() =>
-    Gesture.Pan()
-      .activeOffsetX([-10, 10])
-      .failOffsetY([-15, 15])
-      .onEnd((event) => {
-        'worklet';
-        if (event.translationX > 10) {
-          console.log("this is the event swipe right")
-          runOnJS(goToPrevMonth)();
-        } else if (event.translationX < -10) {
-          console.log("this is the event swipe left")
-          runOnJS(goToNextMonth)();
-        }
-      }),
-    [goToPrevMonth, goToNextMonth],
-  );
-
-  const myEventSwipeGesture = useMemo(() =>
-      Gesture.Pan()
-        .activeOffsetX([-10, 10])
-        .failOffsetY([-15, 15])
-        .onUpdate((event) => {
-          if (event.translationX > 10) {
-            console.log("this is the event swipe right")
-          } else if (event.translationX < -10) {
-            console.log("this is the event swipe left")
-          }
-        })
-        .onEnd((event) => {
-          if (event.translationX > 10) {
-            console.log("this is the event swipe right")
-          } else if (event.translationX < -10) {
-            console.log("this is the event swipe left")
-          }
-        }),
-    [editingEvent, handleDelete, openEditModal],
-  );
 
   const validHour =
     /^\d{1,2}$/.test(editHour) &&
@@ -235,13 +229,11 @@ export default function MyDates({
     ]);
   };
 
+  // ─── Date formatting ──────────────────────────────────────────────────────────
   const formatDisplayDate = (dateStr) => {
     const [y, m, d] = dateStr.split("-");
     const date = new Date(Number(y), Number(m) - 1, Number(d));
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   const formatFullDate = (dateStr) => {
@@ -255,6 +247,7 @@ export default function MyDates({
     });
   };
 
+  // ─── Calendar themes ──────────────────────────────────────────────────────────
   const calendarTheme = {
     backgroundColor: theme.colors.background,
     calendarBackground: theme.colors.background,
@@ -278,6 +271,7 @@ export default function MyDates({
     calendarBackground: "transparent",
   };
 
+  // ─── Marked dates ─────────────────────────────────────────────────────────────
   const markedDates = {
     [selectedDate]: {
       selected: true,
@@ -299,13 +293,11 @@ export default function MyDates({
     ? { [editDate]: { selected: true, selectedColor: theme.colors.primary } }
     : {};
 
+  // ─── Event card ───────────────────────────────────────────────────────────────
   const renderEventCard = (event, index) => (
     <TouchableOpacity
       key={`${event.date}-${index}`}
-      style={[
-        styles.eventCard,
-        { backgroundColor: theme.colors.surfaceVariant },
-      ]}
+      style={[styles.eventCard, { backgroundColor: theme.colors.surfaceVariant }]}
       onPress={() => openEditModal(event)}
       activeOpacity={0.7}
     >
@@ -316,22 +308,12 @@ export default function MyDates({
           </Text>
           <View style={styles.eventMeta}>
             {event.time ? (
-              <Text
-                style={[
-                  styles.eventTime,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
+              <Text style={[styles.eventTime, { color: theme.colors.onSurfaceVariant }]}>
                 {event.time}
               </Text>
             ) : null}
             {event.date && event.date !== today ? (
-              <Text
-                style={[
-                  styles.eventDate,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
+              <Text style={[styles.eventDate, { color: theme.colors.onSurfaceVariant }]}>
                 {formatDisplayDate(event.date)}
               </Text>
             ) : null}
@@ -346,105 +328,101 @@ export default function MyDates({
     </TouchableOpacity>
   );
 
+  // ─── Selected-day events (used under "My Events" swipe section) ───────────────
+  const selectedDayEvents = useMemo(
+    () => sortEvents(events[selectedDate] || []),
+    [events, selectedDate],
+  );
+
+  const isToday = selectedDate === today;
+  const selectedDateLabel = isToday
+    ? "Today"
+    : formatFullDate(selectedDate);
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      
-        <View style={styles.container}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <GestureDetector gesture={calendarSwipeGesture}>
-              <View collapsable={false}>
-                <Calendar
-                  current={displayMonth}
-                  onMonthChange={(month) => setDisplayMonth(month.dateString)}
-                  onDayPress={(day) => setSelectedDate(day.dateString)}
-                  markedDates={markedDates}
-                  theme={calendarTheme}
-                  style={[
-                    styles.calendar,
-                    { borderColor: theme.colors.outlineVariant },
-                  ]}
-                />
-                </View>
-            </GestureDetector>
+      <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Calendar with month-swipe */}
+          <GestureDetector gesture={calendarSwipeGesture}>
+            <View collapsable={false}>
+              <Calendar
+                key={displayMonth}           // re-mount so `current` takes effect
+                current={displayMonth}
+                onMonthChange={(month) => setDisplayMonth(month.dateString)}
+                onDayPress={(day) => setSelectedDate(day.dateString)}
+                markedDates={markedDates}
+                theme={calendarTheme}
+                style={[styles.calendar, { borderColor: theme.colors.outlineVariant }]}
+              />
+            </View>
+          </GestureDetector>
 
-              {/* My Events */}
-              <GestureDetector gesture={myEventSwipeGesture}>
-                <View style={styles.eventsSection}>
-                  <Text
-                    style={[styles.eventsTitle, { color: theme.colors.onSurface }]}
-                  >
-                    My Events
+          {/* My Events with day-swipe */}
+          <GestureDetector gesture={myEventSwipeGesture}>
+            <View style={styles.eventsSection} collapsable={false}>
+              {/* Header row with swipe hint arrows */}
+              <View style={styles.eventsTitleRow}>
+                <TouchableOpacity onPress={goToPrevDay} hitSlop={8}>
+                  <MaterialCommunityIcons
+                    name="chevron-left"
+                    size={22}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                </TouchableOpacity>
+                <Text style={[styles.eventsTitle, { color: theme.colors.onSurface }]}>
+                  {selectedDateLabel}
+                </Text>
+                <TouchableOpacity onPress={goToNextDay} hitSlop={8}>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={22}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {!hasAnyEvents ? (
+                <View style={styles.emptyEvents}>
+                  <MaterialCommunityIcons
+                    name="calendar-blank-outline"
+                    size={48}
+                    color={theme.colors.outlineVariant}
+                  />
+                  <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
+                    No events found
                   </Text>
-
-                  {!hasAnyEvents ? (
-                    <View style={styles.emptyEvents}>
-                      <MaterialCommunityIcons
-                        name="calendar-blank-outline"
-                        size={48}
-                        color={theme.colors.outlineVariant}
-                      />
-                      <Text
-                        style={[
-                          styles.emptyText,
-                          { color: theme.colors.onSurfaceVariant },
-                        ]}
-                      >
-                        No events found
-                      </Text>
-                      <TouchableOpacity onPress={onExplore}>
-                        <Text
-                          style={[
-                            styles.exploreLink,
-                            { color: theme.colors.primary },
-                          ]}
-                        >
-                          Explore Events
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                  <TouchableOpacity onPress={onExplore}>
+                    <Text style={[styles.exploreLink, { color: theme.colors.primary }]}>
+                      Explore Events
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {/* Events for the selected day */}
+                  {selectedDayEvents.length === 0 ? (
+                    <Text style={[styles.noEventsText, { color: theme.colors.onSurfaceVariant }]}>
+                      No events on this day
+                    </Text>
                   ) : (
-                    <>
-                      {/* Today */}
-                      <Text
-                        style={[
-                          styles.subsectionTitle,
-                          { color: theme.colors.onSurface },
-                        ]}
-                      >
-                        Today
-                      </Text>
-                      {todayEvents.length === 0 ? (
-                        <Text
-                          style={[
-                            styles.noEventsText,
-                            { color: theme.colors.onSurfaceVariant },
-                          ]}
-                        >
-                          No events today
-                        </Text>
-                      ) : (
-                        todayEvents.map(renderEventCard)
-                      )}
+                    selectedDayEvents.map(renderEventCard)
+                  )}
 
-                      {/* Upcoming */}
+                  {/* Upcoming (future events) */}
+                  {!isToday ? null : (
+                    <>
                       <Text
-                        style={[
-                          styles.subsectionTitle,
-                          { color: theme.colors.onSurface, marginTop: 20 },
-                        ]}
+                        style={[styles.subsectionTitle, { color: theme.colors.onSurface, marginTop: 20 }]}
                       >
                         Upcoming
                       </Text>
                       {upcomingEvents.length === 0 ? (
-                        <Text
-                          style={[
-                            styles.noEventsText,
-                            { color: theme.colors.onSurfaceVariant },
-                          ]}
-                        >
+                        <Text style={[styles.noEventsText, { color: theme.colors.onSurfaceVariant }]}>
                           No upcoming events
                         </Text>
                       ) : (
@@ -452,374 +430,227 @@ export default function MyDates({
                       )}
                     </>
                   )}
-                </View>
-              </GestureDetector>
-          </ScrollView>
+                </>
+              )}
+            </View>
+          </GestureDetector>
+        </ScrollView>
 
-          {/* Edit / Delete modal */}
-          <Modal
-            visible={!!editingEvent}
-            animationType="slide"
-            transparent
-            onRequestClose={closeEditModal}
-          >
-            <View style={styles.modalOverlay}>
-              <View
-                style={[
-                  styles.modalSheet,
-                  { backgroundColor: theme.colors.surface },
-                ]}
+        {/* Edit / Delete modal */}
+        <Modal
+          visible={!!editingEvent}
+          animationType="slide"
+          transparent
+          onRequestClose={closeEditModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { backgroundColor: theme.colors.surface }]}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.modalScroll}
               >
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.modalScroll}
-                >
-                  {/* Header */}
-                  <View style={styles.modalHeader}>
-                    <Text
-                      style={[
-                        styles.modalTitle,
-                        { color: theme.colors.onSurface },
-                      ]}
-                    >
-                      Edit Event
-                    </Text>
-                    <TouchableOpacity onPress={closeEditModal}>
-                      <MaterialCommunityIcons
-                        name="close"
-                        size={22}
-                        color={theme.colors.onSurfaceVariant}
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Event name (read-only) */}
-                  <Text
-                    style={[
-                      styles.editEventName,
-                      { color: theme.colors.onSurface },
-                    ]}
-                  >
-                    {editingEvent?.event?.title}
+                {/* Header */}
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.onSurface }]}>
+                    Edit Event
                   </Text>
-
-                  {/* Date */}
-                  <Text
-                    style={[
-                      styles.editLabel,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                  >
-                    Date
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.datePickerBtn,
-                      { backgroundColor: theme.colors.surfaceVariant },
-                    ]}
-                    onPress={() => setShowDatePicker(!showDatePicker)}
-                  >
+                  <TouchableOpacity onPress={closeEditModal}>
                     <MaterialCommunityIcons
-                      name="calendar"
-                      size={18}
-                      color={theme.colors.primary}
-                    />
-                    <Text
-                      style={[
-                        styles.datePickerText,
-                        { color: theme.colors.onSurface },
-                      ]}
-                    >
-                      {editDate ? formatFullDate(editDate) : "Select date"}
-                    </Text>
-                    <MaterialCommunityIcons
-                      name={showDatePicker ? "chevron-up" : "chevron-down"}
-                      size={18}
+                      name="close"
+                      size={22}
                       color={theme.colors.onSurfaceVariant}
                     />
                   </TouchableOpacity>
+                </View>
 
-                  {showDatePicker && (
-                    <Calendar
-                      current={editDate || today}
-                      onDayPress={(day) => {
-                        setEditDate(day.dateString);
-                        setShowDatePicker(false);
-                      }}
-                      markedDates={editMarkedDates}
-                      theme={editCalendarTheme}
-                      style={styles.editCalendar}
-                    />
-                  )}
+                {/* Event name (read-only) */}
+                <Text style={[styles.editEventName, { color: theme.colors.onSurface }]}>
+                  {editingEvent?.event?.title}
+                </Text>
 
-                  {/* Time */}
-                  <Text
-                    style={[
-                      styles.editLabel,
-                      { color: theme.colors.onSurfaceVariant, marginTop: 16 },
-                    ]}
-                  >
-                    Time
+                {/* Date */}
+                <Text style={[styles.editLabel, { color: theme.colors.onSurfaceVariant }]}>
+                  Date
+                </Text>
+                <TouchableOpacity
+                  style={[styles.datePickerBtn, { backgroundColor: theme.colors.surfaceVariant }]}
+                  onPress={() => setShowDatePicker(!showDatePicker)}
+                >
+                  <MaterialCommunityIcons name="calendar" size={18} color={theme.colors.primary} />
+                  <Text style={[styles.datePickerText, { color: theme.colors.onSurface }]}>
+                    {editDate ? formatFullDate(editDate) : "Select date"}
                   </Text>
-                  <View style={styles.timeRow}>
-                    <TextInput
+                  <MaterialCommunityIcons
+                    name={showDatePicker ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <Calendar
+                    current={editDate || today}
+                    onDayPress={(day) => {
+                      setEditDate(day.dateString);
+                      setShowDatePicker(false);
+                    }}
+                    markedDates={editMarkedDates}
+                    theme={editCalendarTheme}
+                    style={styles.editCalendar}
+                  />
+                )}
+
+                {/* Time */}
+                <Text style={[styles.editLabel, { color: theme.colors.onSurfaceVariant, marginTop: 16 }]}>
+                  Time
+                </Text>
+                <View style={styles.timeRow}>
+                  <TextInput
+                    style={[
+                      styles.timeInput,
+                      {
+                        backgroundColor: theme.colors.surfaceVariant,
+                        color: theme.colors.onSurface,
+                        borderColor: theme.colors.outlineVariant,
+                      },
+                    ]}
+                    placeholder="HH"
+                    placeholderTextColor={theme.colors.outlineVariant}
+                    value={editHour}
+                    onChangeText={setEditHour}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                  <Text style={[styles.timeSeparator, { color: theme.colors.onSurface }]}>:</Text>
+                  <TextInput
+                    style={[
+                      styles.timeInput,
+                      {
+                        backgroundColor: theme.colors.surfaceVariant,
+                        color: theme.colors.onSurface,
+                        borderColor: theme.colors.outlineVariant,
+                      },
+                    ]}
+                    placeholder="MM"
+                    placeholderTextColor={theme.colors.outlineVariant}
+                    value={editMinute}
+                    onChangeText={setEditMinute}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                  {["AM", "PM"].map((p) => (
+                    <TouchableOpacity
+                      key={p}
                       style={[
-                        styles.timeInput,
+                        styles.periodBtn,
                         {
-                          backgroundColor: theme.colors.surfaceVariant,
-                          color: theme.colors.onSurface,
-                          borderColor: theme.colors.outlineVariant,
+                          backgroundColor:
+                            editPeriod === p
+                              ? theme.colors.primary
+                              : theme.colors.surfaceVariant,
                         },
                       ]}
-                      placeholder="HH"
-                      placeholderTextColor={theme.colors.outlineVariant}
-                      value={editHour}
-                      onChangeText={setEditHour}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
+                      onPress={() => setEditPeriod(p)}
+                    >
+                      <Text
+                        style={[
+                          styles.periodBtnText,
+                          {
+                            color:
+                              editPeriod === p
+                                ? theme.colors.onPrimary
+                                : theme.colors.onSurfaceVariant,
+                          },
+                        ]}
+                      >
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Actions */}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.deleteBtn, { borderColor: theme.colors.error }]}
+                    onPress={handleDelete}
+                  >
+                    <MaterialCommunityIcons name="delete-outline" size={18} color={theme.colors.error} />
+                    <Text style={[styles.deleteBtnText, { color: theme.colors.error }]}>Delete</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.saveBtn,
+                      {
+                        backgroundColor: canSave
+                          ? theme.colors.primary
+                          : theme.colors.surfaceDisabled || theme.colors.outlineVariant,
+                      },
+                    ]}
+                    onPress={handleSave}
+                    disabled={!canSave}
+                    activeOpacity={canSave ? 0.7 : 1}
+                  >
                     <Text
                       style={[
-                        styles.timeSeparator,
-                        { color: theme.colors.onSurface },
+                        styles.saveBtnText,
+                        {
+                          color: canSave
+                            ? theme.colors.onPrimary
+                            : theme.colors.onSurfaceDisabled || theme.colors.outline,
+                        },
                       ]}
                     >
-                      :
+                      Save Changes
                     </Text>
-                    <TextInput
-                      style={[
-                        styles.timeInput,
-                        {
-                          backgroundColor: theme.colors.surfaceVariant,
-                          color: theme.colors.onSurface,
-                          borderColor: theme.colors.outlineVariant,
-                        },
-                      ]}
-                      placeholder="MM"
-                      placeholderTextColor={theme.colors.outlineVariant}
-                      value={editMinute}
-                      onChangeText={setEditMinute}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
-                    {["AM", "PM"].map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[
-                          styles.periodBtn,
-                          {
-                            backgroundColor:
-                              editPeriod === p
-                                ? theme.colors.primary
-                                : theme.colors.surfaceVariant,
-                          },
-                        ]}
-                        onPress={() => setEditPeriod(p)}
-                      >
-                        <Text
-                          style={[
-                            styles.periodBtnText,
-                            {
-                              color:
-                                editPeriod === p
-                                  ? theme.colors.onPrimary
-                                  : theme.colors.onSurfaceVariant,
-                            },
-                          ]}
-                        >
-                          {p}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Actions */}
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.deleteBtn,
-                        { borderColor: theme.colors.error },
-                      ]}
-                      onPress={handleDelete}
-                    >
-                      <MaterialCommunityIcons
-                        name="delete-outline"
-                        size={18}
-                        color={theme.colors.error}
-                      />
-                      <Text
-                        style={[
-                          styles.deleteBtnText,
-                          { color: theme.colors.error },
-                        ]}
-                      >
-                        Delete
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.saveBtn,
-                        {
-                          backgroundColor: canSave
-                            ? theme.colors.primary
-                            : theme.colors.surfaceDisabled ||
-                              theme.colors.outlineVariant,
-                        },
-                      ]}
-                      onPress={handleSave}
-                      disabled={!canSave}
-                      activeOpacity={canSave ? 0.7 : 1}
-                    >
-                      <Text
-                        style={[
-                          styles.saveBtnText,
-                          {
-                            color: canSave
-                              ? theme.colors.onPrimary
-                              : theme.colors.onSurfaceDisabled ||
-                                theme.colors.outline,
-                          },
-                        ]}
-                      >
-                        Save Changes
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
-              </View>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
-          </Modal>
-        </View>
+          </View>
+        </Modal>
+      </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 32,
-  },
-  calendar: {
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  eventsSection: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  eventsTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
-  subsectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  noEventsText: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  emptyEvents: {
-    alignItems: "center",
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-  },
-  exploreLink: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  eventCard: {
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  eventCardContent: {
+  container: { flex: 1 },
+  scrollContent: { paddingBottom: 32 },
+  calendar: { borderBottomWidth: 1, marginBottom: 8 },
+  eventsSection: { paddingHorizontal: 16, paddingTop: 12 },
+  eventsTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  eventCardText: {
-    flex: 1,
-  },
-  eventName: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  eventMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 4,
-  },
-  eventTime: {
-    fontSize: 13,
-  },
-  eventDate: {
-    fontSize: 13,
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  modalSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "85%",
-    paddingBottom: 32,
-  },
-  modalScroll: {
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  editEventName: {
-    fontSize: 17,
-    fontWeight: "600",
-    marginBottom: 20,
-  },
-  editLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  datePickerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-  },
-  datePickerText: {
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-  },
-  editCalendar: {
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  eventsTitle: { fontSize: 18, fontWeight: "700" },
+  subsectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 10 },
+  noEventsText: { fontSize: 14, marginBottom: 8 },
+  emptyEvents: { alignItems: "center", paddingVertical: 40, gap: 12 },
+  emptyText: { fontSize: 15 },
+  exploreLink: { fontSize: 15, fontWeight: "600" },
+  eventCard: { padding: 14, borderRadius: 12, marginBottom: 10 },
+  eventCardContent: { flexDirection: "row", alignItems: "center" },
+  eventCardText: { flex: 1 },
+  eventName: { fontSize: 15, fontWeight: "600" },
+  eventMeta: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  eventTime: { fontSize: 13 },
+  eventDate: { fontSize: 13 },
+  // Modal
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "85%", paddingBottom: 32 },
+  modalScroll: { padding: 20 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: "700" },
+  editEventName: { fontSize: 17, fontWeight: "600", marginBottom: 20 },
+  editLabel: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
+  datePickerBtn: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
+  datePickerText: { fontSize: 14, fontWeight: "600", flex: 1 },
+  editCalendar: { borderRadius: 12, marginTop: 8 },
+  timeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   timeInput: {
     width: 52,
     borderRadius: 10,
@@ -830,24 +661,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-  timeSeparator: {
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  periodBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  periodBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 28,
-  },
+  timeSeparator: { fontSize: 22, fontWeight: "700" },
+  periodBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
+  periodBtnText: { fontSize: 14, fontWeight: "700" },
+  modalActions: { flexDirection: "row", gap: 12, marginTop: 28 },
   deleteBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -858,18 +675,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  deleteBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  saveBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  deleteBtnText: { fontSize: 14, fontWeight: "600" },
+  saveBtn: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 10 },
+  saveBtnText: { fontSize: 14, fontWeight: "600" },
 });
