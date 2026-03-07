@@ -3,37 +3,20 @@ import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-// Hardcoded categories — will be replaced with Google Places API types later.
-// Each `type` matches a Google Places API type for easy swap-in.
 const CATEGORIES = [
-  {
-    id: "restaurant",
-    label: "Restaurants",
-    type: "restaurant",
-    icon: "silverware-fork-knife",
-  },
+  { id: "restaurant", label: "Restaurants", type: "restaurant", icon: "silverware-fork-knife" },
   { id: "cafe", label: "Cafes", type: "cafe", icon: "coffee" },
   { id: "bar", label: "Bars", type: "bar", icon: "glass-cocktail" },
   { id: "park", label: "Parks", type: "park", icon: "tree" },
-  {
-    id: "movie_theater",
-    label: "Movies",
-    type: "movie_theater",
-    icon: "movie-open",
-  },
+  { id: "movie_theater", label: "Movies", type: "movie_theater", icon: "movie-open" },
   { id: "museum", label: "Museums", type: "museum", icon: "bank" },
-  {
-    id: "bowling_alley",
-    label: "Bowling",
-    type: "bowling_alley",
-    icon: "bowling",
-  },
+  { id: "bowling_alley", label: "Bowling", type: "bowling_alley", icon: "bowling" },
   { id: "spa", label: "Spa", type: "spa", icon: "spa" },
 ];
 
 export { CATEGORIES };
 
-export default function Categories({ selected, onSelect }) {
+export default function Categories({ selected, onSelect, onScrollStart, onScrollEnd }) {
   const theme = useTheme();
 
   return (
@@ -41,6 +24,9 @@ export default function Categories({ selected, onSelect }) {
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.container}
+      onScrollBeginDrag={onScrollStart}
+      onScrollEndDrag={onScrollEnd}
+      onMomentumScrollEnd={onScrollEnd}
     >
       {CATEGORIES.map((cat) => {
         const isActive = selected === cat.id;
