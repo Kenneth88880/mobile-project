@@ -186,18 +186,16 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
       setDisplayMonth(firstOfMonth(prevDate));
     }
     setSelectedDate(prevDate);
-    setDisplayDate(prevDate);   // ← now evCurr rebuilds only here, post-animation
   }, [prevDate, selectedDate]);
 
   const commitNextDay = useCallback(() => {
-  evSlideX.value = 0;
-  if (nextDate.slice(0, 7) !== selectedDate.slice(0, 7)) {
-    calSlideX.value = 0;
-    setDisplayMonth(firstOfMonth(nextDate));
-  }
-  setSelectedDate(nextDate);
-  setDisplayDate(nextDate);   // ← same
-}, [nextDate, selectedDate]);
+    evSlideX.value = 0;
+    if (nextDate.slice(0, 7) !== selectedDate.slice(0, 7)) {
+      calSlideX.value = 0;
+      setDisplayMonth(firstOfMonth(nextDate));
+    }
+    setSelectedDate(nextDate);
+  }, [nextDate, selectedDate]);
 
   // ── Button-tap navigation ─────────────────────────────────────────────────
 
