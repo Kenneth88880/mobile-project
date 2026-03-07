@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -78,9 +78,6 @@ const SNAP_EASING    = Easing.out(Easing.cubic);
 const RUBBER         = 0.18;
 
 // ─── SwipeStrip ───────────────────────────────────────────────────────────────
-// Always renders [prev | current | next] in a 3x-wide strip.
-// slideX=0 means center (current) is visible.
-// The animated offset is slideX - W, pinning center slot to x=0.
 
 function SwipeStrip({ width: W, slideX, prevContent, currContent, nextContent, onCommitPrev, onCommitNext }) {
   const animStyle = useAnimatedStyle(() => ({
@@ -145,13 +142,18 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
   const calSlideX = useSharedValue(0);
   const evSlideX  = useSharedValue(0);
 
-  // Always pre-compute neighbours so the strip panels are ready instantly
-  const prevMonth = useMemo(() => firstOfMonth(offsetMonth(displayMonth, -1)), [displayMonth]);
-  const nextMonth = useMemo(() => firstOfMonth(offsetMonth(displayMonth,  1)), [displayMonth]);
-  const prevDate  = useMemo(() => offsetDate(selectedDate, -1), [selectedDate]);
-  const nextDate  = useMemo(() => offsetDate(selectedDate,  1), [selectedDate]);
+  // ── Neighbours ───────────────────────────────────────────────────────────
+  const prevMonthStr = useMemo(() => firstOfMonth(offsetMonth(displayMonth, -1)), [displayMonth]);
+  const nextMonthStr = useMemo(() => firstOfMonth(offsetMonth(displayMonth,  1)), [displayMonth]);
+  const prevDate     = useMemo(() => offsetDate(selectedDate, -1), [selectedDate]);
+  const nextDate     = useMemo(() => offsetDate(selectedDate,  1), [selectedDate]);
 
-  // Edit modal
+  // ── Events ────────────────────────────────────────────────────────────────
+  const allEvents      = useMemo(() => sortEvents(Object.values(events).flat()), [events]);
+  const hasAnyEvents   = allEvents.length > 0;
+  const upcomingEvents = useMemo(() => allEvents.filter((e) => e.date > today), [allEvents, today]);
+
+  // ── Edit modal state ──────────────────────────────────────────────────────
   const [editingEvent,   setEditingEvent]   = useState(null);
   const [editDate,       setEditDate]       = useState("");
   const [editHour,       setEditHour]       = useState("");
@@ -159,45 +161,43 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
   const [editPeriod,     setEditPeriod]     = useState("PM");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const allEvents      = useMemo(() => sortEvents(Object.values(events).flat()), [events]);
-  const hasAnyEvents   = allEvents.length > 0;
-  const upcomingEvents = useMemo(() => allEvents.filter((e) => e.date > today), [allEvents, today]);
-
-  // ── Commit (called after swipe snap completes) ────────────────────────────
+  // ── Commit ────────────────────────────────────────────────────────────────
 
   const commitPrevMonth = useCallback(() => {
-    const nd = offsetMonth(selectedDate, -1);
-    setDisplayMonth(prevMonth);
-    setSelectedDate(nd.slice(0, 7) === today.slice(0, 7) ? today : nd);
     calSlideX.value = 0;
     evSlideX.value  = 0;
-  }, [prevMonth, selectedDate, today]);
+    const nd = offsetMonth(selectedDate, -1);
+    setDisplayMonth(prevMonthStr);
+    setSelectedDate(nd.slice(0, 7) === today.slice(0, 7) ? today : nd);
+  }, [prevMonthStr, selectedDate, today]);
 
   const commitNextMonth = useCallback(() => {
-    const nd = offsetMonth(selectedDate, 1);
-    setDisplayMonth(nextMonth);
-    setSelectedDate(nd.slice(0, 7) === today.slice(0, 7) ? today : nd);
     calSlideX.value = 0;
     evSlideX.value  = 0;
-  }, [nextMonth, selectedDate, today]);
+    const nd = offsetMonth(selectedDate, 1);
+    setDisplayMonth(nextMonthStr);
+    setSelectedDate(nd.slice(0, 7) === today.slice(0, 7) ? today : nd);
+  }, [nextMonthStr, selectedDate, today]);
 
   const commitPrevDay = useCallback(() => {
+    evSlideX.value = 0;
     if (prevDate.slice(0, 7) !== selectedDate.slice(0, 7)) {
-      setDisplayMonth(firstOfMonth(prevDate));
       calSlideX.value = 0;
+      setDisplayMonth(firstOfMonth(prevDate));
     }
     setSelectedDate(prevDate);
-    evSlideX.value = 0;
+    setDisplayDate(prevDate);   // ← now evCurr rebuilds only here, post-animation
   }, [prevDate, selectedDate]);
 
   const commitNextDay = useCallback(() => {
-    if (nextDate.slice(0, 7) !== selectedDate.slice(0, 7)) {
-      setDisplayMonth(firstOfMonth(nextDate));
-      calSlideX.value = 0;
-    }
-    setSelectedDate(nextDate);
-    evSlideX.value = 0;
-  }, [nextDate, selectedDate]);
+  evSlideX.value = 0;
+  if (nextDate.slice(0, 7) !== selectedDate.slice(0, 7)) {
+    calSlideX.value = 0;
+    setDisplayMonth(firstOfMonth(nextDate));
+  }
+  setSelectedDate(nextDate);
+  setDisplayDate(nextDate);   // ← same
+}, [nextDate, selectedDate]);
 
   // ── Button-tap navigation ─────────────────────────────────────────────────
 
@@ -223,42 +223,55 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
     evSlideX.value = withTiming(-W, { duration: SNAP_DURATION, easing: SNAP_EASING }, () => runOnJS(commitNextDay)());
   }, [W, nextDate, selectedDate, commitNextDay]);
 
+  // ── Stable refs for handlers that close over selectedDate ─────────────────
+  // Prevents panel useMemos from rebuilding on every day change
+
+  const selectedDateRef   = useRef(selectedDate);
+  const tapPrevDayRef     = useRef(tapPrevDay);
+  const tapNextDayRef     = useRef(tapNextDay);
+  const openEditModalRef  = useRef(null);
+
+  useEffect(() => { selectedDateRef.current  = selectedDate; }, [selectedDate]);
+  useEffect(() => { tapPrevDayRef.current    = tapPrevDay;   }, [tapPrevDay]);
+  useEffect(() => { tapNextDayRef.current    = tapNextDay;   }, [tapNextDay]);
+
   // ── Edit helpers ──────────────────────────────────────────────────────────
 
-  const findEventIndex = (ev) => (events[ev.date] || []).indexOf(ev);
-
-  const openEditModal = (ev) => {
+  const openEditModal = useCallback((ev) => {
     const p = parseTime(ev.time);
-    setEditingEvent({ event: ev, originalDate: ev.date, index: findEventIndex(ev) });
+    const index = (events[ev.date] || []).indexOf(ev);
+    setEditingEvent({ event: ev, originalDate: ev.date, index });
     setEditDate(ev.date); setEditHour(p.hour); setEditMinute(p.minute); setEditPeriod(p.period);
     setShowDatePicker(false);
-  };
+  }, [events]);
 
-  const closeEditModal = () => {
+  useEffect(() => { openEditModalRef.current = openEditModal; }, [openEditModal]);
+
+  const closeEditModal = useCallback(() => {
     setEditingEvent(null);
     setEditDate(""); setEditHour(""); setEditMinute(""); setEditPeriod("PM");
     setShowDatePicker(false);
-  };
+  }, []);
 
   const validHour   = /^\d{1,2}$/.test(editHour)   && Number(editHour)   >= 1 && Number(editHour)   <= 12;
   const validMinute = /^\d{2}$/.test(editMinute) && Number(editMinute) >= 0 && Number(editMinute) <= 59;
   const canSave = editDate && validHour && validMinute;
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!canSave || !editingEvent) return;
     onUpdateEvent(editingEvent.originalDate, editingEvent.index, {
       ...editingEvent.event, date: editDate, time: `${editHour}:${editMinute} ${editPeriod}`,
     });
     closeEditModal();
-  };
+  }, [canSave, editingEvent, editDate, editHour, editMinute, editPeriod, onUpdateEvent, closeEditModal]);
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     if (!editingEvent) return;
     Alert.alert("Delete Event", "Are you sure you want to delete this event?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => { onDeleteEvent(editingEvent.originalDate, editingEvent.index); closeEditModal(); } },
     ]);
-  };
+  }, [editingEvent, onDeleteEvent, closeEditModal]);
 
   // ── Formatting ────────────────────────────────────────────────────────────
 
@@ -271,27 +284,32 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
     return new Date(+y, +m - 1, +d).toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
   };
 
-  // ── Theme & marked dates ──────────────────────────────────────────────────
+  // ── Theme ─────────────────────────────────────────────────────────────────
 
-  const calTheme = {
-    backgroundColor: theme.colors.background,
-    calendarBackground: theme.colors.background,
-    textSectionTitleColor: theme.colors.onSurfaceVariant,
+  const calTheme = useMemo(() => ({
+    backgroundColor:            theme.colors.background,
+    calendarBackground:         theme.colors.background,
+    textSectionTitleColor:      theme.colors.onSurfaceVariant,
     selectedDayBackgroundColor: theme.colors.primary,
-    selectedDayTextColor: theme.colors.onPrimary,
-    todayTextColor: theme.colors.primary,
-    dayTextColor: theme.colors.onSurface,
-    textDisabledColor: theme.colors.outlineVariant,
-    monthTextColor: theme.colors.onSurface,
-    arrowColor: theme.colors.primary,
-    textMonthFontWeight: "700",
-    textDayFontSize: 14,
-    textMonthFontSize: 16,
-    textDayHeaderFontSize: 13,
-  };
-  const editCalTheme = { ...calTheme, backgroundColor: "transparent", calendarBackground: "transparent" };
+    selectedDayTextColor:       theme.colors.onPrimary,
+    todayTextColor:             theme.colors.primary,
+    dayTextColor:               theme.colors.onSurface,
+    textDisabledColor:          theme.colors.outlineVariant,
+    monthTextColor:             theme.colors.onSurface,
+    arrowColor:                 theme.colors.primary,
+    textMonthFontWeight:        "700",
+    textDayFontSize:            14,
+    textMonthFontSize:          16,
+    textDayHeaderFontSize:      13,
+  }), [theme]);
 
-  const buildMarked = (activeSel) => ({
+  const editCalTheme = useMemo(() => ({
+    ...calTheme, backgroundColor: "transparent", calendarBackground: "transparent",
+  }), [calTheme]);
+
+  // ── Marked dates ──────────────────────────────────────────────────────────
+
+  const buildMarked = useCallback((activeSel) => ({
     [activeSel]: { selected: true, selectedColor: theme.colors.primary },
     ...Object.keys(events).reduce((acc, date) => {
       acc[date] = {
@@ -300,24 +318,33 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
       };
       return acc;
     }, {}),
-  });
+  }), [events, theme.colors.primary]);
 
-  const editMarkedDates = editDate ? { [editDate]: { selected: true, selectedColor: theme.colors.primary } } : {};
+  const markedPrev = useMemo(() => buildMarked(prevDate),     [buildMarked, prevDate]);
+  const markedCurr = useMemo(() => buildMarked(selectedDate), [buildMarked, selectedDate]);
+  const markedNext = useMemo(() => buildMarked(nextDate),     [buildMarked, nextDate]);
+
+  const editMarkedDates = editDate
+    ? { [editDate]: { selected: true, selectedColor: theme.colors.primary } }
+    : {};
 
   // ── Slot renderers ────────────────────────────────────────────────────────
 
-  const renderEventCard = (ev, idx) => (
+  // renderEventCard: only rebuilds when theme/today change — openEditModal via ref
+  const renderEventCard = useCallback((ev, idx) => (
     <TouchableOpacity
       key={`${ev.date}-${idx}`}
       style={[styles.eventCard, { backgroundColor: theme.colors.surfaceVariant }]}
-      onPress={() => openEditModal(ev)}
+      onPress={() => openEditModalRef.current(ev)}
       activeOpacity={0.7}
     >
       <View style={styles.eventCardContent}>
         <View style={styles.eventCardText}>
           <Text style={[styles.eventName, { color: theme.colors.onSurface }]}>{ev.title}</Text>
           <View style={styles.eventMeta}>
-            {ev.time ? <Text style={[styles.eventTime, { color: theme.colors.onSurfaceVariant }]}>{ev.time}</Text> : null}
+            {ev.time
+              ? <Text style={[styles.eventTime, { color: theme.colors.onSurfaceVariant }]}>{ev.time}</Text>
+              : null}
             {ev.date && ev.date !== today
               ? <Text style={[styles.eventDate, { color: theme.colors.onSurfaceVariant }]}>{fmtShort(ev.date)}</Text>
               : null}
@@ -326,43 +353,42 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
         <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
       </View>
     </TouchableOpacity>
-  );
+  ), [theme, today]);
 
-  // Calendar slot — hideArrows because we replaced them with a custom header
-  const renderCalSlot = (monthStr, selDate) => (
+  // renderCalSlot: selectedDate via ref so panels don't rebuild on day change
+  const renderCalSlot = useCallback((monthStr, marked) => (
     <Calendar
       key={monthStr}
       current={monthStr}
       onDayPress={(day) => {
         const d = day.dateString;
-        const dir = d > selectedDate ? -W : W;
+        const dir = d > selectedDateRef.current ? -W : W;
         evSlideX.value = withTiming(dir, { duration: SNAP_DURATION, easing: SNAP_EASING }, () => {
           runOnJS(setSelectedDate)(d);
           runOnJS(() => { evSlideX.value = 0; })();
         });
       }}
-      markedDates={buildMarked(selDate)}
+      markedDates={marked}
       theme={calTheme}
       style={[styles.calendar, { borderColor: theme.colors.outlineVariant }]}
       hideArrows
     />
-  );
+  ), [W, calTheme, theme.colors.outlineVariant]);
 
-  // Events slot — title is rendered inside so it slides with the content (no flash)
-  const renderEvSlot = (dateStr) => {
+  // renderEvSlot: tap handlers via refs so panels don't rebuild on day change
+  const renderEvSlot = useCallback((dateStr) => {
     const dayEvs  = sortEvents(events[dateStr] || []);
     const isToday = dateStr === today;
     const label   = isToday ? "Today" : fmtFull(dateStr);
 
     return (
       <View style={styles.eventsSection}>
-        {/* Title inside the slot so it slides with content */}
         <View style={styles.eventsTitleRow}>
-          <TouchableOpacity onPress={tapPrevDay} hitSlop={8}>
+          <TouchableOpacity onPress={() => tapPrevDayRef.current()} hitSlop={8}>
             <MaterialCommunityIcons name="chevron-left" size={22} color={theme.colors.onSurfaceVariant} />
           </TouchableOpacity>
           <Text style={[styles.eventsTitle, { color: theme.colors.onSurface }]}>{label}</Text>
-          <TouchableOpacity onPress={tapNextDay} hitSlop={8}>
+          <TouchableOpacity onPress={() => tapNextDayRef.current()} hitSlop={8}>
             <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
           </TouchableOpacity>
         </View>
@@ -390,7 +416,18 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
         )}
       </View>
     );
-  };
+  }, [events, today, hasAnyEvents, upcomingEvents, theme, onExplore, renderEventCard]);
+  // ↑ tapPrevDay / tapNextDay intentionally omitted — accessed via refs
+
+  // ── Memoized panels ───────────────────────────────────────────────────────
+
+  const calPrev = useMemo(() => renderCalSlot(prevMonthStr, markedPrev), [renderCalSlot, prevMonthStr, markedPrev]);
+  const calCurr = useMemo(() => renderCalSlot(displayMonth, markedCurr), [renderCalSlot, displayMonth, markedCurr]);
+  const calNext = useMemo(() => renderCalSlot(nextMonthStr, markedNext), [renderCalSlot, nextMonthStr, markedNext]);
+
+  const evPrev  = useMemo(() => renderEvSlot(prevDate),     [renderEvSlot, prevDate]);
+  const evCurr  = useMemo(() => renderEvSlot(selectedDate), [renderEvSlot, selectedDate]);
+  const evNext  = useMemo(() => renderEvSlot(nextDate),     [renderEvSlot, nextDate]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -399,7 +436,6 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Custom calendar header with tap arrows */}
           <View style={styles.calHeader}>
             <TouchableOpacity onPress={tapPrevMonth} hitSlop={8}>
               <MaterialCommunityIcons name="chevron-left" size={24} color={theme.colors.primary} />
@@ -409,26 +445,16 @@ export default function MyDates({ events = {}, onExplore, onUpdateEvent, onDelet
             </TouchableOpacity>
           </View>
 
-          {/* Calendar strip */}
           <SwipeStrip
-            width={W}
-            slideX={calSlideX}
-            prevContent={renderCalSlot(prevMonth, prevDate)}
-            currContent={renderCalSlot(displayMonth, selectedDate)}
-            nextContent={renderCalSlot(nextMonth, nextDate)}
-            onCommitPrev={commitPrevMonth}
-            onCommitNext={commitNextMonth}
+            width={W} slideX={calSlideX}
+            prevContent={calPrev} currContent={calCurr} nextContent={calNext}
+            onCommitPrev={commitPrevMonth} onCommitNext={commitNextMonth}
           />
 
-          {/* Events strip */}
           <SwipeStrip
-            width={W}
-            slideX={evSlideX}
-            prevContent={renderEvSlot(prevDate)}
-            currContent={renderEvSlot(selectedDate)}
-            nextContent={renderEvSlot(nextDate)}
-            onCommitPrev={commitPrevDay}
-            onCommitNext={commitNextDay}
+            width={W} slideX={evSlideX}
+            prevContent={evPrev} currContent={evCurr} nextContent={evNext}
+            onCommitPrev={commitPrevDay} onCommitNext={commitNextDay}
           />
 
         </ScrollView>
