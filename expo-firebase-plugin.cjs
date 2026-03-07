@@ -17,10 +17,8 @@ function withFirebasePodfilePostInstall(config) {
             "CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES",
           )
         ) {
-          const postInstallRegex =
-            /(post_install do \|installer\|[\s\S]*?)(end\s*end)/;
-
-          const postInstallFix = `
+          const insertCode = `
+    # Fix for non-modular headers (Firebase + Google Maps)
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
@@ -29,14 +27,26 @@ function withFirebasePodfilePostInstall(config) {
         end
       end
     end
+
 `;
 
-          contents = contents.replace(
-            postInstallRegex,
-            `$1${postInstallFix}$2`,
-          );
-          writeFileSync(podfilePath, contents);
-          console.log("✅ Added post_install fix to Podfile");
+          // Insert before react_native_post_install
+          if (contents.includes("react_native_post_install")) {
+            contents = contents.replace(
+              /(\s*)(react_native_post_install)/,
+              `${insertCode}$1$2`,
+            );
+            writeFileSync(podfilePath, contents);
+            console.log(
+              "✅ Added modular headers fix before react_native_post_install",
+            );
+          } else {
+            console.warn(
+              "⚠️ Could not find react_native_post_install in Podfile",
+            );
+          }
+        } else {
+          console.log("ℹ️ Modular headers fix already present");
         }
       } catch (error) {
         console.error("❌ Error modifying Podfile:", error);
