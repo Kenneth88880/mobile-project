@@ -12,8 +12,18 @@ import { StripeProvider } from "@stripe/stripe-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
-import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useSharedValue, withTiming, withSpring, runOnJS, useAnimatedStyle } from "react-native-reanimated";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  withTiming,
+  withSpring,
+  runOnJS,
+  useAnimatedStyle,
+} from "react-native-reanimated";
 
 import { setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
@@ -33,7 +43,12 @@ const AnimatedView = ({ offset, translateX, children }) => {
     transform: [{ translateX: translateX.value + offset }],
   }));
   return (
-    <Animated.View style={[{ position: "absolute", width: SCREEN_WIDTH, height: "100%" }, animatedStyle]}>
+    <Animated.View
+      style={[
+        { position: "absolute", width: SCREEN_WIDTH, height: "100%" },
+        animatedStyle,
+      ]}
+    >
       {children}
     </Animated.View>
   );
@@ -51,8 +66,8 @@ export default function App() {
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
 
-  
-  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
+  const API_URL =
+    "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const translateX = useSharedValue(0);
   const isAnimating = useSharedValue(false);
@@ -61,11 +76,23 @@ export default function App() {
   const categoryScrollingRef = useRef(false);
 
   const routes = [
-    { key: "dating",   focusedIcon: "home",    unfocusedIcon: "home-outline" },
-    { key: "likes",    focusedIcon: "heart",   unfocusedIcon: "heart-outline" },
-    { key: "explore",  focusedIcon: "compass", unfocusedIcon: "compass-outline" },
-    { key: "messages", focusedIcon: "message", unfocusedIcon: "message-outline" },
-    { key: "profile",  focusedIcon: "account", unfocusedIcon: "account-outline" },
+    { key: "dating", focusedIcon: "home", unfocusedIcon: "home-outline" },
+    { key: "likes", focusedIcon: "heart", unfocusedIcon: "heart-outline" },
+    {
+      key: "explore",
+      focusedIcon: "compass",
+      unfocusedIcon: "compass-outline",
+    },
+    {
+      key: "messages",
+      focusedIcon: "message",
+      unfocusedIcon: "message-outline",
+    },
+    {
+      key: "profile",
+      focusedIcon: "account",
+      unfocusedIcon: "account-outline",
+    },
   ];
 
   LogBox.ignoreLogs([
@@ -129,13 +156,16 @@ export default function App() {
               console.error("Error listening to profile changes:", error);
               setProfileComplete(false);
               setCheckingProfile(false);
-            }
+            },
           );
       } else {
         setCurrentUserId(null);
         setProfileComplete(false);
         setCheckingProfile(false);
-        if (profileUnsubscribe) { profileUnsubscribe(); profileUnsubscribe = null; }
+        if (profileUnsubscribe) {
+          profileUnsubscribe();
+          profileUnsubscribe = null;
+        }
       }
     });
     return () => {
@@ -159,26 +189,36 @@ export default function App() {
     try {
       const savedTheme = await AsyncStorage.getItem("theme");
       if (savedTheme !== null) setIsDarkMode(savedTheme === "dark");
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const loadDevModePreference = async () => {
     try {
       const savedDevMode = await AsyncStorage.getItem("devMode");
       if (savedDevMode !== null) setDevMode(savedDevMode === "true");
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handleDevModeChange = async (newValue) => {
     setDevMode(newValue);
-    try { await AsyncStorage.setItem("devMode", newValue.toString()); }
-    catch (error) { console.error(error); }
+    try {
+      await AsyncStorage.setItem("devMode", newValue.toString());
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const checkProfileComplete = async (userId) => {
     try {
       setCheckingProfile(true);
-      const profileDoc = await firestore().collection("profiles").doc(userId).get();
+      const profileDoc = await firestore()
+        .collection("profiles")
+        .doc(userId)
+        .get();
       if (profileDoc.exists) {
         const profileData = profileDoc.data();
         const isComplete = !!(
@@ -205,74 +245,98 @@ export default function App() {
     }
   };
 
-  const theme = useMemo(() => (isDarkMode ? darkTheme : lightTheme), [isDarkMode]);
+  const theme = useMemo(
+    () => (isDarkMode ? darkTheme : lightTheme),
+    [isDarkMode],
+  );
 
   const toggleTheme = async () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
-    try { await AsyncStorage.setItem("theme", newTheme ? "dark" : "light"); }
-    catch (error) { console.error(error); }
+    try {
+      await AsyncStorage.setItem("theme", newTheme ? "dark" : "light");
+    } catch (error) {
+      console.error(error);
+    }
   };
 
-  const swipeGesture = useMemo(() =>
-    Gesture.Pan()
-      .activeOffsetX([-40, 40])
-      .failOffsetY([-15, 15])
-      .onUpdate((event) => {
-        if (isAnimating.value || categoryScrollingRef.current) return;
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-40, 40])
+        .failOffsetY([-15, 15])
+        .onUpdate((event) => {
+          if (isAnimating.value || categoryScrollingRef.current) return;
 
-        const currentIndex = routes.findIndex((r) => r.key === activeTab);
-        const isAtStart = currentIndex === 0 && event.translationX > 0;
-        const isAtEnd = currentIndex === routes.length - 1 && event.translationX < 0;
-        translateX.value = isAtStart || isAtEnd
-          ? event.translationX * 0.2
-          : event.translationX;
-      })
-      .onEnd((event) => {
-        if (isAnimating.value || categoryScrollingRef.current) return;
+          const currentIndex = routes.findIndex((r) => r.key === activeTab);
+          const isAtStart = currentIndex === 0 && event.translationX > 0;
+          const isAtEnd =
+            currentIndex === routes.length - 1 && event.translationX < 0;
+          translateX.value =
+            isAtStart || isAtEnd
+              ? event.translationX * 0.2
+              : event.translationX;
+        })
+        .onEnd((event) => {
+          if (isAnimating.value || categoryScrollingRef.current) return;
 
-        const { translationX, velocityX } = event;
-        const currentIndex = routes.findIndex((r) => r.key === activeTab);
+          const { translationX, velocityX } = event;
+          const currentIndex = routes.findIndex((r) => r.key === activeTab);
 
-        const goNext = (translationX < -30 || velocityX < -300) && currentIndex < routes.length - 1;
-        const goPrev = (translationX > 30 || velocityX > 300) && currentIndex > 0;
+          const goNext =
+            (translationX < -30 || velocityX < -300) &&
+            currentIndex < routes.length - 1;
+          const goPrev =
+            (translationX > 30 || velocityX > 300) && currentIndex > 0;
 
-        if (goNext) {
-          const nextKey = routes[currentIndex + 1].key;
-          isAnimating.value = true;
-          runOnJS(setActiveTab)(nextKey);
-          translateX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
-            'worklet';
-            runOnJS(setDisplayTab)(nextKey);
-            isAnimating.value = false;
-          });
-        } else if (goPrev) {
-          const nextKey = routes[currentIndex - 1].key;
-          isAnimating.value = true;
-          runOnJS(setActiveTab)(nextKey);
-          translateX.value = withTiming(SCREEN_WIDTH, { duration: 200 }, () => {
-            'worklet';
-            runOnJS(setDisplayTab)(nextKey);
-            isAnimating.value = false;
-          });
-        } else {
-          translateX.value = withSpring(0, { damping: 15, stiffness: 150 });
-        }
-      }),
-    [activeTab, displayTab, routes, translateX]
+          if (goNext) {
+            const nextKey = routes[currentIndex + 1].key;
+            isAnimating.value = true;
+            runOnJS(setActiveTab)(nextKey);
+            translateX.value = withTiming(
+              -SCREEN_WIDTH,
+              { duration: 200 },
+              () => {
+                "worklet";
+                runOnJS(setDisplayTab)(nextKey);
+                isAnimating.value = false;
+              },
+            );
+          } else if (goPrev) {
+            const nextKey = routes[currentIndex - 1].key;
+            isAnimating.value = true;
+            runOnJS(setActiveTab)(nextKey);
+            translateX.value = withTiming(
+              SCREEN_WIDTH,
+              { duration: 200 },
+              () => {
+                "worklet";
+                runOnJS(setDisplayTab)(nextKey);
+                isAnimating.value = false;
+              },
+            );
+          } else {
+            translateX.value = withSpring(0, { damping: 15, stiffness: 150 });
+          }
+        }),
+    [activeTab, displayTab, routes, translateX],
   );
 
   const sceneMap = {
-    dating:   () => <DatingScreen devMode={devMode} />,
-    likes:    () => <RequestsScreen />,
-    explore:  () => (
+    dating: () => <DatingScreen devMode={devMode} />,
+    likes: () => <RequestsScreen />,
+    explore: () => (
       <ExploreScreenNew
-        onCategoryScrollStart={() => { categoryScrollingRef.current = true; }}
-        onCategoryScrollEnd={() => { categoryScrollingRef.current = false; }}
+        onCategoryScrollStart={() => {
+          categoryScrollingRef.current = true;
+        }}
+        onCategoryScrollEnd={() => {
+          categoryScrollingRef.current = false;
+        }}
       />
     ),
     messages: () => <ChatScreen />,
-    profile:  () => (
+    profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
         toggleTheme={toggleTheme}
@@ -284,18 +348,28 @@ export default function App() {
 
   const visibleRoutes = useMemo(() => {
     const displayIndex = routes.findIndex((r) => r.key === displayTab);
-    const activeIndex  = routes.findIndex((r) => r.key === activeTab);
-    return routes.filter((_, i) =>
-      Math.abs(i - displayIndex) <= 1 || Math.abs(i - activeIndex) <= 1
+    const activeIndex = routes.findIndex((r) => r.key === activeTab);
+    return routes.filter(
+      (_, i) =>
+        Math.abs(i - displayIndex) <= 1 || Math.abs(i - activeIndex) <= 1,
     );
   }, [displayTab, activeTab]);
 
   if (checkingProfile) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
+        <StripeProvider
+          publishableKey={publishableKey}
+          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+        >
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }} />
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            />
           </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
@@ -304,10 +378,14 @@ export default function App() {
 
   if (user && !profileComplete) {
     const needsEmailVerification =
-      user.providerData.some((p) => p.providerId === "password") && !user.emailVerified;
+      user.providerData.some((p) => p.providerId === "password") &&
+      !user.emailVerified;
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
+        <StripeProvider
+          publishableKey={publishableKey}
+          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+        >
           <GestureHandlerRootView style={{ flex: 1 }}>
             <SignUpScreen
               isInSignupFlow={true}
@@ -324,10 +402,16 @@ export default function App() {
   if (user && profileComplete) {
     return (
       <PaperProvider theme={theme}>
-        <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
+        <StripeProvider
+          publishableKey={publishableKey}
+          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+        >
           <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView
-              style={[styles.safeArea, { backgroundColor: theme.colors.elevation.level2 }]}
+              style={[
+                styles.safeArea,
+                { backgroundColor: theme.colors.elevation.level2 },
+              ]}
               edges={["top", "left", "right"]}
             >
               <StatusBar style={isDarkMode ? "light" : "dark"} />
@@ -335,11 +419,19 @@ export default function App() {
               <GestureDetector gesture={swipeGesture}>
                 <View style={{ flex: 1 }}>
                   {visibleRoutes.map((route) => {
-                    const displayIndex = routes.findIndex((r) => r.key === displayTab);
-                    const routeIndex   = routes.findIndex((r) => r.key === route.key);
-                    const offset       = (routeIndex - displayIndex) * SCREEN_WIDTH;
+                    const displayIndex = routes.findIndex(
+                      (r) => r.key === displayTab,
+                    );
+                    const routeIndex = routes.findIndex(
+                      (r) => r.key === route.key,
+                    );
+                    const offset = (routeIndex - displayIndex) * SCREEN_WIDTH;
                     return (
-                      <AnimatedView key={route.key} offset={offset} translateX={translateX}>
+                      <AnimatedView
+                        key={route.key}
+                        offset={offset}
+                        translateX={translateX}
+                      >
                         {sceneMap[route.key]()}
                       </AnimatedView>
                     );
@@ -347,15 +439,26 @@ export default function App() {
                 </View>
               </GestureDetector>
 
-              <View style={{ backgroundColor: theme.colors.elevation.level2, height: 70 }}>
+              <View
+                style={{
+                  backgroundColor: theme.colors.elevation.level2,
+                  height: 70,
+                }}
+              >
                 <BottomNavigation
-                  navigationState={{ index: routes.findIndex((r) => r.key === activeTab), routes }}
+                  navigationState={{
+                    index: routes.findIndex((r) => r.key === activeTab),
+                    routes,
+                  }}
                   onIndexChange={(index) => {
                     setActiveTab(routes[index].key);
                     setDisplayTab(routes[index].key);
                   }}
                   renderScene={() => null}
-                  barStyle={{ backgroundColor: theme.colors.elevation.level2, height: 70 }}
+                  barStyle={{
+                    backgroundColor: theme.colors.elevation.level2,
+                    height: 70,
+                  }}
                   activeColor={theme.colors.primary}
                   inactiveColor={theme.colors.onSurfaceVariant}
                   safeAreaInsets={{ bottom: 0 }}
@@ -370,12 +473,16 @@ export default function App() {
 
   return (
     <PaperProvider theme={theme}>
-      <StripeProvider publishableKey={publishableKey} urlScheme="doubly-yrvn0tmogrdrliugnun4w">
+      <StripeProvider
+        publishableKey={publishableKey}
+        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+      >
         <GestureHandlerRootView style={{ flex: 1 }}>
-          {showRegister
-            ? <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-            : <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-          }
+          {showRegister ? (
+            <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+          ) : (
+            <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
+          )}
         </GestureHandlerRootView>
       </StripeProvider>
     </PaperProvider>

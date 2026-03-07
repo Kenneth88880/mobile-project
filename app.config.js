@@ -40,7 +40,8 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff",
       },
-      googleServicesFile: "./google-services.json",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
       package: "com.doublyconnections.doubly",
       permissions: [
         "ACCESS_FINE_LOCATION",
