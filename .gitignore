@@ -45,7 +45,7 @@ stripeConfig.js
 
 # GOOGLE stuff
 
-#GoogleService-Info.plist
+GoogleService-Info.plist
 google-services.json
 
 #keys for all our services
@@ -53,9 +53,6 @@ google-services.json
 
 #eas.json
 eas.json
-
-# stripe api keys (DO NOT KEEP)
-stripeConfig.js
 
 # ui colours test
 colours/
@@ -70,4 +67,4 @@ database.rules.json
 
 #creates test accounts without the need of validation
 verifyUser.cjs
-serviceAccountKey.json.json
+serviceAccountKey.json
