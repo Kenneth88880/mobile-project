@@ -66,8 +66,8 @@ export default function App() {
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
 
-  const API_URL =
-    "https://us-central1-doubly-messenging.cloudfunctions.net/api";
+  
+  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const translateX = useSharedValue(0);
   const isAnimating = useSharedValue(false);
@@ -260,25 +260,22 @@ export default function App() {
     }
   };
 
-  const swipeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-40, 40])
-        .failOffsetY([-15, 15])
-        .onUpdate((event) => {
-          if (isAnimating.value || categoryScrollingRef.current) return;
+  const swipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-40, 40])
+      .failOffsetY([-15, 15])
+      .onUpdate((event) => {
+        if (isAnimating.value || categoryScrollingRef.current) return;
 
-          const currentIndex = routes.findIndex((r) => r.key === activeTab);
-          const isAtStart = currentIndex === 0 && event.translationX > 0;
-          const isAtEnd =
-            currentIndex === routes.length - 1 && event.translationX < 0;
-          translateX.value =
-            isAtStart || isAtEnd
-              ? event.translationX * 0.2
-              : event.translationX;
-        })
-        .onEnd((event) => {
-          if (isAnimating.value || categoryScrollingRef.current) return;
+        const currentIndex = routes.findIndex((r) => r.key === activeTab);
+        const isAtStart = currentIndex === 0 && event.translationX > 0;
+        const isAtEnd = currentIndex === routes.length - 1 && event.translationX < 0;
+        translateX.value = isAtStart || isAtEnd
+          ? event.translationX * 0.2
+          : event.translationX;
+      })
+      .onEnd((event) => {
+        if (isAnimating.value || categoryScrollingRef.current) return;
 
           const { translationX, velocityX } = event;
           const currentIndex = routes.findIndex((r) => r.key === activeTab);
@@ -323,16 +320,12 @@ export default function App() {
   );
 
   const sceneMap = {
-    dating: () => <DatingScreen devMode={devMode} />,
-    likes: () => <RequestsScreen />,
-    explore: () => (
+    dating:   () => <DatingScreen devMode={devMode} />,
+    likes:    () => <RequestsScreen />,
+    explore:  () => (
       <ExploreScreenNew
-        onCategoryScrollStart={() => {
-          categoryScrollingRef.current = true;
-        }}
-        onCategoryScrollEnd={() => {
-          categoryScrollingRef.current = false;
-        }}
+        onCategoryScrollStart={() => { categoryScrollingRef.current = true; }}
+        onCategoryScrollEnd={() => { categoryScrollingRef.current = false; }}
       />
     ),
     messages: () => <ChatScreen />,
