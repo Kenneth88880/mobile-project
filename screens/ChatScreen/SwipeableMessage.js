@@ -9,90 +9,58 @@ import Animated, {
   runOnJS,
   interpolate,
   Extrapolate,
+  useAnimatedProps
 } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const RADIUS = 13;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const THRESHOLD = 60;
 const SIZE = 30;
 const BORDER = 3;
-const HALF = SIZE / 2;
-const GAP = 4;
+const GAP = 1;
 
-function QuarterArc({ progress, quarterIndex }) {
-  // Each quarter covers a 0.25 window of progress, with slight overlap
-  const start = quarterIndex * 0.25;
-  const end = start + 0.25;
-
-  const style = useAnimatedStyle(() => {
+function ArcRing({ progress }) {
+  const animatedProps = useAnimatedProps(() => {
     const p = Math.min(Math.abs(progress.value), 1);
-    const localP = Math.max(0, Math.min(1, (p - start) / (end - start)));
-    const deg = localP * 90;
-    const visible = p > start ? 1 : 0;
     return {
-      transform: [{ rotate: `${deg}deg` }],
-      opacity: visible,
+      strokeDashoffset: CIRCUMFERENCE * (1 - p),
     };
   });
 
-  const clipStyles = [
-    { top: 0,    left: HALF,  width: HALF, height: HALF },
-    { top: HALF, left: HALF,  width: HALF, height: HALF },
-    { top: HALF, left: 0,     width: HALF, height: HALF },
-    { top: 0,    left: 0,     width: HALF, height: HALF },
-  ];
-
-  const ringOffsets = [
-    { left: -HALF, top: 0    },
-    { left: -HALF, top: -HALF}, 
-    { left: 0,     top: -HALF},
-    { left: 0,     top: 0    },
-  ];
-
-  const clip = clipStyles[quarterIndex];
-  const offset = ringOffsets[quarterIndex];
-
   return (
-    <View style={[{ position: 'absolute', overflow: 'hidden' }, clip]}>
-      <Animated.View style={[{
-        position: 'absolute',
-        width: SIZE,
-        height: SIZE,
-      }, offset, style]}>
-        <View style={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: HALF,
-          borderWidth: BORDER,
-          borderColor: '#5B8BF5',
-          position: 'absolute',
-        }} />
-      </Animated.View>
-    </View>
-  );
-}
-
-function ArcRing({ progress }) {
-  return (
-    <View style={{ width: SIZE, height: SIZE, position: 'absolute' }}>
-
-      <View style={{
-        position: 'absolute',
-        width: SIZE, height: SIZE,
-        borderRadius: HALF,
-        borderWidth: BORDER,
-        borderColor: 'rgba(136,136,136,0.18)',
-      }} />
-
-      <QuarterArc progress={progress} quarterIndex={0} />
-      <QuarterArc progress={progress} quarterIndex={1} />
-      <QuarterArc progress={progress} quarterIndex={2} />
-      <QuarterArc progress={progress} quarterIndex={3} />
-      
-    </View>
+    <Svg width={SIZE} height={SIZE} style={{ position: 'absolute' }}>
+      {/* Background track */}
+      <Circle
+        cx={SIZE / 2}
+        cy={SIZE / 2}
+        r={RADIUS}
+        stroke="rgba(136,136,136,0.18)"
+        strokeWidth={BORDER}
+        fill="none"
+      />
+      {/* Animated fill */}
+      <AnimatedCircle
+        cx={SIZE / 2}
+        cy={SIZE / 2}
+        r={RADIUS}
+        stroke="#5B8BF5"
+        strokeWidth={BORDER}
+        fill="none"
+        strokeDasharray={CIRCUMFERENCE}
+        animatedProps={animatedProps}
+        strokeLinecap="round"
+        rotation="-90"
+        origin={`${SIZE / 2}, ${SIZE / 2}`}
+      />
+    </Svg>
   );
 }
 
 function ReplyIndicator({ progress, side, translateX }) {
-  const APPEAR_THRESHOLD = 36 / THRESHOLD;
+  const APPEAR_THRESHOLD = 15 / THRESHOLD;
 
   const containerStyle = useAnimatedStyle(() => {
     const p = Math.min(Math.abs(progress.value), 1);
@@ -189,7 +157,7 @@ export function SwipeableMessageRight({ children, onSwipe }) {
     .failOffsetY([-10, 10])
     .onUpdate((e) => {
       if (e.translationX > 0) {
-        translateX.value = Math.min(e.translationX * 0.4, THRESHOLD * 0.7);
+        translateX.value = Math.min(e.translationX * 0.4, THRESHOLD * 0.4);
         progress.value = Math.min(e.translationX / THRESHOLD, 1);
       }
     })
@@ -229,7 +197,7 @@ export function SwipeableMessageLeft({ children, onSwipe }) {
     .failOffsetY([-10, 10])
     .onUpdate((e) => {
       if (e.translationX < 0) {
-        translateX.value = Math.max(e.translationX * 0.4, -THRESHOLD * 0.7);
+        translateX.value = Math.max(e.translationX * 0.4, -THRESHOLD * 0.4);
         progress.value = Math.min(Math.abs(e.translationX) / THRESHOLD, 1);
       }
     })

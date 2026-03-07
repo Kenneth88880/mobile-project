@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import { Calendar } from "react-native-calendars";
+import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 /** Convert "3:30 PM" → minutes since midnight for sorting. */
@@ -102,6 +103,49 @@ export default function MyDates({
     setEditPeriod("PM");
     setShowDatePicker(false);
   };
+
+  const calendarSwipeGesture = useMemo(() =>
+  
+    Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-15, 15])
+        .onUpdate((event) => {
+          if (event.translationX > 10) {
+            console.log("this is the calendar swipe right")
+          } else if (event.translationX < -10) {
+            console.log("this is the calendar swipe left")
+          }
+        })
+        .onEnd((event) => {
+          if (event.translationX > 10) {
+            console.log("this is the calendar swipe right")
+          } else if (event.translationX < -10) {
+            console.log("this is the calendar swipe left")
+          }
+        }),
+    [editingEvent, handleDelete, openEditModal],
+  );
+
+  const myEventSwipeGesture = useMemo(() =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-15, 15])
+        .onUpdate((event) => {
+          if (event.translationX > 10) {
+            console.log("this is the event swipe right")
+          } else if (event.translationX < -10) {
+            console.log("this is the event swipe left")
+          }
+        })
+        .onEnd((event) => {
+          if (event.translationX > 10) {
+            console.log("this is the event swipe right")
+          } else if (event.translationX < -10) {
+            console.log("this is the event swipe left")
+          }
+        }),
+    [editingEvent, handleDelete, openEditModal],
+  );
 
   const validHour =
     /^\d{1,2}$/.test(editHour) &&
@@ -250,340 +294,350 @@ export default function MyDates({
   );
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Calendar
-          current={today}
-          onDayPress={(day) => setSelectedDate(day.dateString)}
-          markedDates={markedDates}
-          theme={calendarTheme}
-          style={[
-            styles.calendar,
-            { borderColor: theme.colors.outlineVariant },
-          ]}
-        />
-
-        <View style={styles.eventsSection}>
-          <Text
-            style={[styles.eventsTitle, { color: theme.colors.onSurface }]}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      
+        <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
           >
-            My Events
-          </Text>
-
-          {!hasAnyEvents ? (
-            <View style={styles.emptyEvents}>
-              <MaterialCommunityIcons
-                name="calendar-blank-outline"
-                size={48}
-                color={theme.colors.outlineVariant}
-              />
-              <Text
-                style={[
-                  styles.emptyText,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-                No events found
-              </Text>
-              <TouchableOpacity onPress={onExplore}>
-                <Text
-                  style={[
-                    styles.exploreLink,
-                    { color: theme.colors.primary },
-                  ]}
-                >
-                  Explore Events
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              {/* Today */}
-              <Text
-                style={[
-                  styles.subsectionTitle,
-                  { color: theme.colors.onSurface },
-                ]}
-              >
-                Today
-              </Text>
-              {todayEvents.length === 0 ? (
-                <Text
-                  style={[
-                    styles.noEventsText,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  No events today
-                </Text>
-              ) : (
-                todayEvents.map(renderEventCard)
-              )}
-
-              {/* Upcoming */}
-              <Text
-                style={[
-                  styles.subsectionTitle,
-                  { color: theme.colors.onSurface, marginTop: 20 },
-                ]}
-              >
-                Upcoming
-              </Text>
-              {upcomingEvents.length === 0 ? (
-                <Text
-                  style={[
-                    styles.noEventsText,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  No upcoming events
-                </Text>
-              ) : (
-                upcomingEvents.map(renderEventCard)
-              )}
-            </>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Edit / Delete modal */}
-      <Modal
-        visible={!!editingEvent}
-        animationType="slide"
-        transparent
-        onRequestClose={closeEditModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalSheet,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScroll}
-            >
-              {/* Header */}
-              <View style={styles.modalHeader}>
-                <Text
-                  style={[
-                    styles.modalTitle,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  Edit Event
-                </Text>
-                <TouchableOpacity onPress={closeEditModal}>
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={22}
-                    color={theme.colors.onSurfaceVariant}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Event name (read-only) */}
-              <Text
-                style={[
-                  styles.editEventName,
-                  { color: theme.colors.onSurface },
-                ]}
-              >
-                {editingEvent?.event?.title}
-              </Text>
-
-              {/* Date */}
-              <Text
-                style={[
-                  styles.editLabel,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-                Date
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.datePickerBtn,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-                onPress={() => setShowDatePicker(!showDatePicker)}
-              >
-                <MaterialCommunityIcons
-                  name="calendar"
-                  size={18}
-                  color={theme.colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.datePickerText,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  {editDate ? formatFullDate(editDate) : "Select date"}
-                </Text>
-                <MaterialCommunityIcons
-                  name={showDatePicker ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color={theme.colors.onSurfaceVariant}
-                />
-              </TouchableOpacity>
-
-              {showDatePicker && (
+            <GestureDetector gesture={calendarSwipeGesture}>
+              <View collapsable={false}>
                 <Calendar
-                  current={editDate || today}
-                  onDayPress={(day) => {
-                    setEditDate(day.dateString);
-                    setShowDatePicker(false);
-                  }}
-                  markedDates={editMarkedDates}
-                  theme={editCalendarTheme}
-                  style={styles.editCalendar}
+                  current={today}
+                  onDayPress={(day) => setSelectedDate(day.dateString)}
+                  markedDates={markedDates}
+                  theme={calendarTheme}
+                  style={[
+                    styles.calendar,
+                    { borderColor: theme.colors.outlineVariant },
+                  ]}
                 />
-              )}
+                </View>
+            </GestureDetector>
 
-              {/* Time */}
-              <Text
+              {/* My Events */}
+              <GestureDetector gesture={myEventSwipeGesture}>
+                <View style={styles.eventsSection}>
+                  <Text
+                    style={[styles.eventsTitle, { color: theme.colors.onSurface }]}
+                  >
+                    My Events
+                  </Text>
+
+                  {!hasAnyEvents ? (
+                    <View style={styles.emptyEvents}>
+                      <MaterialCommunityIcons
+                        name="calendar-blank-outline"
+                        size={48}
+                        color={theme.colors.outlineVariant}
+                      />
+                      <Text
+                        style={[
+                          styles.emptyText,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                      >
+                        No events found
+                      </Text>
+                      <TouchableOpacity onPress={onExplore}>
+                        <Text
+                          style={[
+                            styles.exploreLink,
+                            { color: theme.colors.primary },
+                          ]}
+                        >
+                          Explore Events
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <>
+                      {/* Today */}
+                      <Text
+                        style={[
+                          styles.subsectionTitle,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
+                        Today
+                      </Text>
+                      {todayEvents.length === 0 ? (
+                        <Text
+                          style={[
+                            styles.noEventsText,
+                            { color: theme.colors.onSurfaceVariant },
+                          ]}
+                        >
+                          No events today
+                        </Text>
+                      ) : (
+                        todayEvents.map(renderEventCard)
+                      )}
+
+                      {/* Upcoming */}
+                      <Text
+                        style={[
+                          styles.subsectionTitle,
+                          { color: theme.colors.onSurface, marginTop: 20 },
+                        ]}
+                      >
+                        Upcoming
+                      </Text>
+                      {upcomingEvents.length === 0 ? (
+                        <Text
+                          style={[
+                            styles.noEventsText,
+                            { color: theme.colors.onSurfaceVariant },
+                          ]}
+                        >
+                          No upcoming events
+                        </Text>
+                      ) : (
+                        upcomingEvents.map(renderEventCard)
+                      )}
+                    </>
+                  )}
+                </View>
+              </GestureDetector>
+          </ScrollView>
+
+          {/* Edit / Delete modal */}
+          <Modal
+            visible={!!editingEvent}
+            animationType="slide"
+            transparent
+            onRequestClose={closeEditModal}
+          >
+            <View style={styles.modalOverlay}>
+              <View
                 style={[
-                  styles.editLabel,
-                  { color: theme.colors.onSurfaceVariant, marginTop: 16 },
+                  styles.modalSheet,
+                  { backgroundColor: theme.colors.surface },
                 ]}
               >
-                Time
-              </Text>
-              <View style={styles.timeRow}>
-                <TextInput
-                  style={[
-                    styles.timeInput,
-                    {
-                      backgroundColor: theme.colors.surfaceVariant,
-                      color: theme.colors.onSurface,
-                      borderColor: theme.colors.outlineVariant,
-                    },
-                  ]}
-                  placeholder="HH"
-                  placeholderTextColor={theme.colors.outlineVariant}
-                  value={editHour}
-                  onChangeText={setEditHour}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-                <Text
-                  style={[
-                    styles.timeSeparator,
-                    { color: theme.colors.onSurface },
-                  ]}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.modalScroll}
                 >
-                  :
-                </Text>
-                <TextInput
-                  style={[
-                    styles.timeInput,
-                    {
-                      backgroundColor: theme.colors.surfaceVariant,
-                      color: theme.colors.onSurface,
-                      borderColor: theme.colors.outlineVariant,
-                    },
-                  ]}
-                  placeholder="MM"
-                  placeholderTextColor={theme.colors.outlineVariant}
-                  value={editMinute}
-                  onChangeText={setEditMinute}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-                {["AM", "PM"].map((p) => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[
-                      styles.periodBtn,
-                      {
-                        backgroundColor:
-                          editPeriod === p
-                            ? theme.colors.primary
-                            : theme.colors.surfaceVariant,
-                      },
-                    ]}
-                    onPress={() => setEditPeriod(p)}
-                  >
+                  {/* Header */}
+                  <View style={styles.modalHeader}>
                     <Text
                       style={[
-                        styles.periodBtnText,
-                        {
-                          color:
-                            editPeriod === p
-                              ? theme.colors.onPrimary
-                              : theme.colors.onSurfaceVariant,
-                        },
+                        styles.modalTitle,
+                        { color: theme.colors.onSurface },
                       ]}
                     >
-                      {p}
+                      Edit Event
                     </Text>
+                    <TouchableOpacity onPress={closeEditModal}>
+                      <MaterialCommunityIcons
+                        name="close"
+                        size={22}
+                        color={theme.colors.onSurfaceVariant}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Event name (read-only) */}
+                  <Text
+                    style={[
+                      styles.editEventName,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    {editingEvent?.event?.title}
+                  </Text>
+
+                  {/* Date */}
+                  <Text
+                    style={[
+                      styles.editLabel,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    Date
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.datePickerBtn,
+                      { backgroundColor: theme.colors.surfaceVariant },
+                    ]}
+                    onPress={() => setShowDatePicker(!showDatePicker)}
+                  >
+                    <MaterialCommunityIcons
+                      name="calendar"
+                      size={18}
+                      color={theme.colors.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.datePickerText,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      {editDate ? formatFullDate(editDate) : "Select date"}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={showDatePicker ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color={theme.colors.onSurfaceVariant}
+                    />
                   </TouchableOpacity>
-                ))}
-              </View>
 
-              {/* Actions */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.deleteBtn,
-                    { borderColor: theme.colors.error },
-                  ]}
-                  onPress={handleDelete}
-                >
-                  <MaterialCommunityIcons
-                    name="delete-outline"
-                    size={18}
-                    color={theme.colors.error}
-                  />
+                  {showDatePicker && (
+                    <Calendar
+                      current={editDate || today}
+                      onDayPress={(day) => {
+                        setEditDate(day.dateString);
+                        setShowDatePicker(false);
+                      }}
+                      markedDates={editMarkedDates}
+                      theme={editCalendarTheme}
+                      style={styles.editCalendar}
+                    />
+                  )}
+
+                  {/* Time */}
                   <Text
                     style={[
-                      styles.deleteBtnText,
-                      { color: theme.colors.error },
+                      styles.editLabel,
+                      { color: theme.colors.onSurfaceVariant, marginTop: 16 },
                     ]}
                   >
-                    Delete
+                    Time
                   </Text>
-                </TouchableOpacity>
+                  <View style={styles.timeRow}>
+                    <TextInput
+                      style={[
+                        styles.timeInput,
+                        {
+                          backgroundColor: theme.colors.surfaceVariant,
+                          color: theme.colors.onSurface,
+                          borderColor: theme.colors.outlineVariant,
+                        },
+                      ]}
+                      placeholder="HH"
+                      placeholderTextColor={theme.colors.outlineVariant}
+                      value={editHour}
+                      onChangeText={setEditHour}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                    <Text
+                      style={[
+                        styles.timeSeparator,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      :
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.timeInput,
+                        {
+                          backgroundColor: theme.colors.surfaceVariant,
+                          color: theme.colors.onSurface,
+                          borderColor: theme.colors.outlineVariant,
+                        },
+                      ]}
+                      placeholder="MM"
+                      placeholderTextColor={theme.colors.outlineVariant}
+                      value={editMinute}
+                      onChangeText={setEditMinute}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                    {["AM", "PM"].map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.periodBtn,
+                          {
+                            backgroundColor:
+                              editPeriod === p
+                                ? theme.colors.primary
+                                : theme.colors.surfaceVariant,
+                          },
+                        ]}
+                        onPress={() => setEditPeriod(p)}
+                      >
+                        <Text
+                          style={[
+                            styles.periodBtnText,
+                            {
+                              color:
+                                editPeriod === p
+                                  ? theme.colors.onPrimary
+                                  : theme.colors.onSurfaceVariant,
+                            },
+                          ]}
+                        >
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.saveBtn,
-                    {
-                      backgroundColor: canSave
-                        ? theme.colors.primary
-                        : theme.colors.surfaceDisabled ||
-                          theme.colors.outlineVariant,
-                    },
-                  ]}
-                  onPress={handleSave}
-                  disabled={!canSave}
-                  activeOpacity={canSave ? 0.7 : 1}
-                >
-                  <Text
-                    style={[
-                      styles.saveBtnText,
-                      {
-                        color: canSave
-                          ? theme.colors.onPrimary
-                          : theme.colors.onSurfaceDisabled ||
-                            theme.colors.outline,
-                      },
-                    ]}
-                  >
-                    Save Changes
-                  </Text>
-                </TouchableOpacity>
+                  {/* Actions */}
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteBtn,
+                        { borderColor: theme.colors.error },
+                      ]}
+                      onPress={handleDelete}
+                    >
+                      <MaterialCommunityIcons
+                        name="delete-outline"
+                        size={18}
+                        color={theme.colors.error}
+                      />
+                      <Text
+                        style={[
+                          styles.deleteBtnText,
+                          { color: theme.colors.error },
+                        ]}
+                      >
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.saveBtn,
+                        {
+                          backgroundColor: canSave
+                            ? theme.colors.primary
+                            : theme.colors.surfaceDisabled ||
+                              theme.colors.outlineVariant,
+                        },
+                      ]}
+                      onPress={handleSave}
+                      disabled={!canSave}
+                      activeOpacity={canSave ? 0.7 : 1}
+                    >
+                      <Text
+                        style={[
+                          styles.saveBtnText,
+                          {
+                            color: canSave
+                              ? theme.colors.onPrimary
+                              : theme.colors.onSurfaceDisabled ||
+                                theme.colors.outline,
+                          },
+                        ]}
+                      >
+                        Save Changes
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
               </View>
-            </ScrollView>
-          </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
