@@ -860,6 +860,8 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
           style={[styles.container, { backgroundColor: theme.colors.background }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
+          keyboardDismissMode="on-drag"
+          
           enabled={!showEditModal}
         >
           <Surface style={styles.chatHeader} elevation={2}>
