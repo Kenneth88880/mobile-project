@@ -22,7 +22,12 @@ function withFirebasePodfilePostInstall(config) {
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        if target.name == 'react-native-google-maps' || target.name == 'react-native-maps'
+      end
+
+      # Disable modular headers for Google Maps targets to fix RCTViewManager import error
+      if ['react-native-google-maps', 'react-native-maps'].include?(target.name)
+        target.build_configurations.each do |config|
+          config.build_settings['DEFINES_MODULE'] = 'NO'
           config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Wno-non-modular-include-in-framework-module'
         end
       end
@@ -30,7 +35,6 @@ function withFirebasePodfilePostInstall(config) {
 
 `;
 
-          // Insert before react_native_post_install
           if (contents.includes("react_native_post_install")) {
             contents = contents.replace(
               /(\s*)(react_native_post_install)/,
