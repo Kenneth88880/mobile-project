@@ -17,7 +17,7 @@ import {
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
-import { getPlacesPhotoUrl } from "./PlaceItem";
+import { getPhotoUrl } from "../../services/placesService";
 import ShareToChat from "./ShareToChat";
 import { CURRENT_USER_ID } from "../../services/UserConfig";
 
@@ -48,7 +48,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const canSave = eventDate && validHour && validMinute;
 
   const imageUri =
-    (place.photo_reference && getPlacesPhotoUrl(place.photo_reference)) ||
+    (place.photo_name && getPhotoUrl(place.photo_name, 800)) ||
     place.image_url ||
     PLACEHOLDER_IMAGE;
 
@@ -197,6 +197,26 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
             >
               {place.category}
             </Text>
+
+            {(place.rating != null || place.price_range) && (
+              <Text
+                style={[styles.ratingRow, { color: theme.colors.onSurfaceVariant }]}
+              >
+                {place.rating != null
+                  ? `★ ${place.rating}${place.user_ratings_total ? ` (${place.user_ratings_total})` : ""}`
+                  : ""}
+                {place.rating != null && place.price_range ? "  ·  " : ""}
+                {place.price_range || ""}
+              </Text>
+            )}
+
+            {place.editorial_summary ? (
+              <Text
+                style={[styles.summary, { color: theme.colors.onSurfaceVariant }]}
+              >
+                {place.editorial_summary}
+              </Text>
+            ) : null}
 
             {/* Action buttons */}
             <View style={styles.actions}>
@@ -583,7 +603,16 @@ const styles = StyleSheet.create({
   },
   category: {
     fontSize: 15,
-    marginBottom: 20,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  summary: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   actions: {
     flexDirection: "row",
