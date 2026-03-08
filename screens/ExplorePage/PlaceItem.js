@@ -1,25 +1,16 @@
 import React from "react";
 import { View, StyleSheet, Image, TouchableOpacity } from "react-native";
 import { Text, useTheme } from "react-native-paper";
+import { getPhotoUrl } from "../../services/placesService";
 
 const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
 
-// Build a Google Places photo URL from a photo_reference.
-// Call this when you have real Places API data.
-export function getPlacesPhotoUrl(photoReference, maxWidth = 600) {
-  // Replace GOOGLE_PLACES_API_KEY with your actual key or import from config
-  // return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${GOOGLE_PLACES_API_KEY}`;
-  return null;
-}
-
 const PlaceItem = ({ place, onPress }) => {
   const theme = useTheme();
 
-  // Resolve image source: prefer Places API photo, fall back to any provided
-  // uri, then placeholder.
   const imageUri =
-    (place.photo_reference && getPlacesPhotoUrl(place.photo_reference)) ||
+    (place.photo_name && getPhotoUrl(place.photo_name)) ||
     place.image_url ||
     PLACEHOLDER_IMAGE;
 
@@ -43,7 +34,17 @@ const PlaceItem = ({ place, onPress }) => {
         >
           {place.category}
         </Text>
-        {place.price_range ? (
+        {place.rating != null && (
+          <Text
+            style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}
+            numberOfLines={1}
+          >
+            ★ {place.rating}
+            {place.user_ratings_total ? ` (${place.user_ratings_total})` : ""}
+            {place.price_range ? `  ·  ${place.price_range}` : ""}
+          </Text>
+        )}
+        {!place.rating && place.price_range ? (
           <Text
             style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}
             numberOfLines={1}
