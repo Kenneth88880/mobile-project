@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -6,73 +6,34 @@ import {
   TouchableOpacity,
   StatusBar,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Text, Searchbar, useTheme } from "react-native-paper";
+import * as Location from "expo-location";
 import PlaceItem from "./ExplorePage/PlaceItem";
 import PlaceInfo from "./ExplorePage/PlaceInfo";
-import Categories from "./ExplorePage/Categories";
+import Categories, { CATEGORIES } from "./ExplorePage/Categories";
 import MyDates from "./ExplorePage/MyDates";
-import places from "../archive/places.json";
+import { searchNearbyPlaces } from "../services/placesService";
 
-// Map places.json categories to our Google-Places-style category IDs.
-// When you switch to the real API the data will already have a `type` field.
-const CATEGORY_MAP = {
-  restaurant: [
-    "Afghan",
-    "American",
-    "Asian Fusion",
-    "BBQ",
-    "Breakfast",
-    "Burgers",
-    "Caribbean",
-    "Chinese",
-    "Ethiopian",
-    "French",
-    "Greek",
-    "Indian",
-    "Italian",
-    "Japanese",
-    "Korean",
-    "Latin",
-    "Lebanese",
-    "Mediterranean",
-    "Mexican",
-    "Middle Eastern",
-    "Pakistani",
-    "Persian",
-    "Pizza",
-    "Portuguese",
-    "Seafood",
-    "Southern",
-    "Steakhouses",
-    "Sushi",
-    "Thai",
-    "Turkish",
-    "Vegan",
-    "Vegetarian",
-    "Vietnamese",
-  ],
-  cafe: ["Cafe", "Coffee", "Bakeries", "Desserts", "Donuts", "Ice Cream"],
-  bar: ["Bar", "Bars", "Cocktail Bars", "Pubs", "Wine Bars", "Breweries"],
-  park: ["Parks", "Park", "Hiking", "Beaches", "Gardens"],
-  movie_theater: ["Cinema", "Movie Theater", "Movie Theatres"],
-  museum: ["Museum", "Museums", "Art Galleries", "Gallery"],
-  bowling_alley: ["Bowling", "Arcade", "Entertainment"],
-  spa: ["Spa", "Massage", "Wellness"],
-};
-
-function matchesCategory(place, categoryId) {
-  if (!categoryId) return true;
-  const mapped = CATEGORY_MAP[categoryId] || [];
-  return mapped.some(
-    (c) => place.category && place.category.toLowerCase() === c.toLowerCase(),
-  );
-}
+const PAGE_SIZE = 10;
 
 const TABS = [
   { key: "explore", label: "Explore" },
   { key: "mydates", label: "My Dates" },
 ];
+
+// Interleave arrays so the list reads: 1 restaurant, 1 cafe, 1 bar, …, 2 restaurant, …
+function interleave(arrays) {
+  const result = [];
+  const maxLen = Math.max(0, ...arrays.map((a) => a.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const arr of arrays) {
+      if (arr[i] !== undefined) result.push(arr[i]);
+    }
+  }
+  return result;
+}
 
 export default function ExploreScreenNew({ isActive }) {
   const theme = useTheme();
@@ -81,6 +42,98 @@ export default function ExploreScreenNew({ isActive }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [events, setEvents] = useState({});
+  const [allPlaces, setAllPlaces] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [retryKey, setRetryKey] = useState(0);
+
+  // basePlacesRef holds the initial all-category preload.
+  // It is the pool used for search so that an active category filter
+  // never restricts what the user can find via the search bar.
+  const basePlacesRef = useRef([]);
+  // Cache the device location so we only request it once.
+  const locationRef = useRef(null);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+    setAllPlaces([]);
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setLocationError(null);
+      try {
+        // Request location once; reuse on subsequent category changes.
+        if (!locationRef.current) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            if (!cancelled)
+              setLocationError(
+                "Location permission denied. Please enable it in Settings."
+              );
+            return;
+          }
+          const loc = await Location.getCurrentPositionAsync({});
+          locationRef.current = loc.coords;
+        }
+
+        const { latitude, longitude } = locationRef.current;
+        let results;
+
+        if (selectedCategory) {
+          // Category selected — fetch up to 20 of that type.
+          results = await searchNearbyPlaces({
+            latitude,
+            longitude,
+            radius: 1500,
+            includedTypes: [selectedCategory],
+            maxResultCount: 20,
+            rankPreference: "POPULARITY",
+          });
+        } else if (basePlacesRef.current.length > 0) {
+          // No category and we already have the base pool — reuse it
+          // (avoids 8 extra API calls every time the user deselects a category).
+          results = basePlacesRef.current;
+        } else {
+          // Initial load (or after a retry) — fetch 5 from each category
+          // in parallel then interleave for variety.
+          const batches = await Promise.all(
+            CATEGORIES.map((cat) =>
+              searchNearbyPlaces({
+                latitude,
+                longitude,
+                radius: 1500,
+                includedPrimaryTypes: [cat.type],
+                maxResultCount: 5,
+                rankPreference: "POPULARITY",
+              }).catch(() => [])
+            )
+          );
+          results = interleave(batches);
+          basePlacesRef.current = results; // store as permanent search pool
+        }
+
+        if (!cancelled) setAllPlaces(results);
+      } catch (err) {
+        console.error("Failed to load places:", err);
+        if (!cancelled) {
+          const msg = err?.message || "";
+          if (msg.toLowerCase().includes("location") || msg.toLowerCase().includes("unavailable")) {
+            setLocationError("Location unavailable. Please enable location services and try again.");
+          } else {
+            setLocationError("Failed to load places. Please try again.");
+          }
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory, retryKey]);
 
   const addEvent = (event) => {
     setEvents((prev) => ({
@@ -92,12 +145,10 @@ export default function ExploreScreenNew({ isActive }) {
   const updateEvent = (originalDate, index, updated) => {
     setEvents((prev) => {
       const next = { ...prev };
-      // Remove from original date
       const list = [...(next[originalDate] || [])];
       list.splice(index, 1);
       if (list.length === 0) delete next[originalDate];
       else next[originalDate] = list;
-      // Add to (possibly new) date
       next[updated.date] = [...(next[updated.date] || []), updated];
       return next;
     });
@@ -115,41 +166,96 @@ export default function ExploreScreenNew({ isActive }) {
   };
 
   const filteredPlaces = useMemo(() => {
-    let result = places;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allPlaces;
+    // When searching, use the full base pool so the selected category
+    // doesn't restrict what the user can find.
+    const pool = basePlacesRef.current.length > 0 ? basePlacesRef.current : allPlaces;
+    return pool.filter(
+      (p) =>
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q))
+    );
+  }, [allPlaces, searchQuery]);
 
-    if (selectedCategory) {
-      result = result.filter((p) => matchesCategory(p, selectedCategory));
-    }
+  const visiblePlaces = useMemo(
+    () => filteredPlaces.slice(0, visibleCount),
+    [filteredPlaces, visibleCount]
+  );
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (p) =>
-          (p.name && p.name.toLowerCase().includes(q)) ||
-          (p.category && p.category.toLowerCase().includes(q)),
-      );
-    }
-
-    return result;
-  }, [selectedCategory, searchQuery]);
+  const hasMore = visibleCount < filteredPlaces.length;
 
   const renderPlaceItem = ({ item }) => (
     <PlaceItem place={item} onPress={() => setSelectedPlace(item)} />
   );
 
-  const ListHeader = (
-    <>
-      {/* Categories row */}
-      <Categories selected={selectedCategory} onSelect={setSelectedCategory} />
-
-    </>
+  const renderListHeader = () => (
+    <Categories selected={selectedCategory} onSelect={setSelectedCategory} />
   );
+
+  const renderListFooter = () => {
+    if (loading) return null; // spinner is shown in empty component instead
+    if (hasMore) {
+      return (
+        <TouchableOpacity
+          style={[styles.showMoreBtn, { borderColor: theme.colors.primary }]}
+          onPress={() => setVisibleCount((v) => v + PAGE_SIZE)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.showMoreText, { color: theme.colors.primary }]}>
+            Show More
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+    return null;
+  };
+
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>
+            Finding places near you…
+          </Text>
+        </View>
+      );
+    }
+    if (locationError) {
+      return (
+        <View style={styles.empty}>
+          <Text style={{ color: theme.colors.error, textAlign: "center" }}>
+            {locationError}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => {
+              basePlacesRef.current = [];
+              locationRef.current = null;
+              setRetryKey((k) => k + 1);
+            }}
+          >
+            <Text style={{ color: theme.colors.primary, fontWeight: "600" }}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.empty}>
+        <Text style={{ color: theme.colors.onSurfaceVariant }}>
+          No places found
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      {/* Search bar */}
       <View style={styles.searchWrapper}>
         <Searchbar
           placeholder="Search places"
@@ -164,7 +270,6 @@ export default function ExploreScreenNew({ isActive }) {
         />
       </View>
 
-      {/* Tab bar */}
       <View
         style={[
           styles.tabBar,
@@ -204,22 +309,16 @@ export default function ExploreScreenNew({ isActive }) {
         })}
       </View>
 
-      {/* Tab content */}
       {activeTab === "explore" ? (
         <FlatList
-          data={filteredPlaces}
+          data={visiblePlaces}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderPlaceItem}
-          ListHeaderComponent={ListHeader}
+          ListHeaderComponent={renderListHeader}
+          ListFooterComponent={renderListFooter}
+          ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={{ color: theme.colors.onSurfaceVariant }}>
-                No places found
-              </Text>
-            </View>
-          }
         />
       ) : (
         <MyDates
@@ -273,14 +372,34 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 15,
   },
-listContent: {
+  listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   empty: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 48,
+    paddingVertical: 64,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  retryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  showMoreBtn: {
+    marginHorizontal: 40,
+    marginVertical: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+  },
+  showMoreText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
