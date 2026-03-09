@@ -68,3 +68,6 @@ database.rules.json
 #creates test accounts without the need of validation
 verifyUser.cjs
 serviceAccountKey.json
+
+#metro config (irf: using react native cli to build, rather than using expo)
+metro.config.cjs
