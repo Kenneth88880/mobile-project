@@ -12,6 +12,7 @@ export default function ProfileView({
   handleRateProfile,
   hasRatedUser,
   existingRating,
+  isDatingScreen,
 }) {
   const theme = useTheme();
 
@@ -111,7 +112,7 @@ export default function ProfileView({
             </View>
           </Card.Content>
         </Card>
-      ) : (
+      ) : isDatingScreen !== true && (
         <Button
           mode="contained"
           icon="star"
