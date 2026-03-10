@@ -13,6 +13,7 @@ import { ActivityIndicator, Avatar, Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import firestore from "@react-native-firebase/firestore";
 import { getPlacesPhotoUrl } from "./PlaceItem";
+import { getPhotoUrl } from "../../services/placesService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.6;
@@ -20,6 +21,11 @@ const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
 
 function resolveImageUrl(place) {
+  // Matches PlaceInfo priority: photo_name first, then photo_reference, then image_url
+  if (place.photo_name) {
+    const url = getPhotoUrl(place.photo_name, 800);
+    if (url) return url;
+  }
   if (place.photo_reference) {
     const url = getPlacesPhotoUrl(place.photo_reference);
     if (url) return url;
@@ -109,6 +115,7 @@ export default function ShareToChat({
     if (selectedIds.size === 0 || sending || sent || !place) return;
     setSending(true);
 
+    // Use the same image resolution as PlaceInfo
     const imageUrl = resolveImageUrl(place);
 
     const suggestionText = `📅 Date Suggestion\n📍 ${place.name}${
@@ -131,7 +138,7 @@ export default function ShareToChat({
                 place: place.name,
                 address: place.address || "",
                 category: place.category || "",
-                imageUrl: PLACEHOLDER_IMAGE,
+                imageUrl: imageUrl, // ✅ now uses the resolved image, not hardcoded placeholder
               },
               createdAt: firestore.FieldValue.serverTimestamp(),
               user: {
@@ -182,11 +189,9 @@ export default function ShareToChat({
         activeOpacity={0.7}
       >
         {/* Avatar with selection ring */}
-        <View style={styles.avatarWrapper}>
-          {item.groupPhoto ? (
-            <Avatar.Image size={52} source={{ uri: item.groupPhoto }} />
-          ) : (
-            <Avatar.Icon size={52} icon="account-group" />
+        <View style={styles.avatarWrapper}> 
+          {(
+            <Avatar.Image size={52} source={{ uri: item.isPrivate ? currentUserId === item.creatorID ? item.curPhoto : item.otherPhoto : item.groupPhoto }}/>
           )}
           {isSelected && (
             <View
@@ -202,7 +207,8 @@ export default function ShareToChat({
           style={[styles.chatName, { color: theme.colors.onSurface }]}
           numberOfLines={1}
         >
-          {item.groupName || "Chat"}
+          {console.log(item)}
+          {item.isPrivate ? currentUserId === item.creatorID ? item.curUserName : item.otherUserName : item.groupName }
         </Text>
 
         {/* Checkbox */}

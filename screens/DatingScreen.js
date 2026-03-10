@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { View, Animated, Alert, StyleSheet } from "react-native";
 import {
   Text,
@@ -19,6 +19,11 @@ import {
   checkDuoPreferenceMatch,
   hasUserRatedProfile,
 } from "../services/profileService";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { isWithinDistance } from "../utils/locationUtils";
 import DuoCard from "./DatingPage/DuoCard";
@@ -299,6 +304,21 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     }
   };
 
+  const swipeGesture = useMemo(() =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-15, 15])
+        .onUpdate((event) => {
+
+          console.log("we are in business");
+
+        })
+        .onEnd((event) => {
+         
+          }),
+      [],
+    );
+
   const handleSwipeComplete = async (direction) => {
     if (currentPairIndex >= loadedPairs.length) return;
 
@@ -421,19 +441,23 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
   if (showRatingModal && ratingProfile) {
     return (
-      <RatingModal
-        ratingProfile={ratingProfile}
-        existingRating={existingRating}
-        hoveredStar={hoveredStar}
-        setHoveredStar={setHoveredStar}
-        submitRating={submitRating}
-        onClose={() => {
-          setShowRatingModal(false);
-          setRatingProfile(null);
-          setExistingRating(null);
-          setHoveredStar(0);
-        }}
-      />
+      <GestureHandlerRootView style={styles.container}>
+        <GestureDetector gesture={swipeGesture}>
+          <RatingModal
+            ratingProfile={ratingProfile}
+            existingRating={existingRating}
+            hoveredStar={hoveredStar}
+            setHoveredStar={setHoveredStar}
+            submitRating={submitRating}
+            onClose={() => {
+              setShowRatingModal(false);
+              setRatingProfile(null);
+              setExistingRating(null);
+              setHoveredStar(0);
+            }}
+          />
+        </GestureDetector>
+      </GestureHandlerRootView>
     );
   }
 
