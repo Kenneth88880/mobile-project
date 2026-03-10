@@ -241,55 +241,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     setHasRatedUser(false);
   };
 
-  const handleRateProfile = async (profile) => {
-    if (!profile) return;
-
-    try {
-      const profileId = profile.userId || profile.id;
-      const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
-
-      if (ratingCheck.exists) {
-        setExistingRating(ratingCheck.rating);
-      } else {
-        setExistingRating(null);
-      }
-
-      setRatingProfile(profile);
-      setShowRatingModal(true);
-    } catch (error) {
-      console.error("Error checking rating status:", error);
-      Alert.alert("Error", "Failed to check rating status. Please try again.");
-    }
-  };
-
-  const submitRating = async (rating) => {
-    if (!ratingProfile) return;
-
-    const ratedUserId = ratingProfile.userId || ratingProfile.id;
-
-    try {
-      const success = await saveRating(currentUserId, ratedUserId, rating);
-
-      if (success) {
-        Alert.alert(
-          "Success",
-          existingRating
-            ? `You updated your rating to ${rating} stars!`
-            : `You rated ${ratingProfile.name || "this user"} ${rating} stars!`,
-        );
-
-        setShowRatingModal(false);
-        setRatingProfile(null);
-        setExistingRating(null);
-        setHasRatedUser(true);
-      } else {
-        Alert.alert("Error", "Failed to save rating. Please try again.");
-      }
-    } catch (error) {
-      console.error("Error submitting rating:", error);
-      Alert.alert("Error", "Failed to submit rating. Please try again.");
-    }
-  };
 
   // Check rating status when viewing a profile OR when component becomes active
   useEffect(() => {
@@ -493,9 +444,9 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         currentImageIndex={currentImageIndex}
         handleBackToDouble={handleBackToDouble}
         handleImageTap={handleImageTap}
-        handleRateProfile={handleRateProfile}
         hasRatedUser={hasRatedUser}
         existingRating={existingRating}
+        isDatingScreen={true}
       />
     );
   }
