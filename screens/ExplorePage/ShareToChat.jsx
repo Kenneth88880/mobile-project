@@ -138,7 +138,7 @@ export default function ShareToChat({
                 place: place.name,
                 address: place.address || "",
                 category: place.category || "",
-                imageUrl: imageUrl, // ✅ now uses the resolved image, not hardcoded placeholder
+                imageUrl: imageUrl, 
               },
               createdAt: firestore.FieldValue.serverTimestamp(),
               user: {
