@@ -1,11 +1,18 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
-import { View, Animated, Alert, StyleSheet } from "react-native";
+import React, { useEffect, useState, useMemo } from "react";
+import { View, Alert, StyleSheet } from "react-native";
+import { Text, Chip, ActivityIndicator, useTheme } from "react-native-paper";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+} from "react-native-reanimated";
 import {
-  Text,
-  Chip,
-  ActivityIndicator,
-  useTheme,
-} from "react-native-paper";
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { EmptyState } from "../components/CommonComponents";
 import {
   getAllDuoPairs,
@@ -19,11 +26,6 @@ import {
   checkDuoPreferenceMatch,
   hasUserRatedProfile,
 } from "../services/profileService";
-import {
-  GestureDetector,
-  Gesture,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { isWithinDistance } from "../utils/locationUtils";
 import DuoCard from "./DatingPage/DuoCard";
@@ -31,7 +33,12 @@ import SwipeButtons from "./DatingPage/SwipeButtons";
 import RatingModal from "./DatingPage/RatingModal";
 import ProfileView from "./DatingPage/ProfileView";
 
-export default function DatingScreen({ isActive = true, devMode = false }) {
+export default function DatingScreen({
+  isActive = true,
+  devMode = false,
+  onCardSwipeStart,
+  onCardSwipeEnd,
+}) {
   const theme = useTheme();
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -51,14 +58,24 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
   const [allFilteredPairs, setAllFilteredPairs] = useState([]);
   const pairsPerPage = 15;
 
-  const pan = useRef(new Animated.ValueXY()).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const rotate = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
+  const panX = useSharedValue(0);
+  const panY = useSharedValue(0);
+  const rotateVal = useSharedValue(0);
+  const scaleVal = useSharedValue(1);
+  const opacityVal = useSharedValue(1);
+
+  const cardAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: panX.value },
+      { translateY: panY.value },
+      { rotate: `${rotateVal.value}deg` },
+      { scale: scaleVal.value },
+    ],
+    opacity: opacityVal.value,
+  }));
 
   const currentUserId = CURRENT_USER_ID;
 
-  // This prevents swiped duos from reappearing when navigating between tabs
   useEffect(() => {
     if (isActive) {
       loadData();
@@ -68,7 +85,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // OPTIMIZATION: Load user profile and duo partner in parallel
       const [currentUserProfile, duo] = await Promise.all([
         getUserProfile(currentUserId),
         getCurrentDuoPartner(currentUserId),
@@ -86,15 +102,12 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
       setCurrentDuo(duo);
 
-      // Get all duo pairs (already excludes swiped/liked)
       const fetchedPairs = await getAllDuoPairs(currentUserId);
 
-      // OPTIMIZATION: Show first batch immediately without filtering
       const quickLoadPairs = fetchedPairs.slice(0, 5);
       setLoadedPairs(quickLoadPairs);
-      setLoading(false); // Show UI immediately with first 5 profiles
+      setLoading(false);
 
-      // NOW do the expensive filtering in the background
       let filteredPairs = fetchedPairs || [];
 
       if (duo && duo.partnerId) {
@@ -121,11 +134,7 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
             filteredPairs = fetchedPairs.filter((pair) => {
               const user1 = pair.user1Profile || pair.user1 || {};
               const user2 = pair.user2Profile || pair.user2 || {};
-
-              if (!user1.gender || !user2.gender) {
-                return false;
-              }
-
+              if (!user1.gender || !user2.gender) return false;
               return checkDuoPreferenceMatch(
                 currentUserProfile,
                 partnerProfile,
@@ -139,24 +148,20 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         }
       }
 
-      // Filter by distance if user has maxDistance preference set
       const maxDistance = currentUserProfile?.maxDistance || 200;
 
       if (userLocation.latitude && userLocation.longitude && maxDistance) {
         filteredPairs = filteredPairs.filter((pair) => {
           const user1 = pair.user1Profile;
           const user2 = pair.user2Profile;
-
           const user1InRange =
             user1?.latitude &&
             user1?.longitude &&
             isWithinDistance(userLocation, user1, maxDistance);
-
           const user2InRange =
             user2?.latitude &&
             user2?.longitude &&
             isWithinDistance(userLocation, user2, maxDistance);
-
           return user1InRange || user2InRange;
         });
 
@@ -165,7 +170,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         );
       }
 
-      // DEV MODE: Filter to only show test accounts if dev mode is enabled
       if (devMode) {
         filteredPairs = filteredPairs.filter((pair) => {
           const user1 = pair.user1Profile;
@@ -192,19 +196,13 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
   const loadMorePairs = async () => {
     if (loadingMore || !hasMorePairs) return;
-
     setLoadingMore(true);
     try {
       const nextIndex = loadedPairs.length;
-      const newPairs = allFilteredPairs.slice(
-        nextIndex,
-        nextIndex + pairsPerPage,
-      );
-
+      const newPairs = allFilteredPairs.slice(nextIndex, nextIndex + pairsPerPage);
       if (newPairs.length > 0) {
-        setLoadedPairs([...loadedPairs, ...newPairs]);
+        setLoadedPairs((prev) => [...prev, ...newPairs]);
       }
-
       if (nextIndex + pairsPerPage >= allFilteredPairs.length) {
         setHasMorePairs(false);
       }
@@ -217,7 +215,6 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
   const handleProfileClick = async (profile) => {
     if (!profile) return;
-
     try {
       const fullProfile = await getUserProfile(profile.userId || profile.id);
       if (fullProfile) {
@@ -246,17 +243,12 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     setHasRatedUser(false);
   };
 
-
-  // Check rating status when viewing a profile OR when component becomes active
   useEffect(() => {
     const checkRatingStatus = async () => {
       if (selectedProfile) {
         try {
           const profileId = selectedProfile.userId || selectedProfile.id;
-          const ratingCheck = await hasUserRatedProfile(
-            currentUserId,
-            profileId,
-          );
+          const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
           setHasRatedUser(ratingCheck.exists);
           setExistingRating(ratingCheck.exists ? ratingCheck.rating : null);
         } catch (error) {
@@ -269,34 +261,28 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         setExistingRating(null);
       }
     };
-
     checkRatingStatus();
   }, [selectedProfile, currentUserId, isActive]);
 
   const handleNextImage = () => {
     if (selectedProfile?.photos?.length > 1) {
-      setCurrentImageIndex(
-        (prevIndex) => (prevIndex + 1) % selectedProfile.photos.length,
-      );
+      setCurrentImageIndex((prev) => (prev + 1) % selectedProfile.photos.length);
     }
   };
 
   const handlePrevImage = () => {
     if (selectedProfile?.photos?.length > 1) {
-      setCurrentImageIndex((prevIndex) =>
-        prevIndex === 0 ? selectedProfile.photos.length - 1 : prevIndex - 1,
+      setCurrentImageIndex((prev) =>
+        prev === 0 ? selectedProfile.photos.length - 1 : prev - 1,
       );
     }
   };
 
-  // Instagram-style tap navigation
   const handleImageTap = (event) => {
     if (selectedProfile?.photos?.length <= 1) return;
-
     const { locationX } = event.nativeEvent;
     const { width } = event.nativeEvent.target?.offsetWidth ||
       event.nativeEvent.target?.clientWidth || { width: 400 };
-
     if (locationX > width / 2) {
       handleNextImage();
     } else {
@@ -304,22 +290,57 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     }
   };
 
-  const swipeGesture = useMemo(() =>
-      Gesture.Pan()
-        .activeOffsetX([-10, 10])
-        .failOffsetY([-15, 15])
-        .onUpdate((event) => {
+  const resetCard = () => {
+    "worklet";
+    panX.value = 0;
+    panY.value = 0;
+    rotateVal.value = 0;
+    opacityVal.value = 1;
+    scaleVal.value = 1;
+  };
 
-          console.log("we are in business");
+  const afterSwipeComplete = async (action, currentDuoPair) => {
+    try {
+      if (action === "like") {
+        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
+        await saveDuoLike(
+          currentDuo.duoId,
+          currentDuoPair.id,
+          currentUserId,
+          currentDuo.partnerId,
+          currentDuoPair.users?.[0],
+          currentDuoPair.users?.[1],
+        );
+      } else {
+        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
+      }
 
-        })
-        .onEnd((event) => {
-         
-          }),
-      [],
-    );
+      setLoadedPairs((prevPairs) =>
+        prevPairs.filter((pair) => pair.id !== currentDuoPair.id),
+      );
+      panX.value = 0;
+      panY.value = 0;
+      rotateVal.value = 0;
+      opacityVal.value = 1;
+      scaleVal.value = 1;
+      setSwipeFeedback(null);
 
-  const handleSwipeComplete = async (direction) => {
+      if (loadedPairs.length - 1 <= 5 && hasMorePairs && !loadingMore) {
+        loadMorePairs();
+      }
+    } catch (error) {
+      console.error("Error in swipe complete:", error);
+      Alert.alert("Error", "Failed to save your decision. Please try again.");
+      panX.value = 0;
+      panY.value = 0;
+      rotateVal.value = 0;
+      opacityVal.value = 1;
+      scaleVal.value = 1;
+      setSwipeFeedback(null);
+    }
+  };
+
+  const handleSwipeComplete = (direction) => {
     if (currentPairIndex >= loadedPairs.length) return;
 
     const currentDuoPair = loadedPairs[currentPairIndex];
@@ -327,7 +348,7 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
 
     if (!currentDuo) {
       Alert.alert("No Duo", "You need a duo partner to swipe! Go to Profile.");
-      setCurrentPairIndex((prevIndex) => prevIndex + 1);
+      setCurrentPairIndex((prev) => prev + 1);
       return;
     }
 
@@ -336,71 +357,73 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     const toX = direction === "right" ? 500 : -500;
     const toRotate = direction === "right" ? 20 : -20;
 
-    Animated.parallel([
-      Animated.timing(pan.x, {
-        toValue: toX,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-      Animated.timing(rotate, {
-        toValue: toRotate,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start(async () => {
-      try {
-        if (action === "like") {
-          await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
-          await saveDuoLike(
-            currentDuo.duoId,
-            currentDuoPair.id,
-            currentUserId,
-            currentDuo.partnerId,
-            currentDuoPair.users?.[0],
-            currentDuoPair.users?.[1],
-          );
-        } else {
-          await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
-        }
-
-        setLoadedPairs((prevPairs) =>
-          prevPairs.filter((pair) => pair.id !== currentDuoPair.id),
-        );
-
-        pan.setValue({ x: 0, y: 0 });
-        rotate.setValue(0);
-        opacity.setValue(1);
-        scale.setValue(1);
-        setSwipeFeedback(null);
-
-        if (loadedPairs.length - 1 <= 5 && hasMorePairs && !loadingMore) {
-          loadMorePairs();
-        }
-      } catch (error) {
-        console.error("Error in swipe complete:", error);
-        Alert.alert("Error", "Failed to save your decision. Please try again.");
-
-        pan.setValue({ x: 0, y: 0 });
-        rotate.setValue(0);
-        opacity.setValue(1);
-        scale.setValue(1);
-        setSwipeFeedback(null);
-      }
+    panX.value = withTiming(toX, { duration: 300 });
+    rotateVal.value = withTiming(toRotate, { duration: 300 });
+    opacityVal.value = withTiming(0, { duration: 300 }, (finished) => {
+      "worklet";
+      if (finished) runOnJS(afterSwipeComplete)(action, currentDuoPair);
     });
   };
 
-  // --- Render states ---
+  const SWIPE_THRESHOLD = 120;
+
+  // left empty for now until we get the animation for seeing the next photos refined 
+  const swipeGesturePhotos = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-15, 15])
+        .onBegin(() => {
+          
+        })
+        .onUpdate((event) => {
+         
+        })
+        .onEnd((event) => {
+          
+        })
+        .onFinalize(() => {
+         
+        }),
+    [],
+  );
+
+  const swipeGestureAccept = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-15, 15])
+        .onBegin(() => {
+          if (onCardSwipeStart) runOnJS(onCardSwipeStart)();
+        })
+        .onUpdate((event) => {
+          panX.value = event.translationX * 0.75;
+          panY.value = event.translationY * 0.15;
+          rotateVal.value = event.translationX / 15;
+          scaleVal.value = Math.max(0.95, 1 - Math.abs(event.translationX) / 3000);
+        })
+        .onEnd((event) => {
+          if (onCardSwipeEnd) runOnJS(onCardSwipeEnd)();
+          if (event.translationX > SWIPE_THRESHOLD) {
+            runOnJS(handleSwipeComplete)("right");
+          } else if (event.translationX < -SWIPE_THRESHOLD) {
+            runOnJS(handleSwipeComplete)("left");
+          } else {
+            panX.value = withSpring(0, { damping: 20, stiffness: 180 });
+            panY.value = withSpring(0, { damping: 20, stiffness: 180 });
+            rotateVal.value = withSpring(0, { damping: 20, stiffness: 180 });
+            scaleVal.value = withSpring(1, { damping: 20, stiffness: 180 });
+          }
+        })
+        .onFinalize(() => {
+          if (onCardSwipeEnd) runOnJS(onCardSwipeEnd)();
+        }),
+    [loadedPairs, currentPairIndex, currentDuo, hasMorePairs, loadingMore],
+  );
 
   if (loading) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ActivityIndicator size="large" />
         <Text variant="bodyLarge" style={styles.loadingText}>
           Loading profiles...
@@ -409,19 +432,13 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     );
   }
 
-  if (
-    !loadedPairs ||
-    loadedPairs.length === 0 ||
-    currentPairIndex >= loadedPairs.length
-  ) {
+  if (!loadedPairs || loadedPairs.length === 0 || currentPairIndex >= loadedPairs.length) {
     const hasPreferences =
       currentDuo?.partnerProfile?.genderPreference?.length > 0 ||
       currentDuo?.partnerProfile?.duoPreference?.interestedIn?.length > 0;
 
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <EmptyState
           icon="heart-multiple"
           title="No Duo Pairs Available"
@@ -439,61 +456,36 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
     );
   }
 
-  if (showRatingModal && ratingProfile) {
+  if (selectedProfile) {
     return (
-      <GestureHandlerRootView style={styles.container}>
-        <GestureDetector gesture={swipeGesture}>
-          <RatingModal
-            ratingProfile={ratingProfile}
+      <GestureHandlerRootView style={styles.gestureContainer}>
+        <GestureDetector gesture={swipeGesturePhotos}>
+          <ProfileView
+            selectedProfile={selectedProfile}
+            currentImageIndex={currentImageIndex}
+            handleBackToDouble={handleBackToDouble}
+            handleImageTap={handleImageTap}
+            hasRatedUser={hasRatedUser}
             existingRating={existingRating}
-            hoveredStar={hoveredStar}
-            setHoveredStar={setHoveredStar}
-            submitRating={submitRating}
-            onClose={() => {
-              setShowRatingModal(false);
-              setRatingProfile(null);
-              setExistingRating(null);
-              setHoveredStar(0);
-            }}
+            isDatingScreen={true}
           />
         </GestureDetector>
       </GestureHandlerRootView>
     );
   }
 
-  if (selectedProfile) {
-    return (
-      <ProfileView
-        selectedProfile={selectedProfile}
-        currentImageIndex={currentImageIndex}
-        handleBackToDouble={handleBackToDouble}
-        handleImageTap={handleImageTap}
-        hasRatedUser={hasRatedUser}
-        existingRating={existingRating}
-        isDatingScreen={true}
-      />
-    );
-  }
-
-  // Main Duo Card View
   const currentDuoPair = loadedPairs[currentPairIndex];
   const topProfile = currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
   const bottomProfile = currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
-  const topPhoto =
-    topProfile?.photos?.[0] ||
-    "https://via.placeholder.com/400x300?text=No+Photo";
-  const bottomPhoto =
-    bottomProfile?.photos?.[0] ||
-    "https://via.placeholder.com/400x300?text=No+Photo";
+  const topPhoto = topProfile?.photos?.[0] || "https://via.placeholder.com/400x300?text=No+Photo";
+  const bottomPhoto = bottomProfile?.photos?.[0] || "https://via.placeholder.com/400x300?text=No+Photo";
   const topName = topProfile?.name || "Unknown";
   const topAge = topProfile?.age || "?";
   const bottomName = bottomProfile?.name || "Unknown";
   const bottomAge = bottomProfile?.age || "?";
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
         <Text variant="headlineMedium">Double Dating</Text>
       </View>
@@ -508,23 +500,26 @@ export default function DatingScreen({ isActive = true, devMode = false }) {
         </Chip>
       )}
 
-      <DuoCard
-        topProfile={topProfile}
-        bottomProfile={bottomProfile}
-        topPhoto={topPhoto}
-        bottomPhoto={bottomPhoto}
-        topName={topName}
-        topAge={topAge}
-        bottomName={bottomName}
-        bottomAge={bottomAge}
-        currentUserLocation={currentUserLocation}
-        handleProfileClick={handleProfileClick}
-        swipeFeedback={swipeFeedback}
-        pan={pan}
-        rotate={rotate}
-        opacity={opacity}
-        scale={scale}
-      />
+      <GestureHandlerRootView style={styles.gestureContainer}>
+        <GestureDetector gesture={swipeGestureAccept}>
+          <Animated.View style={[styles.animatedCard, cardAnimatedStyle]}>
+            <DuoCard
+              topProfile={topProfile}
+              bottomProfile={bottomProfile}
+              topPhoto={topPhoto}
+              bottomPhoto={bottomPhoto}
+              topName={topName}
+              topAge={topAge}
+              bottomName={bottomName}
+              bottomAge={bottomAge}
+              currentUserLocation={currentUserLocation}
+              handleProfileClick={handleProfileClick}
+              swipeFeedback={swipeFeedback}
+              cardAnimatedStyle={cardAnimatedStyle}
+            />
+          </Animated.View>
+        </GestureDetector>
+      </GestureHandlerRootView>
 
       <SwipeButtons
         onPass={() => handleSwipeComplete("left")}
@@ -561,6 +556,12 @@ const styles = StyleSheet.create({
     margin: 8,
     alignSelf: "center",
     backgroundColor: "#FFD700",
+  },
+  gestureContainer: {
+    flex: 1,
+  },
+  animatedCard: {
+    flex: 1,
   },
   instructions: {
     textAlign: "center",
