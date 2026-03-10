@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, Alert, KeyboardAvoidingView, Platform, StyleSheet, 
-         TouchableOpacity, Image, Keyboard } from "react-native";
+         TouchableOpacity, Image, Keyboard, Linking } from "react-native";
 import {
   Text,
   TextInput,
@@ -38,6 +38,11 @@ import { SwipeableMessageRight, SwipeableMessageLeft } from "./ChatScreen/Swipea
 
 const getUserID = () => CURRENT_USER_ID;
 
+const openPlaceInBrowser = (suggestion) => {
+  const query = [suggestion.place, suggestion.address].filter(Boolean).join(", ");
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  Linking.openURL(url).catch(() => Alert.alert("Error", "Unable to open browser"));
+};
 
 const deleteChat = async (chatId) => {
   try {
@@ -394,7 +399,7 @@ function ChatListScreen({ onChatSelect }) {
 
     return (
       <List.Item
-        title={item.isGroupChat ? item.groupName : currentUserId === item.creatorID ? item.curUserName : item.otherUserName }
+        title={item.isGroupChat ? item.groupName : currentUserId === item.creatorID ? item.curUserName : item.otherUserName}
         titleStyle={unreadCount > 0 && !isArchived ? { fontWeight: "bold", color: theme.colors.onSurface } : {}}
         description={isArchived ? "🗄️ Archived - Read only" : item.lastMessageText || "No messages yet"}
         descriptionNumberOfLines={1}
@@ -539,12 +544,9 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
   const [submittingRating, setSubmittingRating] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Messages listener
   useEffect(() => {
     if (!chat?.id) return;
-
     firestore().collection("chats").doc(chat.id).update({ [`unreadCount.${currentUserId}`]: 0 }).catch(console.error);
-
     const unsubscribe = firestore()
       .collection("chats").doc(chat.id).collection("messages")
       .orderBy("createdAt", "desc")
@@ -569,12 +571,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
           else console.error("Error loading messages:", error);
         }
       );
-
     unsubscribersRef.current.messages = unsubscribe;
     return () => { unsubscribe(); unsubscribersRef.current.messages = null; };
   }, [chat, currentUserId]);
 
-  // Load participant profiles
   useEffect(() => {
     if (!chat?.participants) return;
     (async () => {
@@ -587,7 +587,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
     })();
   }, [chat]);
 
-  // Chat doc listener
   useEffect(() => {
     if (!chat?.id) return;
     const unsubscribe = firestore().collection("chats").doc(chat.id).onSnapshot(
@@ -688,15 +687,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
       ]);
       const otherUserName = otherUserDoc.data().name;
       const currentUserName = currentUserDoc.data().name;
-
       const existing = await firestore().collection("chats")
         .where("participants", "array-contains", currentUserId).where("isPrivate", "==", true).get();
       const existingDM = existing.docs.find((doc) => doc.data().participants.includes(otherUserID));
-
-      if (existingDM) {
-        return { id: existingDM.id, ...existingDM.data() };
-      }
-
+      if (existingDM) return { id: existingDM.id, ...existingDM.data() };
       const chatData = {
         participants: [currentUserId, otherUserID],
         curUserName: otherUserName || "Private Chat",
@@ -709,7 +703,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
         lastMessageTime: firestore.FieldValue.serverTimestamp(),
         type: "private",
       };
-
       const chatRef = await firestore().collection("chats").add(chatData);
       setViewingProfile(null);
       return { id: chatRef.id, ...chatData };
@@ -772,19 +765,16 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             const reference = storage().ref(filename);
             await reference.putFile(response.assets[0].uri);
             const downloadURL = await reference.getDownloadURL();
-
             await firestore().collection("chats").doc(chat.id).collection("messages").add({
               imageUrl: downloadURL, text: "",
               createdAt: firestore.FieldValue.serverTimestamp(),
               user: { _id: currentUserId, name: "You" },
             });
-
             const unreadUpdate = {};
             chat.participants?.forEach((participantId) => {
               if (participantId !== currentUserId)
                 unreadUpdate[`unreadCount.${participantId}`] = (chat.unreadCount?.[participantId] || 0) + 1;
             });
-
             await firestore().collection("chats").doc(chat.id).update({
               lastMessageText: "📷 Image",
               lastMessageTime: firestore.FieldValue.serverTimestamp(),
@@ -826,22 +816,18 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
           },
         }),
       });
-
       setReplyingTo(null);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-
       const unreadUpdate = {};
       chat.participants?.forEach((participantId) => {
         if (participantId !== currentUserId)
           unreadUpdate[`unreadCount.${participantId}`] = (chat.unreadCount?.[participantId] || 0) + 1;
       });
-
       await firestore().collection("chats").doc(chat.id).update({
         lastMessageText: inputText.trim(),
         lastMessageTime: firestore.FieldValue.serverTimestamp(),
         ...unreadUpdate,
       });
-
       setInputText("");
     } catch (error) {
       console.error("Error sending message:", error);
@@ -849,9 +835,37 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
     }
   }, [chat, currentUserId, inputText, currentChat.status, replyingTo, userProfiles]);
 
-  if (!chat) {
-    return <View style={[styles.container, { backgroundColor: theme.colors.background }]}><Text>No chat selected</Text></View>;
-  }
+  // Shared renderer for place suggestion cards — tappable, opens Google Maps
+  const renderPlaceSuggestion = (suggestion, bgColor, isMyMessage) => (
+    <TouchableOpacity activeOpacity={0.8} onPress={() => openPlaceInBrowser(suggestion)}>
+      <Surface style={[
+        styles.messageBubble,
+        {
+          backgroundColor: bgColor,
+          borderBottomRightRadius: isMyMessage ? 4 : 16,
+          borderBottomLeftRadius: isMyMessage ? 16 : 4,
+          padding: 0,
+          overflow: "hidden",
+          maxWidth: 240,
+        }
+      ]} elevation={1}>
+        {suggestion.imageUrl && (
+          <Image
+            source={{ uri: suggestion.imageUrl }}
+            style={{ width: 240, height: 130, marginLeft: isMyMessage ? -12 : 0 }}
+            resizeMode="cover"
+          />
+        )}
+        <View style={{ padding: 10 }}>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.primary, marginBottom: 3 }}>📅 Date Suggestion</Text>
+          <Text style={{ fontWeight: "700", fontSize: 14, color: theme.colors.onSurface }} numberOfLines={1}>{suggestion.place}</Text>
+          {suggestion.category && <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 1 }}>{suggestion.category}</Text>}
+          {suggestion.address && <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={2}>📌 {suggestion.address}</Text>}
+          <Text style={{ fontSize: 10, color: theme.colors.primary, marginTop: 6, fontStyle: "italic" }}>Tap to view on Maps →</Text>
+        </View>
+      </Surface>
+    </TouchableOpacity>
+  );
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -861,7 +875,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
           keyboardDismissMode="on-drag"
-          
           enabled={!showEditModal}
         >
           <Surface style={styles.chatHeader} elevation={2}>
@@ -876,10 +889,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             )}
 
             {(!currentChat.isGroupChat && currentChat.isPrivate) && (
-            <View style={{ marginRight: 8 }}>
-              <Avatar.Image size={36} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
-            </View>
-          )}
+              <View style={{ marginRight: 8 }}>
+                <Avatar.Image size={36} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
+              </View>
+            )}
 
             <TouchableOpacity
               onPress={(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" ? handleEditGroupInfo : undefined}
@@ -917,8 +930,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                           <View style={{ alignItems: "flex-end" }}>
                             {item.replyTo && (
                               <TouchableOpacity onPress={() => handleReplyBubbleTap(item.replyTo)}>
-                                <View style={{ backgroundColor: 
-                                  theme.dark === true ? "rgb(255, 176, 201)" : "rgb(139, 74, 97)", opacity: 0.6, borderRadius: 12, borderBottomRightRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginRight: 8 }}>
+                                <View style={{ backgroundColor: theme.dark === true ? "rgb(255, 176, 201)" : "rgb(139, 74, 97)", opacity: 0.6, borderRadius: 12, borderBottomRightRadius: 2, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 240, marginBottom: 2, marginRight: 8 }}>
                                   <Text style={{ fontSize: 11, fontWeight: "700", color: theme.dark === true ? "#fff" : "#000", marginBottom: 2 }}>{item.replyTo.senderName}</Text>
                                   <Text style={{ fontSize: 12, color: theme.dark === true ? "#fff" : "#000" }} numberOfLines={1}>{item.replyTo.text}</Text>
                                 </View>
@@ -929,22 +941,14 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                             </Surface>
                           </View>
                         )}
-                        {item.imageUrl && (
+                        {item.imageUrl && !item.type && (
                           <Surface>
                             <Image source={{ uri: item.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12, marginLeft: -1 }} resizeMode="cover" />
                           </Surface>
                         )}
-                        {item.type === "place_suggestion" && item.suggestion && (
-                          <Surface style={[styles.messageBubble, { backgroundColor: theme.colors.primaryContainer, borderBottomRightRadius: 4, borderBottomLeftRadius: 16, padding: 0, overflow: "hidden", maxWidth: 240 }]} elevation={1}>
-                            {item.suggestion.imageUrl && <Image source={{ uri: item.suggestion.imageUrl }} style={{ width: 240, height: 130, marginLeft: -12 }} resizeMode="cover" />}
-                            <View style={{ padding: 10 }}>
-                              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.primary, marginBottom: 3 }}>📅 Date Suggestion</Text>
-                              <Text style={{ fontWeight: "700", fontSize: 14, color: theme.colors.onSurface }} numberOfLines={1}>{item.suggestion.place}</Text>
-                              {item.suggestion.category && <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 1 }}>{item.suggestion.category}</Text>}
-                              {item.suggestion.address && <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={2}>📌 {item.suggestion.address}</Text>}
-                            </View>
-                          </Surface>
-                        )}
+                        {item.type === "place_suggestion" && item.suggestion &&
+                          renderPlaceSuggestion(item.suggestion, theme.colors.primaryContainer, true)
+                        }
                         {isLatestMessage && (
                           <Text variant="labelSmall" style={[styles.messageTime, { color: theme.colors.onPrimaryContainer }]}>
                             {item.createdAt?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -989,22 +993,14 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                           </Surface>
                         </View>
                       )}
-                      {item.imageUrl && (
+                      {item.imageUrl && !item.type && (
                         <Surface>
                           <Image source={{ uri: item.imageUrl }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="cover" />
                         </Surface>
                       )}
-                      {item.type === "place_suggestion" && item.suggestion && (
-                        <Surface style={[styles.messageBubble, { backgroundColor: theme.colors.surfaceVariant, borderBottomRightRadius: 16, borderBottomLeftRadius: 4, padding: 0, overflow: "hidden", maxWidth: 240 }]} elevation={1}>
-                          {item.suggestion.imageUrl && <Image source={{ uri: item.suggestion.imageUrl }} style={{ width: 240, height: 130 }} resizeMode="cover" />}
-                          <View style={{ padding: 10 }}>
-                            <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.primary, marginBottom: 3 }}>📅 Date Suggestion</Text>
-                            <Text style={{ fontWeight: "700", fontSize: 14, color: theme.colors.onSurface }} numberOfLines={1}>{item.suggestion.place}</Text>
-                            {item.suggestion.category && <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 1 }}>{item.suggestion.category}</Text>}
-                            {item.suggestion.address && <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={2}>📌 {item.suggestion.address}</Text>}
-                          </View>
-                        </Surface>
-                      )}
+                      {item.type === "place_suggestion" && item.suggestion &&
+                        renderPlaceSuggestion(item.suggestion, theme.colors.surfaceVariant, false)
+                      }
                       {isLatestMessage && (
                         <Text variant="labelSmall" style={[styles.messageTime, { color: theme.colors.onSurfaceVariant }]}>
                           {item.createdAt?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -1028,7 +1024,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                 <IconButton icon="close" size={16} onPress={() => setReplyingTo(null)} />
               </View>
             )}
-
             {currentChat.status === "archived" ? (
               <View style={{ padding: 12, backgroundColor: theme.colors.surfaceVariant, alignItems: "center" }}>
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>🗄️ This chat is archived and read-only</Text>
@@ -1058,7 +1053,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             )}
           </Surface>
 
-          {/* ── Edit Modal (self-contained, no message list re-renders) ── */}
+          {/* ── Edit Modal ── */}
           <EditGroupModal
             visible={showEditModal}
             onDismiss={() => setShowEditModal(false)}
@@ -1071,7 +1066,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
             onParticipantPress={handleParticipantPress}
           />
 
-          {/* ── Profile Viewing Modal ── */}
+          {/* ── Profile Modal ── */}
           <Portal>
             <Modal
               visible={viewingProfile !== null}
@@ -1084,7 +1079,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                     <Text variant="titleLarge">{viewingProfile.name}'s Profile</Text>
                     <IconButton icon="close" onPress={() => { setViewingProfile(null); setProfileImageIndex(0); setUserRating(0); setHasRated(false); }} />
                   </View>
-
                   <View style={{ maxHeight: 600 }}>
                     <FlatList
                       data={[{ key: "profile" }]}
@@ -1110,11 +1104,9 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                               <Text style={{ marginTop: 8 }}>No photos</Text>
                             </Card>
                           )}
-
                           <Card style={{ marginBottom: 16 }}>
                             <Card.Content>
                               <Text variant="headlineSmall">{viewingProfile.name}, {viewingProfile.age || "?"}</Text>
-
                               <View style={{ marginTop: 12, alignItems: "center" }}>
                                 <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
                                   {renderStars(parseFloat(viewingProfileRating.average))}
@@ -1123,14 +1115,12 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                                   {viewingProfileRating.average} ({viewingProfileRating.count} rating{viewingProfileRating.count !== 1 ? "s" : ""})
                                 </Text>
                               </View>
-
                               {viewingProfile.city && (
                                 <View style={{ flexDirection: "row", alignItems: "center", marginTop: 12 }}>
                                   <Icon source="map-marker" size={16} />
                                   <Text variant="bodyMedium" style={{ marginLeft: 4 }}>{viewingProfile.city}</Text>
                                 </View>
                               )}
-
                               {viewingProfile.gender && (
                                 <View style={{ marginTop: 12 }}>
                                   <Text variant="titleSmall" style={{ marginBottom: 4 }}>Gender</Text>
@@ -1139,14 +1129,12 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                                   </Chip>
                                 </View>
                               )}
-
                               {viewingProfile.description && (
                                 <View style={{ marginTop: 16 }}>
                                   <Text variant="titleSmall" style={{ marginBottom: 4 }}>About</Text>
                                   <Text variant="bodyMedium" style={{ lineHeight: 22 }}>{viewingProfile.description}</Text>
                                 </View>
                               )}
-
                               {viewingProfile.tags?.length > 0 && (
                                 <View style={{ marginTop: 16 }}>
                                   <Text variant="titleSmall" style={{ marginBottom: 8 }}>Interests</Text>
@@ -1157,7 +1145,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                               )}
                             </Card.Content>
                           </Card>
-
                           {viewingProfile.id !== currentUserId && (
                             <Card style={{ marginBottom: 16, backgroundColor: theme.colors.primaryContainer }}>
                               <Card.Content>
@@ -1204,21 +1191,26 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
     </GestureDetector>
   );
 }
-   
+
+// ── Root: always render ChatListScreen so its Firestore listener stays alive ──
+// IndividualChatScreen overlays it via absoluteFill — no remount lag on back swipe
 export default function ChatScreen() {
   const [selectedChat, setSelectedChat] = useState(null);
 
-  if (selectedChat) {
-    return (
-      <IndividualChatScreen
-        chat={selectedChat}
-        onBack={() => setSelectedChat(null)}
-        onChatSelect={setSelectedChat}
-      />
-    );
-  }
-
-  return <ChatListScreen onChatSelect={setSelectedChat} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <ChatListScreen onChatSelect={setSelectedChat} />
+      {selectedChat && (
+        <View style={StyleSheet.absoluteFill}>
+          <IndividualChatScreen
+            chat={selectedChat}
+            onBack={() => setSelectedChat(null)}
+            onChatSelect={setSelectedChat}
+          />
+        </View>
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
