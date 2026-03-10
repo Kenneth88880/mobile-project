@@ -16,7 +16,6 @@ import {
 import { EmptyState } from "../components/CommonComponents";
 import {
   getAllDuoPairs,
-  saveRating,
   getCurrentDuoPartner,
   saveDuoLike,
   deleteDuoLikeBetween,
@@ -24,13 +23,11 @@ import {
   getUserProfile,
   getDuoPartnerProfile,
   checkDuoPreferenceMatch,
-  hasUserRatedProfile,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { isWithinDistance } from "../utils/locationUtils";
 import DuoCard from "./DatingPage/DuoCard";
 import SwipeButtons from "./DatingPage/SwipeButtons";
-import RatingModal from "./DatingPage/RatingModal";
 import ProfileView from "./DatingPage/ProfileView";
 
 export default function DatingScreen({
@@ -44,14 +41,9 @@ export default function DatingScreen({
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [ratingProfile, setRatingProfile] = useState(null);
   const [currentDuo, setCurrentDuo] = useState(null);
   const [swipeFeedback, setSwipeFeedback] = useState(null);
   const [currentUserLocation, setCurrentUserLocation] = useState(null);
-  const [hasRatedUser, setHasRatedUser] = useState(false);
-  const [existingRating, setExistingRating] = useState(null);
-  const [hoveredStar, setHoveredStar] = useState(0);
   const [loadedPairs, setLoadedPairs] = useState([]);
   const [hasMorePairs, setHasMorePairs] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -240,29 +232,7 @@ export default function DatingScreen({
   const handleBackToDouble = () => {
     setSelectedProfile(null);
     setCurrentImageIndex(0);
-    setHasRatedUser(false);
   };
-
-  useEffect(() => {
-    const checkRatingStatus = async () => {
-      if (selectedProfile) {
-        try {
-          const profileId = selectedProfile.userId || selectedProfile.id;
-          const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
-          setHasRatedUser(ratingCheck.exists);
-          setExistingRating(ratingCheck.exists ? ratingCheck.rating : null);
-        } catch (error) {
-          console.error("Error checking rating status:", error);
-          setHasRatedUser(false);
-          setExistingRating(null);
-        }
-      } else {
-        setHasRatedUser(false);
-        setExistingRating(null);
-      }
-    };
-    checkRatingStatus();
-  }, [selectedProfile, currentUserId, isActive]);
 
   const handleNextImage = () => {
     if (selectedProfile?.photos?.length > 1) {
@@ -465,8 +435,6 @@ export default function DatingScreen({
             currentImageIndex={currentImageIndex}
             handleBackToDouble={handleBackToDouble}
             handleImageTap={handleImageTap}
-            hasRatedUser={hasRatedUser}
-            existingRating={existingRating}
             isDatingScreen={true}
           />
         </GestureDetector>
