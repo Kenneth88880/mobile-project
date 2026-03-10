@@ -66,6 +66,7 @@ export default function App() {
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
   const cardSwipingRef = useRef(false);
+  const chatGestures = useRef(false);
 
   
   const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
@@ -266,7 +267,7 @@ export default function App() {
       .activeOffsetX([-40, 40])
       .failOffsetY([-15, 15])
       .onUpdate((event) => {
-        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current) return;
+        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current || chatGestures.current) return;
 
         const currentIndex = routes.findIndex((r) => r.key === activeTab);
         const isAtStart = currentIndex === 0 && event.translationX > 0;
@@ -276,7 +277,7 @@ export default function App() {
           : event.translationX;
       })
       .onEnd((event) => {
-        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current) return;
+        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current || chatGestures.current) return;
 
           const { translationX, velocityX } = event;
           const currentIndex = routes.findIndex((r) => r.key === activeTab);
