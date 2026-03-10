@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, Alert, KeyboardAvoidingView, Platform, StyleSheet, 
-         TouchableOpacity, Image, Keyboard, Linking } from "react-native";
+         TouchableOpacity, Image, Keyboard, Linking, ScrollView } from "react-native";
 import {
   Text,
   TextInput,
@@ -42,6 +42,15 @@ const openPlaceInBrowser = (suggestion) => {
   const query = [suggestion.place, suggestion.address].filter(Boolean).join(", ");
   const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   Linking.openURL(url).catch(() => Alert.alert("Error", "Unable to open browser"));
+};
+
+const openMapsFromSuggestion = (suggestion) => {
+  const query = [suggestion.place, suggestion.address].filter(Boolean).join(", ");
+  const encoded = encodeURIComponent(query);
+  const url = Platform.OS === "ios"
+    ? `maps://app?q=${encoded}`
+    : `geo:0,0?q=${encoded}`;
+  Linking.openURL(url).catch(() => openPlaceInBrowser(suggestion));
 };
 
 const deleteChat = async (chatId) => {
@@ -168,6 +177,177 @@ const updateChatPicture = async (chatId, imageUri) => {
     return false;
   }
 };
+
+// ── Place Suggestion Modal ─────────────────────────────────────────────────────
+// Mirrors the PlaceInfo visual style: hero image, name, category, actions, info rows
+function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
+  const theme = useTheme();
+
+  if (!suggestion) return null;
+
+  const PLACEHOLDER_IMAGE =
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
+
+  const imageUri = suggestion.imageUrl || PLACEHOLDER_IMAGE;
+
+  const handleDirections = () => openMapsFromSuggestion(suggestion);
+  const handleOpenMaps = () => openPlaceInBrowser(suggestion);
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={{
+          flex: 1,
+          margin: 0,
+          backgroundColor: theme.colors.background,
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* ── Hero image ── */}
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: imageUri }}
+                style={{ width: "100%", aspectRatio: 4 / 3 }}
+                resizeMode="cover"
+              />
+              {/* Back button overlaid on image */}
+              <TouchableOpacity
+                onPress={onDismiss}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: theme.colors.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                }}
+              >
+                <Icon source="arrow-left" size={24} color={theme.colors.onSurface} />
+              </TouchableOpacity>
+
+              {/* "Date Suggestion" badge overlaid on image */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  backgroundColor: theme.colors.primary,
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                }}
+              >
+                <Icon source="calendar-heart" size={14} color={theme.colors.onPrimary} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.colors.onPrimary }}>
+                  Date Suggestion
+                </Text>
+              </View>
+            </View>
+
+            {/* ── Content ── */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+              {/* Name & category */}
+              <Text style={{ fontSize: 24, fontWeight: "700", color: theme.colors.onSurface, marginBottom: 4 }}>
+                {suggestion.place}
+              </Text>
+              {suggestion.category ? (
+                <Text style={{ fontSize: 15, color: theme.colors.onSurfaceVariant, marginBottom: 16 }}>
+                  {suggestion.category}
+                </Text>
+              ) : null}
+
+              {/* ── Action buttons — mirroring PlaceInfo layout ── */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
+                <TouchableOpacity
+                  onPress={handleDirections}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    borderRadius: 14,
+                    gap: 4,
+                    backgroundColor: theme.colors.primaryContainer,
+                  }}
+                >
+                  <Icon source="directions" size={22} color={theme.colors.onPrimaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
+                    Directions
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleOpenMaps}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    borderRadius: 14,
+                    gap: 4,
+                    backgroundColor: theme.colors.primaryContainer,
+                  }}
+                >
+                  <Icon source="map-search" size={22} color={theme.colors.onPrimaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
+                    View on Maps
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ── Divider ── */}
+              <View style={{ height: 1, backgroundColor: theme.colors.outlineVariant, marginBottom: 8 }} />
+
+              {/* ── Address info row ── */}
+              {suggestion.address ? (
+                <TouchableOpacity
+                  onPress={handleDirections}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}
+                >
+                  <Icon source="map-marker-outline" size={22} color={theme.colors.primary} />
+                  <Text style={{ fontSize: 15, flex: 1, color: theme.colors.onSurface }}>
+                    {suggestion.address.replace(/\n/g, ", ")}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* ── Category info row ── */}
+              {suggestion.category ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}>
+                  <Icon source="tag-outline" size={22} color={theme.colors.primary} />
+                  <Text style={{ fontSize: 15, flex: 1, color: theme.colors.onSurface }}>
+                    {suggestion.category}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    </Portal>
+  );
+}
 
 function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userProfiles,
                           uploadingChatImage, onChangePicture, onSaveName, onParticipantPress }) {
@@ -517,6 +697,8 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentChat, setCurrentChat] = useState(chat);
   const [replyingTo, setReplyingTo] = useState(null);
+  // ── NEW: place suggestion modal state ──
+  const [selectedSuggestion, setSelectedSuggestion] = useState(null);
   const flatListRef = useRef(null);
   const itemHeightsRef = useRef({});
 
@@ -835,9 +1017,13 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
     }
   }, [chat, currentUserId, inputText, currentChat.status, replyingTo, userProfiles]);
 
-  // Shared renderer for place suggestion cards — tappable, opens Google Maps
+  // ── Place suggestion card renderer ──
+  // Now opens PlaceSuggestionModal on tap instead of going directly to Maps
   const renderPlaceSuggestion = (suggestion, bgColor, isMyMessage) => (
-    <TouchableOpacity activeOpacity={0.8} onPress={() => openPlaceInBrowser(suggestion)}>
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => setSelectedSuggestion(suggestion)}
+    >
       <Surface style={[
         styles.messageBubble,
         {
@@ -861,7 +1047,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
           <Text style={{ fontWeight: "700", fontSize: 14, color: theme.colors.onSurface }} numberOfLines={1}>{suggestion.place}</Text>
           {suggestion.category && <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 1 }}>{suggestion.category}</Text>}
           {suggestion.address && <Text style={{ fontSize: 11, color: theme.colors.onSurfaceVariant, marginTop: 2 }} numberOfLines={2}>📌 {suggestion.address}</Text>}
-          <Text style={{ fontSize: 10, color: theme.colors.primary, marginTop: 6, fontStyle: "italic" }}>Tap to view on Maps →</Text>
+          <Text style={{ fontSize: 10, color: theme.colors.primary, marginTop: 6, fontStyle: "italic" }}>Tap to view details →</Text>
         </View>
       </Surface>
     </TouchableOpacity>
@@ -1190,6 +1376,13 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
               )}
             </Modal>
           </Portal>
+
+          {/* ── Place Suggestion Detail Modal ── */}
+          <PlaceSuggestionModal
+            visible={selectedSuggestion !== null}
+            suggestion={selectedSuggestion}
+            onDismiss={() => setSelectedSuggestion(null)}
+          />
 
         </KeyboardAvoidingView>
       </Animated.View>
