@@ -25,9 +25,9 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/cli": "^20.0.2",
     "@react-native-community/slider": "5.0.1",
-    "@react-native-firebase/app": "^23.8.1",
-    "@react-native-firebase/auth": "^23.8.1",
-    "@react-native-firebase/firestore": "^23.8.1",
+    "@react-native-firebase/app": "^23.8.6",
+    "@react-native-firebase/auth": "^23.8.6",
+    "@react-native-firebase/firestore": "^23.8.6",
     "@react-native-firebase/storage": "^23.8.1",
     "@react-navigation/elements": "^2.8.3",
     "@react-navigation/native": "^7.1.8",
@@ -41,6 +41,7 @@
     "expo-checkbox": "~5.0.8",
     "expo-constants": "~18.0.12",
     "expo-crypto": "~15.0.8",
+    "expo-dev-client": "~6.0.20",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",
     "expo-image-manipulator": "~14.0.8",
@@ -62,6 +63,7 @@
     "react-native-gifted-chat": "^2.8.1",
     "react-native-image-crop-picker": "^0.51.1",
     "react-native-image-picker": "^8.2.1",
+    "react-native-keyboard-controller": "1.18.5",
     "react-native-maps": "1.20.1",
     "react-native-paper": "^5.14.5",
     "react-native-reanimated": "~4.1.1",
@@ -79,6 +81,7 @@
   "private": true,
   "devDependencies": {
     "@react-native/metro-config": "^0.82.1",
+    "@types/react": "~19.1.10",
     "nodemon": "^3.1.11",
     "typescript": "~5.9.2"
   }
