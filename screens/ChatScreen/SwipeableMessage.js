@@ -148,13 +148,16 @@ function ReplyIndicator({ progress, side, translateX }) {
     );
   }
 
-export function SwipeableMessageRight({ children, onSwipe }) {
+export function SwipeableMessageRight({ children, onSwipe, onMessageSwipeStart, onMessageSwipeEnd }) {
   const translateX = useSharedValue(0);
   const progress = useSharedValue(0);
 
   const gesture = Gesture.Pan()
     .activeOffsetX([10, 999])
     .failOffsetY([-10, 10])
+    .onBegin(() => {
+      if (onMessageSwipeStart) runOnJS(onMessageSwipeStart)();
+    })
     .onUpdate((e) => {
       if (e.translationX > 0) {
         translateX.value = Math.min(e.translationX * 0.4, THRESHOLD * 0.4);
@@ -162,11 +165,13 @@ export function SwipeableMessageRight({ children, onSwipe }) {
       }
     })
     .onEnd((e) => {
+      if (onMessageSwipeEnd) runOnJS(onMessageSwipeEnd)();
       if (e.translationX > THRESHOLD) runOnJS(onSwipe)();
       translateX.value = withSpring(0, { damping: 18, stiffness: 200 });
       progress.value = withTiming(0, { duration: 250 });
     })
     .onFinalize(() => {
+      if (onMessageSwipeEnd) runOnJS(onMessageSwipeEnd)();
       translateX.value = withSpring(0, { damping: 18, stiffness: 200 });
       progress.value = withTiming(0, { duration: 250 });
     });
@@ -187,7 +192,7 @@ export function SwipeableMessageRight({ children, onSwipe }) {
   );
 }
 
-export function SwipeableMessageLeft({ children, onSwipe }) {
+export function SwipeableMessageLeft({ children, onSwipe, onMessageSwipeStart, onMessageSwipeEnd }) {
   const translateX = useSharedValue(0);
   const progress = useSharedValue(0);
   const [bubbleHeight, setBubbleHeight] = useState(40);
@@ -195,6 +200,10 @@ export function SwipeableMessageLeft({ children, onSwipe }) {
   const gesture = Gesture.Pan()
     .activeOffsetX([-15, -15])
     .failOffsetY([-10, 10])
+    .onBegin(() => {
+      if (onMessageSwipeStart) runOnJS(onMessageSwipeStart)();
+    
+    })
     .onUpdate((e) => {
       if (e.translationX < 0) {
         translateX.value = Math.max(e.translationX * 0.4, -THRESHOLD * 0.4);
@@ -202,11 +211,13 @@ export function SwipeableMessageLeft({ children, onSwipe }) {
       }
     })
     .onEnd((e) => {
+      if (onMessageSwipeEnd) runOnJS(onMessageSwipeEnd)();
       if (e.translationX < -THRESHOLD) runOnJS(onSwipe)();
       translateX.value = withSpring(0, { damping: 18, stiffness: 200 });
       progress.value = withTiming(0, { duration: 250 });
     })
     .onFinalize(() => {
+      if (onMessageSwipeEnd) runOnJS(onMessageSwipeEnd)();
       translateX.value = withSpring(0, { damping: 18, stiffness: 200 });
       progress.value = withTiming(0, { duration: 250 });
     });

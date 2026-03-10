@@ -505,7 +505,7 @@ function ChatListScreen({ onChatSelect }) {
   );
 }
 
-function IndividualChatScreen({ chat, onBack, onChatSelect }) {
+function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart, onMessageSwipeEnd }) {
   const theme = useTheme();
   const currentUserId = getUserID();
   const [messages, setMessages] = useState([]);
@@ -924,7 +924,9 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
               if (isMyMessage) {
                 return (
                   <View style={[styles.messageRow, styles.myMessageRow]} onLayout={(e) => { itemHeightsRef.current[item._id] = e.nativeEvent.layout.height; }}>
-                    <SwipeableMessageLeft onSwipe={() => setReplyingTo(item)}>
+                    <SwipeableMessageLeft onSwipe={() => setReplyingTo(item)}
+                      onMessageSwipeStart={onMessageSwipeStart}
+                      onMessageSwipeEnd={onMessageSwipeEnd}>
                       <View style={{ alignItems: "flex-end" }}>
                         {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
                           <View style={{ alignItems: "flex-end" }}>
@@ -976,7 +978,10 @@ function IndividualChatScreen({ chat, onBack, onChatSelect }) {
                       <ProfilePhoto uri={senderProfile?.photos?.[0]} size={32} style={styles.messageAvatar} />
                     </TouchableOpacity>
                   </View>
-                  <SwipeableMessageRight onSwipe={() => setReplyingTo(item)}>
+                  <SwipeableMessageRight  onSwipe={() => setReplyingTo(item)}
+                                          onMessageSwipeStart={onMessageSwipeStart}
+                                          onMessageSwipeEnd={onMessageSwipeEnd}
+                  >
                     <View style={{ alignItems: "flex-start" }}>
                       {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
                         <View style={{ alignItems: "flex-start" }}>
