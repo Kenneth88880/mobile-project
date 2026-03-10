@@ -1,6 +1,7 @@
 import React from "react";
-import { Animated, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { Card, Surface, Text } from "react-native-paper";
+import Animated from "react-native-reanimated";
 import ProfileHalfCard from "./ProfileHalfCard";
 
 export default function DuoCard({
@@ -15,31 +16,10 @@ export default function DuoCard({
   currentUserLocation,
   handleProfileClick,
   swipeFeedback,
-  pan,
-  rotate,
-  opacity,
-  scale,
+  cardAnimatedStyle,
 }) {
   return (
-    <Animated.View
-      style={[
-        styles.cardsContainer,
-        {
-          transform: [
-            { translateX: pan.x },
-            { translateY: pan.y },
-            {
-              rotate: rotate.interpolate({
-                inputRange: [-20, 20],
-                outputRange: ["-20deg", "20deg"],
-              }),
-            },
-            { scale },
-          ],
-          opacity,
-        },
-      ]}
-    >
+    <Animated.View style={[styles.cardsContainer, cardAnimatedStyle]}>
       <Card style={styles.duoCard}>
         <ProfileHalfCard
           profile={topProfile}
