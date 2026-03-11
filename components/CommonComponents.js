@@ -86,19 +86,19 @@ export function StarRating({ rating = 0, maxStars = 5, size = 20, style }) {
       stars.push(
         <Text key={i} style={[styles.starFilled, { fontSize: size }]}>
           {"\u2605"}
-        </Text>
+        </Text>,
       );
     } else if (i === fullStars && hasHalfStar) {
       stars.push(
         <Text key={i} style={[styles.starHalf, { fontSize: size }]}>
           {"\u2BE8"}
-        </Text>
+        </Text>,
       );
     } else {
       stars.push(
         <Text key={i} style={[styles.starEmpty, { fontSize: size }]}>
           {"\u2606"}
-        </Text>
+        </Text>,
       );
     }
   }
@@ -140,6 +140,7 @@ export function ActionButtonRow({ onPass, onLike, passLabel, likeLabel }) {
 export function ProfileInfoCard({
   name,
   age,
+  gender,
   description,
   tags,
   city,
@@ -155,9 +156,30 @@ export function ProfileInfoCard({
           {name}, {age}
         </Text>
 
+        {gender && (
+          <Chip
+            icon="gender-male-female"
+            compact
+            style={{ alignSelf: "flex-start", marginBottom: 8 }}
+          >
+            {gender}
+          </Chip>
+        )}
+
         {city && (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
-            <Icon source="map-marker" size={16} color={theme.colors.onSurfaceVariant} />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginBottom: 4,
+            }}
+          >
+            <Icon
+              source="map-marker"
+              size={16}
+              color={theme.colors.onSurfaceVariant}
+            />
             <Text
               variant="bodyMedium"
               style={{ color: theme.colors.onSurfaceVariant }}
