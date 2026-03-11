@@ -19,6 +19,7 @@ export default function ProfileView({
   const profilePhotos = selectedProfile?.photos || [];
   const profileName = selectedProfile?.name || "Unknown";
   const profileAge = selectedProfile?.age || "?";
+  const profileGender = selectedProfile?.gender;
   const profileDescription =
     selectedProfile?.description || "No description available";
   const profileTags = selectedProfile?.tags || [];
@@ -77,6 +78,7 @@ export default function ProfileView({
       <ProfileInfoCard
         name={profileName}
         age={profileAge}
+        gender={profileGender}
         description={profileDescription}
         tags={profileTags}
         city={profileCity}
@@ -112,15 +114,17 @@ export default function ProfileView({
             </View>
           </Card.Content>
         </Card>
-      ) : isDatingScreen !== true && (
-        <Button
-          mode="contained"
-          icon="star"
-          onPress={() => handleRateProfile(selectedProfile)}
-          style={styles.rateButton}
-        >
-          Rate Profile
-        </Button>
+      ) : (
+        isDatingScreen !== true && (
+          <Button
+            mode="contained"
+            icon="star"
+            onPress={() => handleRateProfile(selectedProfile)}
+            style={styles.rateButton}
+          >
+            Rate Profile
+          </Button>
+        )
       )}
     </ScrollView>
   );
