@@ -639,7 +639,7 @@ export default function ProfileScreen({
   };
 
   const handleDevModeToggle = () => {
-    if (devPasswordInput === "devmode123") {
+    if (devPasswordInput === "82wiOtnC6LclCdTWCN8b") {
       const newDevMode = !devMode;
       setDevMode(newDevMode); // Call parent's setDevMode from App.js
       setShowDevPasswordModal(false);
