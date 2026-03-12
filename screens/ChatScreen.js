@@ -708,13 +708,24 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
     .activeOffsetX([40, 999])
     .failOffsetY([-5, 5])
     .onUpdate((event) => {
-      if (event.translationX > 0) translateX.value = event.translationX * 0.4;
+      if (event.translationX > 0) translateX.value = event.translationX * 0.6;
     })
     .onEnd((event) => {
-      if (event.translationX > 80) { translateX.value = withSpring(500); runOnJS(onBack)(); }
-      else translateX.value = withSpring(0);
+      if (event.translationX > 80) {
+        translateX.value = withSpring(
+          500,
+          { damping: 30, stiffness: 200, mass: 0.8, overshootClamping: true },
+          (finished) => { if (finished) runOnJS(onBack)(); }
+        );
+      } else {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+      }
     })
-    .onFinalize(() => { translateX.value = withSpring(0); });
+    .onFinalize((event) => {
+      if (event.translationX <= 80) {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+      }
+    });
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
 
