@@ -1081,7 +1081,12 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             )}
 
             <TouchableOpacity
-              onPress={(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" ? handleEditGroupInfo : undefined}
+              onPress={() => {
+                Keyboard.dismiss();
+                if ((currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived") {
+                  handleEditGroupInfo();
+                }
+              }}
               style={{ flex: 1, flexDirection: "column", alignItems: "flex-start" }}
               disabled={(!currentChat.isGroupChat && !currentChat.isPrivate) || currentChat.status === "archived"}
             >
@@ -1230,6 +1235,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                   style={[styles.textInput, { borderRadius: 30, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderWidth: 0, borderColor: "transparent" }]}
                   dense
                   autoCorrect={true}
+                  selectionColor="#000000"
                   autoCapitalize="sentences"
                   spellCheck={true}
                   textContentType="none"
