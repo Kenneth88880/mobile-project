@@ -884,7 +884,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
     setUserRating(0); setHasRated(false); setViewingProfileRating({ average: "0.0", count: 0 });
     setViewingProfile(profile);
     setProfileImageIndex(0);
-    setShowEditModal(false);
     loadProfileRating(profile.id);
   };
 
