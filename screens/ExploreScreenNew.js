@@ -50,11 +50,28 @@ export default function ExploreScreenNew({ currentUserId }) {
   const [retryKey, setRetryKey] = useState(0);
 
   // basePlacesRef holds the initial all-category preload.
-  // It is the pool used for search so that an active category filter
-  // never restricts what the user can find via the search bar.
   const basePlacesRef = useRef([]);
   // Cache the device location so we only request it once.
   const locationRef = useRef(null);
+
+  // Load events from Firestore in real-time on mount
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsubscribe = firestore()
+      .collection("userEvents")
+      .doc(currentUserId)
+      .collection("events")
+      .onSnapshot((snapshot) => {
+        const loaded = {};
+        snapshot.forEach((doc) => {
+          const data = { id: doc.id, ...doc.data() };
+          if (!loaded[data.date]) loaded[data.date] = [];
+          loaded[data.date].push(data);
+        });
+        setEvents(loaded);
+      });
+    return () => unsubscribe();
+  }, [currentUserId]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -93,8 +110,7 @@ export default function ExploreScreenNew({ currentUserId }) {
             rankPreference: "POPULARITY",
           });
         } else if (basePlacesRef.current.length > 0) {
-          // No category and we already have the base pool — reuse it
-          // (avoids 8 extra API calls every time the user deselects a category).
+          // No category and we already have the base pool — reuse it.
           results = basePlacesRef.current;
         } else {
           // Initial load (or after a retry) — fetch 5 from each category
@@ -112,7 +128,7 @@ export default function ExploreScreenNew({ currentUserId }) {
             )
           );
           results = interleave(batches);
-          basePlacesRef.current = results; // store as permanent search pool
+          basePlacesRef.current = results;
         }
 
         if (!cancelled) setAllPlaces(results);
@@ -120,8 +136,13 @@ export default function ExploreScreenNew({ currentUserId }) {
         console.error("Failed to load places:", err);
         if (!cancelled) {
           const msg = err?.message || "";
-          if (msg.toLowerCase().includes("location") || msg.toLowerCase().includes("unavailable")) {
-            setLocationError("Location unavailable. Please enable location services and try again.");
+          if (
+            msg.toLowerCase().includes("location") ||
+            msg.toLowerCase().includes("unavailable")
+          ) {
+            setLocationError(
+              "Location unavailable. Please enable location services and try again."
+            );
           } else {
             setLocationError("Failed to load places. Please try again.");
           }
@@ -136,97 +157,64 @@ export default function ExploreScreenNew({ currentUserId }) {
     };
   }, [selectedCategory, retryKey]);
 
-  const addEvent = async(event) => {
- 
+  // onSnapshot handles state — just write to Firestore
+  const addEvent = async (event) => {
     try {
-
-      const eventId = firestore()
-                      .collection("userEvents")
-                      .doc(currentUserId)
-                      .collection("events");
-      await eventId.add({
-        title: event.title,
-        date: event.date,
-        time: event.time,
-        placeId: event.place.id,
-        placeName: event.place.name,
-        placeAddress: event.place.address,
-        placeLatitude: event.place.latitude,
-        placeLongitude: event.place.longitude,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      });
-      setEvents((prev) => ({
-        ...prev,
-        [event.date]: [...(prev[event.date] || []), event, { ...event, id: eventId }],
-      }));
-
+      await firestore()
+        .collection("userEvents")
+        .doc(currentUserId)
+        .collection("events")
+        .add({
+          title: event.title,
+          date: event.date,
+          time: event.time,
+          placeId: event.place?.id,
+          placeName: event.place?.name,
+          placeAddress: event.place?.address,
+          placeLatitude: event.place?.latitude,
+          placeLongitude: event.place?.longitude,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
     } catch (error) {
       console.error("Error adding event:", error);
     }
-
   };
 
-  const updateEvent = async(originalDate, index, updated) => {
-    
+  // Resolve the event by index to get its Firestore id
+  const updateEvent = async (originalDate, index, updated) => {
     try {
-
+      const eventToUpdate = (events[originalDate] || [])[index];
+      if (!eventToUpdate?.id) return;
       await firestore()
-            .collection("userEvents")
-            .doc(currentUserId)
-            .collection("events")
-            .doc(eventToUpdate.id)
-            .update({
-              title: updated.title,
-              date: updated.date,
-              time: updated.time,
-      });
-
-      setEvents((prev) => {
-        const next = { ...prev };
-        const list = [...(next[originalDate] || [])];
-        list.splice(index, 1);
-        if (list.length === 0) delete next[originalDate];
-        else next[originalDate] = list;
-
-        // Preserve the Firestore id on the updated event
-        next[updated.date] = [
-          ...(next[updated.date] || []),
-          { ...updated, id: eventToUpdate.id },
-        ];
-        return next;
-      });
-      
+        .collection("userEvents")
+        .doc(currentUserId)
+        .collection("events")
+        .doc(eventToUpdate.id)
+        .update({
+          title: updated.title,
+          date: updated.date,
+          time: updated.time,
+        });
+      // onSnapshot handles state update
     } catch (error) {
-
       console.error("Error updating event:", error);
-
     }
-
   };
 
-  const deleteEvent = async(date, index) => {
-    
+  const deleteEvent = async (date, index) => {
     try {
-       await firestore()
-              .collection("userEvents")
-              .doc(currentUserId)
-              .collection("events")
-              .doc(eventToDelete.id)
-              .delete();
-
-      setEvents((prev) => {
-        const next = { ...prev };
-        const list = [...(next[date] || [])];
-        list.splice(index, 1);
-        if (list.length === 0) delete next[date];
-        else next[date] = list;
-        return next;
-      });
-
+      const eventToDelete = (events[date] || [])[index];
+      if (!eventToDelete?.id) return;
+      await firestore()
+        .collection("userEvents")
+        .doc(currentUserId)
+        .collection("events")
+        .doc(eventToDelete.id)
+        .delete();
+      // onSnapshot handles state update
     } catch (error) {
       console.error("Error deleting event:", error);
     }
-
   };
 
   const filteredPlaces = useMemo(() => {
@@ -234,7 +222,8 @@ export default function ExploreScreenNew({ currentUserId }) {
     if (!q) return allPlaces;
     // When searching, use the full base pool so the selected category
     // doesn't restrict what the user can find.
-    const pool = basePlacesRef.current.length > 0 ? basePlacesRef.current : allPlaces;
+    const pool =
+      basePlacesRef.current.length > 0 ? basePlacesRef.current : allPlaces;
     return pool.filter(
       (p) =>
         (p.name && p.name.toLowerCase().includes(q)) ||
@@ -258,7 +247,7 @@ export default function ExploreScreenNew({ currentUserId }) {
   );
 
   const renderListFooter = () => {
-    if (loading) return null; // spinner is shown in empty component instead
+    if (loading) return null;
     if (hasMore) {
       return (
         <TouchableOpacity
@@ -280,7 +269,12 @@ export default function ExploreScreenNew({ currentUserId }) {
       return (
         <View style={styles.empty}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>
+          <Text
+            style={[
+              styles.loadingText,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
             Finding places near you…
           </Text>
         </View>
