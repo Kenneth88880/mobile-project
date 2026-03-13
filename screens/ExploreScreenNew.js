@@ -168,11 +168,7 @@ export default function ExploreScreenNew({ currentUserId }) {
           title: event.title,
           date: event.date,
           time: event.time,
-          placeId: event.place?.id,
-          placeName: event.place?.name,
-          placeAddress: event.place?.address,
-          placeLatitude: event.place?.latitude,
-          placeLongitude: event.place?.longitude,
+          place: event.place,
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
