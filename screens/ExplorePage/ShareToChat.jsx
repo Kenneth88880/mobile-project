@@ -139,6 +139,7 @@ export default function ShareToChat({
                 address: place.address || "",
                 category: place.category || "",
                 imageUrl: imageUrl, 
+                allInfo: place,
               },
               createdAt: firestore.FieldValue.serverTimestamp(),
               user: {
