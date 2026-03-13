@@ -180,7 +180,7 @@ const updateChatPicture = async (chatId, imageUri) => {
 
 // ── Place Suggestion Modal ─────────────────────────────────────────────────────
 // Mirrors the PlaceInfo visual style: hero image, name, category, actions, info rows
-function PlaceSuggestionModal({ visible, suggestion, onDismiss, isMySuggestion }) {
+function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
   const theme = useTheme();
 
   const [place, setPlace] = useState("");
@@ -407,42 +407,46 @@ function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userPr
         visible={visible}
         onDismiss={onDismiss}
         contentContainerStyle={{
-          backgroundColor: theme.colors.background,
-          padding: 20,
-          margin: 20,
-          borderRadius: 8,
+          backgroundColor: theme.colors.elevation.level1,
+          height: "100%",
+          width: "100%",
+          justifyContent: "flex-start",
+          paddingTop: currentChat.isGroupChat ? 20 : 0,
         }}
       >
-        <Card>
-          <Card.Title title={currentChat.isPrivate ? "Nickname" : "Edit Group Info"} />
-          <Card.Content>
-            {!currentChat.isPrivate && (
-              <TouchableOpacity
-                onPress={onChangePicture}
-                disabled={uploadingChatImage}
-                style={{ alignItems: "center", marginBottom: 16 }}
-              >
-                {uploadingChatImage ? (
-                  <ActivityIndicator size="large" />
-                ) : currentChat.groupPhoto ? (
-                  <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
-                ) : (
-                  <Avatar.Icon size={80} icon="account-group" />
-                )}
-                <Text variant="labelLarge" style={{ marginTop: 8, color: uploadingChatImage ? "#999" : theme.colors.primary }}>
-                  {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TextInput
-              mode="outlined"
-              label={currentChat.isPrivate ? "Name" : "Group Name"}
-              value={editingName}
-              onChangeText={setEditingName}
-              maxLength={50}
-              style={{ marginTop: 8 }}
-            />
-          </Card.Content>
+        <View>
+          <Card.Title title={currentChat.isPrivate ? "" : "Edit Group Info"} />
+            <Card.Content>
+              {!currentChat.isPrivate ? (
+                <TouchableOpacity
+                  onPress={onChangePicture}
+                  disabled={uploadingChatImage}
+                >
+                  {uploadingChatImage ? (
+                    <ActivityIndicator size="large" />
+                  ) : currentChat.groupPhoto ? (
+                    <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
+                  ) : (
+                    <Avatar.Icon size={80} icon="account-group" />
+                  )}
+                  <Text variant="labelLarge" style={{ marginTop: 8, color: uploadingChatImage ? "#999" : theme.colors.primary }}>
+                    {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View>
+                  <Avatar.Image size={80} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
+                </View>
+              )}
+              <TextInput
+                mode="outlined"
+                label={currentChat.isPrivate ? "Nickname" : "Group Name"}
+                value={editingName}
+                onChangeText={setEditingName}
+                maxLength={50}
+                style={{ marginTop: 8 }}
+              />
+            </Card.Content>
           <Card.Actions>
             <Button onPress={() => { Keyboard.dismiss(); setTimeout(onDismiss, 150); }}>Cancel</Button>
             <Button onPress={() => onSaveName(editingName)}>Save</Button>
@@ -455,27 +459,26 @@ function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userPr
           />
 
           {showParticipants && (
-            <Card>
+            <View>
               <Card.Title title="People" />
-              <Card.Content>
-                {Object.values(userProfiles).length > 0 ? (
-                  Object.values(userProfiles).map((profile) => (
-                    <List.Item
-                      key={profile.id}
-                      title={profile.name || "Unknown"}
-                      description={profile.city || "No location"}
-                      left={() => <ProfilePhoto uri={profile.photos?.[0]} size={48} />}
-                      style={{ paddingVertical: 8 }}
-                      onPress={() => onParticipantPress(profile)}
-                    />
-                  ))
-                ) : (
-                  <Text>No participants found</Text>
-                )}
-              </Card.Content>
-            </Card>
+                <Card.Content>
+                  {Object.values(userProfiles).length > 0 ? (
+                    Object.values(userProfiles).map((profile) => (
+                      <List.Item
+                        key={profile.id}
+                        title={profile.name || "Unknown"}
+                        description={profile.city || "No location"}
+                        left={() => <ProfilePhoto uri={profile.photos?.[0]} size={48} />}
+                        onPress={() => onParticipantPress(profile)}
+                      />
+                    ))
+                  ) : (
+                    <Text>No participants found</Text>
+                  )}
+                </Card.Content>
+            </View>
           )}
-        </Card>
+        </View>
       </Modal>
     </Portal>
   );
@@ -732,7 +735,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
   const [replyingTo, setReplyingTo] = useState(null);
   // ── NEW: place suggestion modal state ──
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
-  const [isMyMessage, setIsMyMessage] = useState(false);
   const flatListRef = useRef(null);
   const itemHeightsRef = useRef({});
 
@@ -1154,7 +1156,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             contentContainerStyle={styles.messagesList}
             renderItem={({ item, index }) => {
               const isMyMessage = item.user._id === currentUserId;
-              setIsMyMessage(isMyMessage);
               const senderProfile = userProfiles[item.user._id];
               const isLatestMessage = index === 0;
 
@@ -1435,7 +1436,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             visible={selectedSuggestion !== null}
             suggestion={selectedSuggestion}
             onDismiss={() => setSelectedSuggestion(null)}
-            isMySuggestion={isMyMessage}
           />
 
         </KeyboardAvoidingView>
