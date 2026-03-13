@@ -180,8 +180,10 @@ const updateChatPicture = async (chatId, imageUri) => {
 
 // ── Place Suggestion Modal ─────────────────────────────────────────────────────
 // Mirrors the PlaceInfo visual style: hero image, name, category, actions, info rows
-function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
+function PlaceSuggestionModal({ visible, suggestion, onDismiss, isMySuggestion }) {
   const theme = useTheme();
+
+  const [place, setPlace] = useState("");
 
   if (!suggestion) return null;
 
@@ -192,6 +194,16 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
 
   const handleDirections = () => openMapsFromSuggestion(suggestion);
   const handleOpenMaps = () => openPlaceInBrowser(suggestion);
+  const createEvent = (eventHour, eventMinute, selectedPeriod, eventDate, place) => {
+
+    ({
+      date: eventDate,
+      time: `${eventHour}:${eventMinute} ${selectedPeriod}`,
+      title: place.name,
+      place,
+    })
+
+  }
 
   return (
     <Portal>
@@ -297,6 +309,27 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     Directions
                   </Text>
                 </TouchableOpacity>
+
+                  {/* {(isMySuggestion === false && 
+                  <TouchableOpacity
+                    onPress={handleOpenMaps}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      gap: 4,
+                      backgroundColor: theme.colors.primaryContainer,
+                    }}
+                  >
+
+                    <Icon source="calendar-heart" size={22} color={theme.colors.onPrimaryContainer} />
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
+                      Add to my Calendar
+                    </Text>
+
+                  </TouchableOpacity>
+                )} */}
 
                 <TouchableOpacity
                   onPress={handleOpenMaps}
@@ -699,6 +732,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
   const [replyingTo, setReplyingTo] = useState(null);
   // ── NEW: place suggestion modal state ──
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+  const [isMyMessage, setIsMyMessage] = useState(false);
   const flatListRef = useRef(null);
   const itemHeightsRef = useRef({});
 
@@ -1049,7 +1083,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
         {suggestion.imageUrl && (
           <Image
             source={{ uri: suggestion.imageUrl }}
-            style={{ width: 240, height: 130, marginLeft: isMyMessage ? -12 : 0 }}
+            style={{ width: 240, height: 130, marginLeft: -12 }}
             resizeMode="cover"
           />
         )}
@@ -1120,6 +1154,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             contentContainerStyle={styles.messagesList}
             renderItem={({ item, index }) => {
               const isMyMessage = item.user._id === currentUserId;
+              setIsMyMessage(isMyMessage);
               const senderProfile = userProfiles[item.user._id];
               const isLatestMessage = index === 0;
 
@@ -1172,6 +1207,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                 );
               }
 
+              else {
               return (
                 <View style={[styles.messageRow]} onLayout={(e) => { itemHeightsRef.current[item._id] = e.nativeEvent.layout.height; }}>
                   <View style={styles.avatarWrapper}>
@@ -1217,7 +1253,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                   </SwipeableMessageRight>
                 </View>
               );
-            }}
+            }}}
           />
 
           {/* ── Input ── */}
@@ -1399,6 +1435,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             visible={selectedSuggestion !== null}
             suggestion={selectedSuggestion}
             onDismiss={() => setSelectedSuggestion(null)}
+            isMySuggestion={isMyMessage}
           />
 
         </KeyboardAvoidingView>
