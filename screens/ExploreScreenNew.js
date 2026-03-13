@@ -15,6 +15,7 @@ import PlaceInfo from "./ExplorePage/PlaceInfo";
 import Categories, { CATEGORIES } from "./ExplorePage/Categories";
 import MyDates from "./ExplorePage/MyDates";
 import { searchNearbyPlaces } from "../services/placesService";
+import firestore from "@react-native-firebase/firestore";
 
 const PAGE_SIZE = 10;
 
@@ -35,7 +36,7 @@ function interleave(arrays) {
   return result;
 }
 
-export default function ExploreScreenNew({ isActive }) {
+export default function ExploreScreenNew({ currentUserId }) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("explore");
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -135,34 +136,97 @@ export default function ExploreScreenNew({ isActive }) {
     };
   }, [selectedCategory, retryKey]);
 
-  const addEvent = (event) => {
-    setEvents((prev) => ({
-      ...prev,
-      [event.date]: [...(prev[event.date] || []), event],
-    }));
+  const addEvent = async(event) => {
+ 
+    try {
+
+      const eventId = firestore()
+                      .collection("userEvents")
+                      .doc(currentUserId)
+                      .collection("events");
+      await eventId.add({
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        placeId: event.place.id,
+        placeName: event.place.name,
+        placeAddress: event.place.address,
+        placeLatitude: event.place.latitude,
+        placeLongitude: event.place.longitude,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+      setEvents((prev) => ({
+        ...prev,
+        [event.date]: [...(prev[event.date] || []), event, { ...event, id: eventId }],
+      }));
+
+    } catch (error) {
+      console.error("Error adding event:", error);
+    }
+
   };
 
-  const updateEvent = (originalDate, index, updated) => {
-    setEvents((prev) => {
-      const next = { ...prev };
-      const list = [...(next[originalDate] || [])];
-      list.splice(index, 1);
-      if (list.length === 0) delete next[originalDate];
-      else next[originalDate] = list;
-      next[updated.date] = [...(next[updated.date] || []), updated];
-      return next;
-    });
+  const updateEvent = async(originalDate, index, updated) => {
+    
+    try {
+
+      await firestore()
+            .collection("userEvents")
+            .doc(currentUserId)
+            .collection("events")
+            .doc(eventToUpdate.id)
+            .update({
+              title: updated.title,
+              date: updated.date,
+              time: updated.time,
+      });
+
+      setEvents((prev) => {
+        const next = { ...prev };
+        const list = [...(next[originalDate] || [])];
+        list.splice(index, 1);
+        if (list.length === 0) delete next[originalDate];
+        else next[originalDate] = list;
+
+        // Preserve the Firestore id on the updated event
+        next[updated.date] = [
+          ...(next[updated.date] || []),
+          { ...updated, id: eventToUpdate.id },
+        ];
+        return next;
+      });
+      
+    } catch (error) {
+
+      console.error("Error updating event:", error);
+
+    }
+
   };
 
-  const deleteEvent = (date, index) => {
-    setEvents((prev) => {
-      const next = { ...prev };
-      const list = [...(next[date] || [])];
-      list.splice(index, 1);
-      if (list.length === 0) delete next[date];
-      else next[date] = list;
-      return next;
-    });
+  const deleteEvent = async(date, index) => {
+    
+    try {
+       await firestore()
+              .collection("userEvents")
+              .doc(currentUserId)
+              .collection("events")
+              .doc(eventToDelete.id)
+              .delete();
+
+      setEvents((prev) => {
+        const next = { ...prev };
+        const list = [...(next[date] || [])];
+        list.splice(index, 1);
+        if (list.length === 0) delete next[date];
+        else next[date] = list;
+        return next;
+      });
+
+    } catch (error) {
+      console.error("Error deleting event:", error);
+    }
+
   };
 
   const filteredPlaces = useMemo(() => {
