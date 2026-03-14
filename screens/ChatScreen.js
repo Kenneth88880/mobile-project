@@ -1635,13 +1635,11 @@ function IndividualChatScreen({
   );
 
   return (
+  <>
     <GestureDetector gesture={panGesture}>
       <Animated.View style={[{ flex: 1 }, animatedStyle]}>
         <KeyboardAvoidingView
-          style={[
-            styles.container,
-            { backgroundColor: theme.colors.background },
-          ]}
+          style={[styles.container, { backgroundColor: theme.colors.background }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 50 : 40}
           keyboardDismissMode="on-drag"
@@ -1653,18 +1651,13 @@ function IndividualChatScreen({
             {(currentChat.isGroupChat || !currentChat.isPrivate) && (
               <TouchableOpacity
                 onPress={handleChangeGroupPicture}
-                disabled={
-                  uploadingChatImage || currentChat.status === "archived"
-                }
+                disabled={uploadingChatImage || currentChat.status === "archived"}
                 style={{ marginRight: 8 }}
               >
                 {uploadingChatImage ? (
                   <ActivityIndicator size={36} />
                 ) : currentChat.groupPhoto ? (
-                  <Avatar.Image
-                    size={36}
-                    source={{ uri: currentChat.groupPhoto }}
-                  />
+                  <Avatar.Image size={36} source={{ uri: currentChat.groupPhoto }} />
                 ) : (
                   <Avatar.Icon size={36} icon="account-group" />
                 )}
@@ -1695,11 +1688,7 @@ function IndividualChatScreen({
                   handleEditGroupInfo();
                 }
               }}
-              style={{
-                flex: 1,
-                flexDirection: "column",
-                alignItems: "flex-start",
-              }}
+              style={{ flex: 1, flexDirection: "column", alignItems: "flex-start" }}
               disabled={
                 (!currentChat.isGroupChat && !currentChat.isPrivate) ||
                 currentChat.status === "archived"
@@ -1724,7 +1713,6 @@ function IndividualChatScreen({
             </TouchableOpacity>
           </Surface>
 
-          {/* ── Messages ── */}
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -1741,8 +1729,7 @@ function IndividualChatScreen({
                   <View
                     style={[styles.messageRow, styles.myMessageRow]}
                     onLayout={(e) => {
-                      itemHeightsRef.current[item._id] =
-                        e.nativeEvent.layout.height;
+                      itemHeightsRef.current[item._id] = e.nativeEvent.layout.height;
                     }}
                   >
                     <SwipeableMessageLeft
@@ -1751,90 +1738,74 @@ function IndividualChatScreen({
                       onMessageSwipeEnd={onMessageSwipeEnd}
                     >
                       <View style={{ alignItems: "flex-end" }}>
-                        {item.text &&
-                          !item.imageUrl &&
-                          item.type !== "place_suggestion" && (
-                            <View style={{ alignItems: "flex-end" }}>
-                              {item.replyTo && (
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    handleReplyBubbleTap(item.replyTo)
-                                  }
-                                >
-                                  <View
-                                    style={{
-                                      backgroundColor:
-                                        theme.dark === true
-                                          ? "rgb(255, 176, 201)"
-                                          : "rgb(139, 74, 97)",
-                                      opacity: 0.6,
-                                      borderRadius: 12,
-                                      borderBottomRightRadius: 2,
-                                      paddingHorizontal: 10,
-                                      paddingVertical: 6,
-                                      maxWidth: 240,
-                                      marginBottom: 2,
-                                      marginRight: 8,
-                                    }}
-                                  >
-                                    <Text
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: "700",
-                                        color:
-                                          theme.dark === true ? "#fff" : "#000",
-                                        marginBottom: 2,
-                                      }}
-                                    >
-                                      {item.replyTo.senderName}
-                                    </Text>
-                                    <Text
-                                      style={{
-                                        fontSize: 12,
-                                        color:
-                                          theme.dark === true ? "#fff" : "#000",
-                                      }}
-                                      numberOfLines={1}
-                                    >
-                                      {item.replyTo.text}
-                                    </Text>
-                                  </View>
-                                </TouchableOpacity>
-                              )}
-                              <Surface
-                                style={[
-                                  styles.messageBubble,
-                                  {
-                                    backgroundColor:
-                                      theme.colors.primaryContainer,
-                                    borderBottomRightRadius: 4,
-                                    borderBottomLeftRadius: 16,
-                                    zIndex: 1,
-                                  },
-                                ]}
-                                elevation={1}
-                              >
-                                <Text
-                                  variant="bodyMedium"
+                        {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
+                          <View style={{ alignItems: "flex-end" }}>
+                            {item.replyTo && (
+                              <TouchableOpacity onPress={() => handleReplyBubbleTap(item.replyTo)}>
+                                <View
                                   style={{
-                                    color: theme.colors.onPrimaryContainer,
+                                    backgroundColor:
+                                      theme.dark === true
+                                        ? "rgb(255, 176, 201)"
+                                        : "rgb(139, 74, 97)",
+                                    opacity: 0.6,
+                                    borderRadius: 12,
+                                    borderBottomRightRadius: 2,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    maxWidth: 240,
+                                    marginBottom: 2,
+                                    marginRight: 8,
                                   }}
                                 >
-                                  {item.text}
-                                </Text>
-                              </Surface>
-                            </View>
-                          )}
+                                  <Text
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: "700",
+                                      color: theme.dark === true ? "#fff" : "#000",
+                                      marginBottom: 2,
+                                    }}
+                                  >
+                                    {item.replyTo.senderName}
+                                  </Text>
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      color: theme.dark === true ? "#fff" : "#000",
+                                    }}
+                                    numberOfLines={1}
+                                  >
+                                    {item.replyTo.text}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                            <Surface
+                              style={[
+                                styles.messageBubble,
+                                {
+                                  backgroundColor: theme.colors.primaryContainer,
+                                  borderBottomRightRadius: 4,
+                                  borderBottomLeftRadius: 16,
+                                  zIndex: 1,
+                                },
+                              ]}
+                              elevation={1}
+                            >
+                              <Text
+                                variant="bodyMedium"
+                                style={{ color: theme.colors.onPrimaryContainer }}
+                              >
+                                {item.text}
+                              </Text>
+                            </Surface>
+                          </View>
+                        )}
                         {item.imageUrl && !item.type && (
                           <Surface>
                             <Image
                               source={{ uri: item.imageUrl }}
-                              style={{
-                                width: 200,
-                                height: 200,
-                                borderRadius: 12,
-                                marginLeft: -1,
-                              }}
+                              style={{ width: 200, height: 200, borderRadius: 12, marginLeft: -1 }}
                               resizeMode="cover"
                             />
                           </Surface>
@@ -1868,9 +1839,7 @@ function IndividualChatScreen({
                           {userProfiles[currentUserId].name || "You"}
                         </Text>
                         <TouchableOpacity
-                          onPress={() =>
-                            handleProfilePicturePress(currentUserId)
-                          }
+                          onPress={() => handleProfilePicturePress(currentUserId)}
                         >
                           <ProfilePhoto
                             uri={userProfiles[currentUserId].photos?.[0]}
@@ -1887,8 +1856,7 @@ function IndividualChatScreen({
                   <View
                     style={[styles.messageRow]}
                     onLayout={(e) => {
-                      itemHeightsRef.current[item._id] =
-                        e.nativeEvent.layout.height;
+                      itemHeightsRef.current[item._id] = e.nativeEvent.layout.height;
                     }}
                   >
                     <View style={styles.avatarWrapper}>
@@ -1911,91 +1879,78 @@ function IndividualChatScreen({
                       onMessageSwipeEnd={onMessageSwipeEnd}
                     >
                       <View style={{ alignItems: "flex-start" }}>
-                        {item.text &&
-                          !item.imageUrl &&
-                          item.type !== "place_suggestion" && (
-                            <View style={{ alignItems: "flex-start" }}>
-                              {item.replyTo && (
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    handleReplyBubbleTap(item.replyTo)
-                                  }
-                                >
-                                  <View
-                                    style={{
-                                      backgroundColor:
-                                        theme.dark === true
-                                          ? "rgb(255, 176, 201)"
-                                          : "rgb(139, 74, 97)",
-                                      opacity: 0.6,
-                                      borderRadius: 12,
-                                      borderBottomLeftRadius: 2,
-                                      paddingHorizontal: 10,
-                                      paddingVertical: 6,
-                                      maxWidth: 240,
-                                      marginBottom: 2,
-                                      marginLeft: 8,
-                                      borderLeftWidth: 3,
-                                      borderLeftColor: theme.colors.primary,
-                                    }}
-                                  >
-                                    <Text
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: "700",
-                                        color:
-                                          theme.dark === true ? "#fff" : "#000",
-                                        marginBottom: 2,
-                                      }}
-                                    >
-                                      {item.replyTo.senderName}
-                                    </Text>
-                                    <Text
-                                      style={{
-                                        fontSize: 12,
-                                        color:
-                                          theme.dark === true ? "#fff" : "#000",
-                                      }}
-                                      numberOfLines={1}
-                                    >
-                                      {item.replyTo.text}
-                                    </Text>
-                                  </View>
-                                </TouchableOpacity>
-                              )}
-                              <Surface
-                                style={[
-                                  styles.messageBubble,
-                                  {
-                                    backgroundColor:
-                                      theme.colors.surfaceVariant,
-                                    borderBottomRightRadius: 16,
-                                    borderBottomLeftRadius: 4,
-                                    zIndex: 1,
-                                  },
-                                ]}
-                                elevation={1}
+                        {item.text && !item.imageUrl && item.type !== "place_suggestion" && (
+                          <View style={{ alignItems: "flex-start" }}>
+                            {item.replyTo && (
+                              <TouchableOpacity
+                                onPress={() => handleReplyBubbleTap(item.replyTo)}
                               >
-                                <Text
-                                  variant="bodyMedium"
+                                <View
                                   style={{
-                                    color: theme.colors.onSurfaceVariant,
+                                    backgroundColor:
+                                      theme.dark === true
+                                        ? "rgb(255, 176, 201)"
+                                        : "rgb(139, 74, 97)",
+                                    opacity: 0.6,
+                                    borderRadius: 12,
+                                    borderBottomLeftRadius: 2,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    maxWidth: 240,
+                                    marginBottom: 2,
+                                    marginLeft: 8,
+                                    borderLeftWidth: 3,
+                                    borderLeftColor: theme.colors.primary,
                                   }}
                                 >
-                                  {item.text}
-                                </Text>
-                              </Surface>
-                            </View>
-                          )}
+                                  <Text
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: "700",
+                                      color: theme.dark === true ? "#fff" : "#000",
+                                      marginBottom: 2,
+                                    }}
+                                  >
+                                    {item.replyTo.senderName}
+                                  </Text>
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      color: theme.dark === true ? "#fff" : "#000",
+                                    }}
+                                    numberOfLines={1}
+                                  >
+                                    {item.replyTo.text}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                            <Surface
+                              style={[
+                                styles.messageBubble,
+                                {
+                                  backgroundColor: theme.colors.surfaceVariant,
+                                  borderBottomRightRadius: 16,
+                                  borderBottomLeftRadius: 4,
+                                  zIndex: 1,
+                                },
+                              ]}
+                              elevation={1}
+                            >
+                              <Text
+                                variant="bodyMedium"
+                                style={{ color: theme.colors.onSurfaceVariant }}
+                              >
+                                {item.text}
+                              </Text>
+                            </Surface>
+                          </View>
+                        )}
                         {item.imageUrl && !item.type && (
                           <Surface>
                             <Image
                               source={{ uri: item.imageUrl }}
-                              style={{
-                                width: 200,
-                                height: 200,
-                                borderRadius: 12,
-                              }}
+                              style={{ width: 200, height: 200, borderRadius: 12 }}
                               resizeMode="cover"
                             />
                           </Surface>
@@ -2029,7 +1984,6 @@ function IndividualChatScreen({
             }}
           />
 
-          {/* ── Input ── */}
           <Surface
             style={{
               backgroundColor: theme.colors.background,
@@ -2050,22 +2004,14 @@ function IndividualChatScreen({
                 }}
               >
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text
-                    variant="labelSmall"
-                    style={{ color: theme.colors.primary }}
-                  >
-                    Replying to{" "}
-                    {userProfiles[replyingTo.user._id]?.name || "Someone"}
+                  <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
+                    Replying to {userProfiles[replyingTo.user._id]?.name || "Someone"}
                   </Text>
                   <Text variant="bodySmall" numberOfLines={1}>
                     {replyingTo.text || "📷 Image"}
                   </Text>
                 </View>
-                <IconButton
-                  icon="close"
-                  size={16}
-                  onPress={() => setReplyingTo(null)}
-                />
+                <IconButton icon="close" size={16} onPress={() => setReplyingTo(null)} />
               </View>
             )}
             {currentChat.status === "archived" ? (
@@ -2076,10 +2022,7 @@ function IndividualChatScreen({
                   alignItems: "center",
                 }}
               >
-                <Text
-                  variant="bodyMedium"
-                  style={{ color: theme.colors.onSurfaceVariant }}
-                >
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                   🗄️ This chat is archived and read-only
                 </Text>
               </View>
@@ -2144,363 +2087,290 @@ function IndividualChatScreen({
               </View>
             )}
           </Surface>
-
-          {/* ── Edit Modal ── */}
-          <EditGroupModal
-            visible={showEditModal}
-            onDismiss={() => setShowEditModal(false)}
-            currentChat={currentChat}
-            currentUserId={currentUserId}
-            userProfiles={userProfiles}
-            uploadingChatImage={uploadingChatImage}
-            onChangePicture={handleChangeGroupPicture}
-            onSaveName={handleSaveGroupName}
-            onParticipantPress={handleParticipantPress}
-          />
-
-          {/* ── Profile Modal ── */}
-          <Portal>
-            <Modal
-              visible={viewingProfile !== null}
-              onDismiss={() => {
-                setViewingProfile(null);
-                setProfileImageIndex(0);
-                setUserRating(0);
-                setHasRated(false);
-              }}
-              contentContainerStyle={{
-                backgroundColor: theme.colors.background,
-                margin: 20,
-                borderRadius: 8,
-                maxHeight: "90%",
-              }}
-            >
-              {viewingProfile && (
-                <View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: 16,
-                      paddingTop:
-                        Platform.OS === "ios" ? Math.max(16, insets.top) : 16,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.outline,
-                    }}
-                  >
-                    <Text variant="titleLarge">
-                      {viewingProfile.name}'s Profile
-                    </Text>
-                    <IconButton
-                      icon="close"
-                      onPress={() => {
-                        setViewingProfile(null);
-                        setProfileImageIndex(0);
-                        setUserRating(0);
-                        setHasRated(false);
-                      }}
-                    />
-                  </View>
-                  <View style={{ maxHeight: 600 }}>
-                    <FlatList
-                      data={[{ key: "profile" }]}
-                      keyExtractor={(item) => item.key}
-                      renderItem={() => (
-                        <View style={{ padding: 16 }}>
-                          {viewingProfile.photos?.length > 0 ? (
-                            <Card style={{ marginBottom: 16 }}>
-                              <TouchableOpacity
-                                activeOpacity={0.9}
-                                onPress={handleProfileImageTap}
-                              >
-                                <Card.Cover
-                                  source={{
-                                    uri: viewingProfile.photos[
-                                      profileImageIndex
-                                    ],
-                                  }}
-                                  style={{ height: 300 }}
-                                />
-                                {viewingProfile.photos.length > 1 && (
-                                  <View
-                                    style={{
-                                      position: "absolute",
-                                      bottom: 16,
-                                      left: 0,
-                                      right: 0,
-                                      flexDirection: "row",
-                                      justifyContent: "center",
-                                      gap: 8,
-                                    }}
-                                  >
-                                    {viewingProfile.photos.map((_, index) => (
-                                      <View
-                                        key={index}
-                                        style={{
-                                          width:
-                                            index === profileImageIndex
-                                              ? 10
-                                              : 8,
-                                          height:
-                                            index === profileImageIndex
-                                              ? 10
-                                              : 8,
-                                          borderRadius:
-                                            index === profileImageIndex ? 5 : 4,
-                                          backgroundColor:
-                                            index === profileImageIndex
-                                              ? "white"
-                                              : "rgba(255,255,255,0.5)",
-                                        }}
-                                      />
-                                    ))}
-                                  </View>
-                                )}
-                              </TouchableOpacity>
-                            </Card>
-                          ) : (
-                            <Card
-                              style={{
-                                marginBottom: 16,
-                                height: 300,
-                                justifyContent: "center",
-                                alignItems: "center",
-                              }}
-                            >
-                              <Avatar.Icon size={80} icon="account" />
-                              <Text style={{ marginTop: 8 }}>No photos</Text>
-                            </Card>
-                          )}
-                          <Card style={{ marginBottom: 16 }}>
-                            <Card.Content>
-                              <Text variant="headlineSmall">
-                                {viewingProfile.name},{" "}
-                                {viewingProfile.age || "?"}
-                              </Text>
-                              <View
-                                style={{ marginTop: 12, alignItems: "center" }}
-                              >
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    marginBottom: 4,
-                                  }}
-                                >
-                                  {renderStars(
-                                    parseFloat(viewingProfileRating.average),
-                                  )}
-                                </View>
-                                <Text
-                                  variant="bodySmall"
-                                  style={{
-                                    color: theme.colors.onSurfaceVariant,
-                                  }}
-                                >
-                                  {viewingProfileRating.average} (
-                                  {viewingProfileRating.count} rating
-                                  {viewingProfileRating.count !== 1 ? "s" : ""})
-                                </Text>
-                              </View>
-                              {viewingProfile.city && (
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    marginTop: 12,
-                                  }}
-                                >
-                                  <Icon source="map-marker" size={16} />
-                                  <Text
-                                    variant="bodyMedium"
-                                    style={{ marginLeft: 4 }}
-                                  >
-                                    {viewingProfile.city}
-                                  </Text>
-                                </View>
-                              )}
-                              {viewingProfile.gender && (
-                                <View style={{ marginTop: 12 }}>
-                                  <Text
-                                    variant="titleSmall"
-                                    style={{ marginBottom: 4 }}
-                                  >
-                                    Gender
-                                  </Text>
-                                  <Chip
-                                    style={{
-                                      alignSelf: "flex-start",
-                                      backgroundColor:
-                                        viewingProfile.gender === "male"
-                                          ? "#4A90E2"
-                                          : viewingProfile.gender === "female"
-                                            ? "#FF69B4"
-                                            : "#9B59B6",
-                                    }}
-                                    textStyle={{ color: "#FFFFFF" }}
-                                  >
-                                    {viewingProfile.gender === "male"
-                                      ? "Male"
-                                      : viewingProfile.gender === "female"
-                                        ? "Female"
-                                        : "Non-Binary"}
-                                  </Chip>
-                                </View>
-                              )}
-                              {viewingProfile.description && (
-                                <View style={{ marginTop: 16 }}>
-                                  <Text
-                                    variant="titleSmall"
-                                    style={{ marginBottom: 4 }}
-                                  >
-                                    About
-                                  </Text>
-                                  <Text
-                                    variant="bodyMedium"
-                                    style={{ lineHeight: 22 }}
-                                  >
-                                    {viewingProfile.description}
-                                  </Text>
-                                </View>
-                              )}
-                              {viewingProfile.tags?.length > 0 && (
-                                <View style={{ marginTop: 16 }}>
-                                  <Text
-                                    variant="titleSmall"
-                                    style={{ marginBottom: 8 }}
-                                  >
-                                    Interests
-                                  </Text>
-                                  <View
-                                    style={{
-                                      flexDirection: "row",
-                                      flexWrap: "wrap",
-                                      gap: 8,
-                                    }}
-                                  >
-                                    {viewingProfile.tags.map((tag, index) => (
-                                      <Chip key={index} compact>
-                                        {tag}
-                                      </Chip>
-                                    ))}
-                                  </View>
-                                </View>
-                              )}
-                            </Card.Content>
-                          </Card>
-                          {viewingProfile.id !== currentUserId && (
-                            <Card
-                              style={{
-                                marginBottom: 16,
-                                backgroundColor: theme.colors.primaryContainer,
-                              }}
-                            >
-                              <Card.Content>
-                                <Text
-                                  variant="titleMedium"
-                                  style={{
-                                    marginBottom: 12,
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {hasRated
-                                    ? "Update Your Rating"
-                                    : "Rate This Person"}
-                                </Text>
-                                <View
-                                  style={{
-                                    alignItems: "center",
-                                    marginBottom: 12,
-                                  }}
-                                >
-                                  <View
-                                    style={{
-                                      flexDirection: "row",
-                                      justifyContent: "center",
-                                    }}
-                                  >
-                                    {renderStars(userRating, setUserRating)}
-                                  </View>
-                                  {userRating > 0 && (
-                                    <Text
-                                      variant="bodySmall"
-                                      style={{
-                                        marginTop: 8,
-                                        fontStyle: "italic",
-                                      }}
-                                    >
-                                      {userRating === 1 && "Poor"}
-                                      {userRating === 2 && "Fair"}
-                                      {userRating === 3 && "Good"}
-                                      {userRating === 4 && "Very Good"}
-                                      {userRating === 5 && "Excellent"}
-                                    </Text>
-                                  )}
-                                </View>
-                                <Button
-                                  mode="contained"
-                                  onPress={() =>
-                                    handleSubmitRating(
-                                      viewingProfile.id,
-                                      userRating,
-                                    )
-                                  }
-                                  disabled={
-                                    userRating === 0 || submittingRating
-                                  }
-                                  loading={submittingRating}
-                                  icon={hasRated ? "update" : "star"}
-                                >
-                                  {hasRated ? "Update Rating" : "Submit Rating"}
-                                </Button>
-                                {hasRated && (
-                                  <Text
-                                    variant="bodySmall"
-                                    style={{
-                                      marginTop: 8,
-                                      textAlign: "center",
-                                      fontStyle: "italic",
-                                      opacity: 0.7,
-                                    }}
-                                  >
-                                    You previously rated this person{" "}
-                                    {userRating} star
-                                    {userRating !== 1 ? "s" : ""}
-                                  </Text>
-                                )}
-                                {currentChat.isPrivate !== true && (
-                                  <Button
-                                    mode="contained"
-                                    style={{ marginTop: 8 }}
-                                    onPress={() =>
-                                      handleCreatePrivateChat(viewingProfile.id)
-                                    }
-                                  >
-                                    Create Private DM
-                                  </Button>
-                                )}
-                              </Card.Content>
-                            </Card>
-                          )}
-                        </View>
-                      )}
-                    />
-                  </View>
-                </View>
-              )}
-            </Modal>
-          </Portal>
-
-          {/* ── Place Suggestion Detail Modal ── */}
-          <PlaceSuggestionModal
-            visible={selectedSuggestion !== null}
-            suggestion={selectedSuggestion}
-            onDismiss={() => setSelectedSuggestion(null)}
-          />
         </KeyboardAvoidingView>
       </Animated.View>
     </GestureDetector>
+
+    {/* ── Modals outside GestureDetector — fixes iOS touch interception ── */}
+    <EditGroupModal
+      visible={showEditModal}
+      onDismiss={() => setShowEditModal(false)}
+      currentChat={currentChat}
+      currentUserId={currentUserId}
+      userProfiles={userProfiles}
+      uploadingChatImage={uploadingChatImage}
+      onChangePicture={handleChangeGroupPicture}
+      onSaveName={handleSaveGroupName}
+      onParticipantPress={handleParticipantPress}
+    />
+
+    <Portal>
+      <Modal
+        visible={viewingProfile !== null}
+        onDismiss={() => {
+          setViewingProfile(null);
+          setProfileImageIndex(0);
+          setUserRating(0);
+          setHasRated(false);
+        }}
+        contentContainerStyle={{
+          backgroundColor: theme.colors.background,
+          margin: 20,
+          borderRadius: 8,
+          maxHeight: "90%",
+        }}
+      >
+        {viewingProfile && (
+          <View>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 16,
+                paddingTop: Platform.OS === "ios" ? Math.max(16, insets.top) : 16,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.outline,
+              }}
+            >
+              <Text variant="titleLarge">{viewingProfile.name}'s Profile</Text>
+              <IconButton
+                icon="close"
+                onPress={() => {
+                  setViewingProfile(null);
+                  setProfileImageIndex(0);
+                  setUserRating(0);
+                  setHasRated(false);
+                }}
+              />
+            </View>
+            <View style={{ maxHeight: 600 }}>
+              <FlatList
+                data={[{ key: "profile" }]}
+                keyExtractor={(item) => item.key}
+                renderItem={() => (
+                  <View style={{ padding: 16 }}>
+                    {viewingProfile.photos?.length > 0 ? (
+                      <Card style={{ marginBottom: 16 }}>
+                        <TouchableOpacity activeOpacity={0.9} onPress={handleProfileImageTap}>
+                          <Card.Cover
+                            source={{ uri: viewingProfile.photos[profileImageIndex] }}
+                            style={{ height: 300 }}
+                          />
+                          {viewingProfile.photos.length > 1 && (
+                            <View
+                              style={{
+                                position: "absolute",
+                                bottom: 16,
+                                left: 0,
+                                right: 0,
+                                flexDirection: "row",
+                                justifyContent: "center",
+                                gap: 8,
+                              }}
+                            >
+                              {viewingProfile.photos.map((_, index) => (
+                                <View
+                                  key={index}
+                                  style={{
+                                    width: index === profileImageIndex ? 10 : 8,
+                                    height: index === profileImageIndex ? 10 : 8,
+                                    borderRadius: index === profileImageIndex ? 5 : 4,
+                                    backgroundColor:
+                                      index === profileImageIndex
+                                        ? "white"
+                                        : "rgba(255,255,255,0.5)",
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      </Card>
+                    ) : (
+                      <Card
+                        style={{
+                          marginBottom: 16,
+                          height: 300,
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Avatar.Icon size={80} icon="account" />
+                        <Text style={{ marginTop: 8 }}>No photos</Text>
+                      </Card>
+                    )}
+                    <Card style={{ marginBottom: 16 }}>
+                      <Card.Content>
+                        <Text variant="headlineSmall">
+                          {viewingProfile.name}, {viewingProfile.age || "?"}
+                        </Text>
+                        <View style={{ marginTop: 12, alignItems: "center" }}>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {renderStars(parseFloat(viewingProfileRating.average))}
+                          </View>
+                          <Text
+                            variant="bodySmall"
+                            style={{ color: theme.colors.onSurfaceVariant }}
+                          >
+                            {viewingProfileRating.average} ({viewingProfileRating.count} rating
+                            {viewingProfileRating.count !== 1 ? "s" : ""})
+                          </Text>
+                        </View>
+                        {viewingProfile.city && (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginTop: 12,
+                            }}
+                          >
+                            <Icon source="map-marker" size={16} />
+                            <Text variant="bodyMedium" style={{ marginLeft: 4 }}>
+                              {viewingProfile.city}
+                            </Text>
+                          </View>
+                        )}
+                        {viewingProfile.gender && (
+                          <View style={{ marginTop: 12 }}>
+                            <Text variant="titleSmall" style={{ marginBottom: 4 }}>
+                              Gender
+                            </Text>
+                            <Chip
+                              style={{
+                                alignSelf: "flex-start",
+                                backgroundColor:
+                                  viewingProfile.gender === "male"
+                                    ? "#4A90E2"
+                                    : viewingProfile.gender === "female"
+                                      ? "#FF69B4"
+                                      : "#9B59B6",
+                              }}
+                              textStyle={{ color: "#FFFFFF" }}
+                            >
+                              {viewingProfile.gender === "male"
+                                ? "Male"
+                                : viewingProfile.gender === "female"
+                                  ? "Female"
+                                  : "Non-Binary"}
+                            </Chip>
+                          </View>
+                        )}
+                        {viewingProfile.description && (
+                          <View style={{ marginTop: 16 }}>
+                            <Text variant="titleSmall" style={{ marginBottom: 4 }}>
+                              About
+                            </Text>
+                            <Text variant="bodyMedium" style={{ lineHeight: 22 }}>
+                              {viewingProfile.description}
+                            </Text>
+                          </View>
+                        )}
+                        {viewingProfile.tags?.length > 0 && (
+                          <View style={{ marginTop: 16 }}>
+                            <Text variant="titleSmall" style={{ marginBottom: 8 }}>
+                              Interests
+                            </Text>
+                            <View
+                              style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+                            >
+                              {viewingProfile.tags.map((tag, index) => (
+                                <Chip key={index} compact>
+                                  {tag}
+                                </Chip>
+                              ))}
+                            </View>
+                          </View>
+                        )}
+                      </Card.Content>
+                    </Card>
+                    {viewingProfile.id !== currentUserId && (
+                      <Card
+                        style={{
+                          marginBottom: 16,
+                          backgroundColor: theme.colors.primaryContainer,
+                        }}
+                      >
+                        <Card.Content>
+                          <Text
+                            variant="titleMedium"
+                            style={{ marginBottom: 12, textAlign: "center" }}
+                          >
+                            {hasRated ? "Update Your Rating" : "Rate This Person"}
+                          </Text>
+                          <View style={{ alignItems: "center", marginBottom: 12 }}>
+                            <View style={{ flexDirection: "row", justifyContent: "center" }}>
+                              {renderStars(userRating, setUserRating)}
+                            </View>
+                            {userRating > 0 && (
+                              <Text
+                                variant="bodySmall"
+                                style={{ marginTop: 8, fontStyle: "italic" }}
+                              >
+                                {userRating === 1 && "Poor"}
+                                {userRating === 2 && "Fair"}
+                                {userRating === 3 && "Good"}
+                                {userRating === 4 && "Very Good"}
+                                {userRating === 5 && "Excellent"}
+                              </Text>
+                            )}
+                          </View>
+                          <Button
+                            mode="contained"
+                            onPress={() => handleSubmitRating(viewingProfile.id, userRating)}
+                            disabled={userRating === 0 || submittingRating}
+                            loading={submittingRating}
+                            icon={hasRated ? "update" : "star"}
+                          >
+                            {hasRated ? "Update Rating" : "Submit Rating"}
+                          </Button>
+                          {hasRated && (
+                            <Text
+                              variant="bodySmall"
+                              style={{
+                                marginTop: 8,
+                                textAlign: "center",
+                                fontStyle: "italic",
+                                opacity: 0.7,
+                              }}
+                            >
+                              You previously rated this person {userRating} star
+                              {userRating !== 1 ? "s" : ""}
+                            </Text>
+                          )}
+                          {currentChat.isPrivate !== true && (
+                            <Button
+                              mode="contained"
+                              style={{ marginTop: 8 }}
+                              onPress={() => handleCreatePrivateChat(viewingProfile.id)}
+                            >
+                              Create Private DM
+                            </Button>
+                          )}
+                        </Card.Content>
+                      </Card>
+                    )}
+                  </View>
+                )}
+              />
+            </View>
+          </View>
+        )}
+      </Modal>
+    </Portal>
+
+    <PlaceSuggestionModal
+      visible={selectedSuggestion !== null}
+      suggestion={selectedSuggestion}
+      onDismiss={() => setSelectedSuggestion(null)}
+    />
+  </>
   );
 }
 
