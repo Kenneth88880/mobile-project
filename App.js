@@ -25,7 +25,7 @@ import Animated, {
   useAnimatedStyle,
 } from "react-native-reanimated";
 
-import { setCurrentUserId } from "./services/UserConfig";
+import { CURRENT_USER_ID, setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreenNew from "./screens/ExploreScreenNew";
 import ProfileScreen from "./screens/ProfileScreen";
@@ -330,6 +330,7 @@ export default function App() {
       <ExploreScreenNew
         onCategoryScrollStart={() => { categoryScrollingRef.current = true; }}
         onCategoryScrollEnd={() => { categoryScrollingRef.current = false; }}
+        currentUserId={CURRENT_USER_ID}
       />
     ),
     messages: () => <ChatScreen />,
