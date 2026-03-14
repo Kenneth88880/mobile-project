@@ -358,6 +358,7 @@ export default function DatingScreen({
   const swipeGestureAccept = useMemo(
     () =>
       Gesture.Pan()
+        .hitSlop({ bottom: -80 })
         .activeOffsetX([-10, 10])
         .failOffsetY([-15, 15])
         .onBegin(() => {

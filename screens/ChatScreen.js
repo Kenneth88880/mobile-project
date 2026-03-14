@@ -183,6 +183,8 @@ const updateChatPicture = async (chatId, imageUri) => {
 function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
   const theme = useTheme();
 
+  const [place, setPlace] = useState("");
+
   if (!suggestion) return null;
 
   const PLACEHOLDER_IMAGE =
@@ -192,6 +194,16 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
 
   const handleDirections = () => openMapsFromSuggestion(suggestion);
   const handleOpenMaps = () => openPlaceInBrowser(suggestion);
+  const createEvent = (eventHour, eventMinute, selectedPeriod, eventDate, place) => {
+
+    ({
+      date: eventDate,
+      time: `${eventHour}:${eventMinute} ${selectedPeriod}`,
+      title: place.name,
+      place,
+    })
+
+  }
 
   return (
     <Portal>
@@ -298,6 +310,27 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                   </Text>
                 </TouchableOpacity>
 
+                  {/* {(isMySuggestion === false && 
+                  <TouchableOpacity
+                    onPress={handleOpenMaps}
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      gap: 4,
+                      backgroundColor: theme.colors.primaryContainer,
+                    }}
+                  >
+
+                    <Icon source="calendar-heart" size={22} color={theme.colors.onPrimaryContainer} />
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
+                      Add to my Calendar
+                    </Text>
+
+                  </TouchableOpacity>
+                )} */}
+
                 <TouchableOpacity
                   onPress={handleOpenMaps}
                   style={{
@@ -374,42 +407,46 @@ function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userPr
         visible={visible}
         onDismiss={onDismiss}
         contentContainerStyle={{
-          backgroundColor: theme.colors.background,
-          padding: 20,
-          margin: 20,
-          borderRadius: 8,
+          backgroundColor: theme.colors.elevation.level1,
+          height: "100%",
+          width: "100%",
+          justifyContent: "flex-start",
+          paddingTop: currentChat.isGroupChat ? 20 : 0,
         }}
       >
-        <Card>
-          <Card.Title title={currentChat.isPrivate ? "Nickname" : "Edit Group Info"} />
-          <Card.Content>
-            {!currentChat.isPrivate && (
-              <TouchableOpacity
-                onPress={onChangePicture}
-                disabled={uploadingChatImage}
-                style={{ alignItems: "center", marginBottom: 16 }}
-              >
-                {uploadingChatImage ? (
-                  <ActivityIndicator size="large" />
-                ) : currentChat.groupPhoto ? (
-                  <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
-                ) : (
-                  <Avatar.Icon size={80} icon="account-group" />
-                )}
-                <Text variant="labelLarge" style={{ marginTop: 8, color: uploadingChatImage ? "#999" : theme.colors.primary }}>
-                  {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TextInput
-              mode="outlined"
-              label={currentChat.isPrivate ? "Name" : "Group Name"}
-              value={editingName}
-              onChangeText={setEditingName}
-              maxLength={50}
-              style={{ marginTop: 8 }}
-            />
-          </Card.Content>
+        <View>
+          <Card.Title title={currentChat.isPrivate ? "" : "Edit Group Info"} />
+            <Card.Content>
+              {!currentChat.isPrivate ? (
+                <TouchableOpacity
+                  onPress={onChangePicture}
+                  disabled={uploadingChatImage}
+                >
+                  {uploadingChatImage ? (
+                    <ActivityIndicator size="large" />
+                  ) : currentChat.groupPhoto ? (
+                    <Avatar.Image size={80} source={{ uri: currentChat.groupPhoto }} />
+                  ) : (
+                    <Avatar.Icon size={80} icon="account-group" />
+                  )}
+                  <Text variant="labelLarge" style={{ marginTop: 8, color: uploadingChatImage ? "#999" : theme.colors.primary }}>
+                    {uploadingChatImage ? "Uploading..." : "Tap to Change Picture"}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View>
+                  <Avatar.Image size={80} source={{ uri: currentUserId === currentChat.creatorID ? currentChat.curPhoto : currentChat.otherPhoto }} />
+                </View>
+              )}
+              <TextInput
+                mode="outlined"
+                label={currentChat.isPrivate ? "Nickname" : "Group Name"}
+                value={editingName}
+                onChangeText={setEditingName}
+                maxLength={50}
+                style={{ marginTop: 8 }}
+              />
+            </Card.Content>
           <Card.Actions>
             <Button onPress={() => { Keyboard.dismiss(); setTimeout(onDismiss, 150); }}>Cancel</Button>
             <Button onPress={() => onSaveName(editingName)}>Save</Button>
@@ -422,27 +459,26 @@ function EditGroupModal({ visible, onDismiss, currentChat, currentUserId, userPr
           />
 
           {showParticipants && (
-            <Card>
+            <View>
               <Card.Title title="People" />
-              <Card.Content>
-                {Object.values(userProfiles).length > 0 ? (
-                  Object.values(userProfiles).map((profile) => (
-                    <List.Item
-                      key={profile.id}
-                      title={profile.name || "Unknown"}
-                      description={profile.city || "No location"}
-                      left={() => <ProfilePhoto uri={profile.photos?.[0]} size={48} />}
-                      style={{ paddingVertical: 8 }}
-                      onPress={() => onParticipantPress(profile)}
-                    />
-                  ))
-                ) : (
-                  <Text>No participants found</Text>
-                )}
-              </Card.Content>
-            </Card>
+                <Card.Content>
+                  {Object.values(userProfiles).length > 0 ? (
+                    Object.values(userProfiles).map((profile) => (
+                      <List.Item
+                        key={profile.id}
+                        title={profile.name || "Unknown"}
+                        description={profile.city || "No location"}
+                        left={() => <ProfilePhoto uri={profile.photos?.[0]} size={48} />}
+                        onPress={() => onParticipantPress(profile)}
+                      />
+                    ))
+                  ) : (
+                    <Text>No participants found</Text>
+                  )}
+                </Card.Content>
+            </View>
           )}
-        </Card>
+        </View>
       </Modal>
     </Portal>
   );
@@ -708,13 +744,24 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
     .activeOffsetX([40, 999])
     .failOffsetY([-5, 5])
     .onUpdate((event) => {
-      if (event.translationX > 0) translateX.value = event.translationX * 0.4;
+      if (event.translationX > 0) translateX.value = event.translationX * 0.6;
     })
     .onEnd((event) => {
-      if (event.translationX > 80) { translateX.value = withSpring(500); runOnJS(onBack)(); }
-      else translateX.value = withSpring(0);
+      if (event.translationX > 80) {
+        translateX.value = withSpring(
+          500,
+          { damping: 30, stiffness: 200, mass: 0.8, overshootClamping: true },
+          (finished) => { if (finished) runOnJS(onBack)(); }
+        );
+      } else {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+      }
     })
-    .onFinalize(() => { translateX.value = withSpring(0); });
+    .onFinalize((event) => {
+      if (event.translationX <= 80) {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+      }
+    });
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
 
@@ -837,7 +884,6 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
     setUserRating(0); setHasRated(false); setViewingProfileRating({ average: "0.0", count: 0 });
     setViewingProfile(profile);
     setProfileImageIndex(0);
-    setShowEditModal(false);
     loadProfileRating(profile.id);
   };
 
@@ -1038,7 +1084,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
         {suggestion.imageUrl && (
           <Image
             source={{ uri: suggestion.imageUrl }}
-            style={{ width: 240, height: 130, marginLeft: isMyMessage ? -12 : 0 }}
+            style={{ width: 240, height: 130, marginLeft: -12 }}
             resizeMode="cover"
           />
         )}
@@ -1081,7 +1127,12 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
             )}
 
             <TouchableOpacity
-              onPress={(currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived" ? handleEditGroupInfo : undefined}
+              onPress={() => {
+                Keyboard.dismiss();
+                if ((currentChat.isGroupChat || currentChat.isPrivate) && currentChat.status !== "archived") {
+                  handleEditGroupInfo();
+                }
+              }}
               style={{ flex: 1, flexDirection: "column", alignItems: "flex-start" }}
               disabled={(!currentChat.isGroupChat && !currentChat.isPrivate) || currentChat.status === "archived"}
             >
@@ -1156,6 +1207,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                 );
               }
 
+              else {
               return (
                 <View style={[styles.messageRow]} onLayout={(e) => { itemHeightsRef.current[item._id] = e.nativeEvent.layout.height; }}>
                   <View style={styles.avatarWrapper}>
@@ -1201,7 +1253,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                   </SwipeableMessageRight>
                 </View>
               );
-            }}
+            }}}
           />
 
           {/* ── Input ── */}
@@ -1230,6 +1282,7 @@ function IndividualChatScreen({ chat, onBack, onChatSelect, onMessageSwipeStart,
                   style={[styles.textInput, { borderRadius: 30, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderWidth: 0, borderColor: "transparent" }]}
                   dense
                   autoCorrect={true}
+                  selectionColor="#000000"
                   autoCapitalize="sentences"
                   spellCheck={true}
                   textContentType="none"
