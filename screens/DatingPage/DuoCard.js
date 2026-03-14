@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Card, Surface, Text } from "react-native-paper";
 import Animated from "react-native-reanimated";
 import ProfileHalfCard from "./ProfileHalfCard";
@@ -20,7 +20,7 @@ export default function DuoCard({
 }) {
   return (
     <Animated.View style={[styles.cardsContainer, cardAnimatedStyle]}>
-      <Card style={styles.duoCard}>
+      <View style={styles.duoCard}>
         <ProfileHalfCard
           profile={topProfile}
           photo={topPhoto}
@@ -37,7 +37,7 @@ export default function DuoCard({
           currentUserLocation={currentUserLocation}
           onPress={() => handleProfileClick(bottomProfile)}
         />
-      </Card>
+      </View>
 
       {swipeFeedback && (
         <Surface style={styles.feedbackOverlay} elevation={4}>
@@ -56,8 +56,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   duoCard: {
-    flex: 1,
-    marginBottom: 8,
     backgroundColor: "transparent",
   },
   feedbackOverlay: {
