@@ -11,6 +11,7 @@ import {
   Keyboard,
   Linking,
   ScrollView,
+  Pressable
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -245,18 +246,19 @@ const updateChatPicture = async (chatId, imageUri) => {
 // Mirrors the PlaceInfo visual style: hero image, name, category, actions, info rows
 function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
   const theme = useTheme();
+  
+  // Keep a ref of the last valid suggestion so it doesn't
+  // go blank during the close animation either
+  const lastSuggestion = useRef(suggestion);
+  if (suggestion) lastSuggestion.current = suggestion;
+  
+  const displaySuggestion = suggestion || lastSuggestion.current;
+  if (!displaySuggestion) return null;
 
-  const [place, setPlace] = useState("");
-
-  if (!suggestion) return null;
-
-  const PLACEHOLDER_IMAGE =
-    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
-
-  const imageUri = suggestion.imageUrl || PLACEHOLDER_IMAGE;
-
-  const handleDirections = () => openMapsFromSuggestion(suggestion);
-  const handleOpenMaps = () => openPlaceInBrowser(suggestion);
+  // replace all uses of `suggestion` below with `displaySuggestion`
+  const imageUri = displaySuggestion.imageUrl || PLACEHOLDER_IMAGE;
+  const handleDirections = () => openMapsFromSuggestion(displaySuggestion);
+  const handleOpenMaps = () => openPlaceInBrowser(displaySuggestion);
   const createEvent = (
     eventHour,
     eventMinute,
@@ -288,14 +290,12 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
             contentContainerStyle={{ paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
           >
-            {/* ── Hero image ── */}
             <View style={{ position: "relative" }}>
               <Image
                 source={{ uri: imageUri }}
                 style={{ width: "100%", aspectRatio: 4 / 3 }}
                 resizeMode="cover"
               />
-              {/* Back button overlaid on image */}
               <TouchableOpacity
                 onPress={onDismiss}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -316,14 +316,8 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                   shadowRadius: 4,
                 }}
               >
-                <Icon
-                  source="arrow-left"
-                  size={24}
-                  color={theme.colors.onSurface}
-                />
+                <Icon source="arrow-left" size={24} color={theme.colors.onSurface} />
               </TouchableOpacity>
-
-              {/* "Date Suggestion" badge overlaid on image */}
               <View
                 style={{
                   position: "absolute",
@@ -343,26 +337,14 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                   shadowRadius: 4,
                 }}
               >
-                <Icon
-                  source="calendar-heart"
-                  size={14}
-                  color={theme.colors.onPrimary}
-                />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: theme.colors.onPrimary,
-                  }}
-                >
+                <Icon source="calendar-heart" size={14} color={theme.colors.onPrimary} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.colors.onPrimary }}>
                   Date Suggestion
                 </Text>
               </View>
             </View>
 
-            {/* ── Content ── */}
             <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-              {/* Name & category */}
               <Text
                 style={{
                   fontSize: 24,
@@ -371,9 +353,9 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                   marginBottom: 4,
                 }}
               >
-                {suggestion.place}
+                {displaySuggestion.place}
               </Text>
-              {suggestion.category ? (
+              {displaySuggestion.category ? (
                 <Text
                   style={{
                     fontSize: 15,
@@ -381,11 +363,10 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     marginBottom: 16,
                   }}
                 >
-                  {suggestion.category}
+                  {displaySuggestion.category}
                 </Text>
               ) : null}
 
-              {/* ── Action buttons — mirroring PlaceInfo layout ── */}
               <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
                 <TouchableOpacity
                   onPress={handleDirections}
@@ -398,42 +379,11 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     backgroundColor: theme.colors.primaryContainer,
                   }}
                 >
-                  <Icon
-                    source="directions"
-                    size={22}
-                    color={theme.colors.onPrimaryContainer}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: theme.colors.onPrimaryContainer,
-                    }}
-                  >
+                  <Icon source="directions" size={22} color={theme.colors.onPrimaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
                     Directions
                   </Text>
                 </TouchableOpacity>
-
-                {/* {(isMySuggestion === false && 
-                  <TouchableOpacity
-                    onPress={handleOpenMaps}
-                    style={{
-                      flex: 1,
-                      alignItems: "center",
-                      paddingVertical: 14,
-                      borderRadius: 14,
-                      gap: 4,
-                      backgroundColor: theme.colors.primaryContainer,
-                    }}
-                  >
-
-                    <Icon source="calendar-heart" size={22} color={theme.colors.onPrimaryContainer} />
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
-                      Add to my Calendar
-                    </Text>
-
-                  </TouchableOpacity>
-                )} */}
 
                 <TouchableOpacity
                   onPress={handleOpenMaps}
@@ -446,34 +396,16 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     backgroundColor: theme.colors.primaryContainer,
                   }}
                 >
-                  <Icon
-                    source="map-search"
-                    size={22}
-                    color={theme.colors.onPrimaryContainer}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: theme.colors.onPrimaryContainer,
-                    }}
-                  >
+                  <Icon source="map-search" size={22} color={theme.colors.onPrimaryContainer} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: theme.colors.onPrimaryContainer }}>
                     View on Maps
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* ── Divider ── */}
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: theme.colors.outlineVariant,
-                  marginBottom: 8,
-                }}
-              />
+              <View style={{ height: 1, backgroundColor: theme.colors.outlineVariant, marginBottom: 8 }} />
 
-              {/* ── Address info row ── */}
-              {suggestion.address ? (
+              {displaySuggestion.address ? (
                 <TouchableOpacity
                   onPress={handleDirections}
                   style={{
@@ -483,25 +415,14 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     paddingVertical: 12,
                   }}
                 >
-                  <Icon
-                    source="map-marker-outline"
-                    size={22}
-                    color={theme.colors.primary}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      flex: 1,
-                      color: theme.colors.onSurface,
-                    }}
-                  >
-                    {suggestion.address.replace(/\n/g, ", ")}
+                  <Icon source="map-marker-outline" size={22} color={theme.colors.primary} />
+                  <Text style={{ fontSize: 15, flex: 1, color: theme.colors.onSurface }}>
+                    {displaySuggestion.address.replace(/\n/g, ", ")}
                   </Text>
                 </TouchableOpacity>
               ) : null}
 
-              {/* ── Category info row ── */}
-              {suggestion.category ? (
+              {displaySuggestion.category ? (
                 <View
                   style={{
                     flexDirection: "row",
@@ -510,19 +431,9 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
                     paddingVertical: 12,
                   }}
                 >
-                  <Icon
-                    source="tag-outline"
-                    size={22}
-                    color={theme.colors.primary}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      flex: 1,
-                      color: theme.colors.onSurface,
-                    }}
-                  >
-                    {suggestion.category}
+                  <Icon source="tag-outline" size={22} color={theme.colors.primary} />
+                  <Text style={{ fontSize: 15, flex: 1, color: theme.colors.onSurface }}>
+                    {displaySuggestion.category}
                   </Text>
                 </View>
               ) : null}
@@ -1081,8 +992,9 @@ function IndividualChatScreen({
   const translateX = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
+    .minDistance(10)
     .activeOffsetX([40, 999])
-    .failOffsetY([-5, 5])
+    .failOffsetY([-15, 15])
     .onUpdate((event) => {
       if (event.translationX > 0) translateX.value = event.translationX * 0.6;
     })
@@ -1550,7 +1462,8 @@ function IndividualChatScreen({
   // ── Place suggestion card renderer ──
   // Now opens PlaceSuggestionModal on tap instead of going directly to Maps
   const renderPlaceSuggestion = (suggestion, bgColor, isMyMessage) => (
-    <TouchableOpacity
+    <Pressable
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       activeOpacity={0.8}
       onPress={() => setSelectedSuggestion(suggestion)}
     >
@@ -1631,7 +1544,7 @@ function IndividualChatScreen({
           </Text>
         </View>
       </Surface>
-    </TouchableOpacity>
+    </Pressable>
   );
 
   return (
