@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -13,6 +13,7 @@ import {
   TextInput,
   LayoutAnimation,
   UIManager,
+  KeyboardAvoidingView
 } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -40,9 +41,25 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const [selectedPeriod, setSelectedPeriod] = useState("PM");
   const [shareVisible, setShareVisible] = useState(false);
 
+  const scrollViewRef = useRef(null);
+  const timeInputRef = useRef(null);
+
+  const handleTimeFocus = () => {
+    setTimeout(() => {
+      timeInputRef.current?.measureInWindow((x, y, width, height) => {
+        scrollViewRef.current?.scrollTo({ y: y + height + 100, animated: true });
+      });
+    }, 300); // wait for keyboard to fully appear
+  };
+
   if (!place) return null;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = (() => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset() * 60000;
+    const local = new Date(d - offset);
+    return local.toISOString().slice(0, 10);
+  })();
   const validHour = /^\d{1,2}$/.test(eventHour) && Number(eventHour) >= 1 && Number(eventHour) <= 12;
   const validMinute = /^\d{2}$/.test(eventMinute) && Number(eventMinute) >= 0 && Number(eventMinute) <= 59;
   const canSave = eventDate && validHour && validMinute;
@@ -157,12 +174,14 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
       transparent={false}
       onRequestClose={handleClose}
     >
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={true}
         >
           {/* Hero image */}
           <View style={styles.imageWrapper}>
@@ -372,11 +391,13 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
                         onChangeText={setEventHour}
                         keyboardType="number-pad"
                         maxLength={2}
+                        onFocus={handleTimeFocus}
                       />
                       <Text style={[styles.timeSeparator, { color: theme.colors.onSurface }]}>
                         :
                       </Text>
-                      <TextInput
+                     <TextInput
+                        ref={timeInputRef}
                         style={[
                           styles.timeInput,
                           {
@@ -391,6 +412,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
                         onChangeText={setEventMinute}
                         keyboardType="number-pad"
                         maxLength={2}
+                        onFocus={handleTimeFocus}
                       />
 
                       {/* AM / PM toggle */}
@@ -557,7 +579,6 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
       currentUserId={CURRENT_USER_ID}
       onClose={() => setShareVisible(false)}
     />
-
     </Modal>
   );
 }
@@ -568,7 +589,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 200,
   },
   imageWrapper: {
     position: "relative",
