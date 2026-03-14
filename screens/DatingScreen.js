@@ -191,7 +191,10 @@ export default function DatingScreen({
     setLoadingMore(true);
     try {
       const nextIndex = loadedPairs.length;
-      const newPairs = allFilteredPairs.slice(nextIndex, nextIndex + pairsPerPage);
+      const newPairs = allFilteredPairs.slice(
+        nextIndex,
+        nextIndex + pairsPerPage,
+      );
       if (newPairs.length > 0) {
         setLoadedPairs((prev) => [...prev, ...newPairs]);
       }
@@ -236,7 +239,9 @@ export default function DatingScreen({
 
   const handleNextImage = () => {
     if (selectedProfile?.photos?.length > 1) {
-      setCurrentImageIndex((prev) => (prev + 1) % selectedProfile.photos.length);
+      setCurrentImageIndex(
+        (prev) => (prev + 1) % selectedProfile.photos.length,
+      );
     }
   };
 
@@ -337,24 +342,16 @@ export default function DatingScreen({
 
   const SWIPE_THRESHOLD = 120;
 
-  // left empty for now until we get the animation for seeing the next photos refined 
+  // left empty for now until we get the animation for seeing the next photos refined
   const swipeGesturePhotos = useMemo(
     () =>
       Gesture.Pan()
         .activeOffsetX([-10, 10])
         .failOffsetY([-15, 15])
-        .onBegin(() => {
-          
-        })
-        .onUpdate((event) => {
-         
-        })
-        .onEnd((event) => {
-          
-        })
-        .onFinalize(() => {
-         
-        }),
+        .onBegin(() => {})
+        .onUpdate((event) => {})
+        .onEnd((event) => {})
+        .onFinalize(() => {}),
     [],
   );
 
@@ -370,7 +367,10 @@ export default function DatingScreen({
           panX.value = event.translationX * 0.75;
           panY.value = event.translationY * 0.15;
           rotateVal.value = event.translationX / 15;
-          scaleVal.value = Math.max(0.95, 1 - Math.abs(event.translationX) / 3000);
+          scaleVal.value = Math.max(
+            0.95,
+            1 - Math.abs(event.translationX) / 3000,
+          );
         })
         .onEnd((event) => {
           if (onCardSwipeEnd) runOnJS(onCardSwipeEnd)();
@@ -393,7 +393,9 @@ export default function DatingScreen({
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <ActivityIndicator size="large" />
         <Text variant="bodyLarge" style={styles.loadingText}>
           Loading profiles...
@@ -402,13 +404,19 @@ export default function DatingScreen({
     );
   }
 
-  if (!loadedPairs || loadedPairs.length === 0 || currentPairIndex >= loadedPairs.length) {
+  if (
+    !loadedPairs ||
+    loadedPairs.length === 0 ||
+    currentPairIndex >= loadedPairs.length
+  ) {
     const hasPreferences =
       currentDuo?.partnerProfile?.genderPreference?.length > 0 ||
       currentDuo?.partnerProfile?.duoPreference?.interestedIn?.length > 0;
 
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <EmptyState
           icon="heart-multiple"
           title="No Duo Pairs Available"
@@ -443,17 +451,25 @@ export default function DatingScreen({
   }
 
   const currentDuoPair = loadedPairs[currentPairIndex];
-  const topProfile = currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
-  const bottomProfile = currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
-  const topPhoto = topProfile?.photos?.[0] || "https://via.placeholder.com/400x300?text=No+Photo";
-  const bottomPhoto = bottomProfile?.photos?.[0] || "https://via.placeholder.com/400x300?text=No+Photo";
+  const topProfile =
+    currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
+  const bottomProfile =
+    currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
+  const topPhoto =
+    topProfile?.photos?.[0] ||
+    "https://via.placeholder.com/400x300?text=No+Photo";
+  const bottomPhoto =
+    bottomProfile?.photos?.[0] ||
+    "https://via.placeholder.com/400x300?text=No+Photo";
   const topName = topProfile?.name || "Unknown";
   const topAge = topProfile?.age || "?";
   const bottomName = bottomProfile?.name || "Unknown";
   const bottomAge = bottomProfile?.age || "?";
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <View style={styles.header}>
         <Text variant="headlineMedium">Double Dating</Text>
       </View>
@@ -495,7 +511,7 @@ export default function DatingScreen({
       />
 
       <Text variant="bodySmall" style={styles.instructions}>
-        Tap profiles to view details • Swipe or use buttons to decide
+        Tap profiles to view details
       </Text>
     </View>
   );
