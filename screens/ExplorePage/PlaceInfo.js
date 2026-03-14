@@ -13,8 +13,9 @@ import {
   TextInput,
   LayoutAnimation,
   UIManager,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
@@ -34,6 +35,7 @@ const PLACEHOLDER_IMAGE =
 
 export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventDate, setEventDate] = useState("");
   const [eventHour, setEventHour] = useState("");
@@ -47,7 +49,10 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const handleTimeFocus = () => {
     setTimeout(() => {
       timeInputRef.current?.measureInWindow((x, y, width, height) => {
-        scrollViewRef.current?.scrollTo({ y: y + height + 100, animated: true });
+        scrollViewRef.current?.scrollTo({
+          y: y + height + 100,
+          animated: true,
+        });
       });
     }, 300); // wait for keyboard to fully appear
   };
@@ -60,8 +65,14 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
     const local = new Date(d - offset);
     return local.toISOString().slice(0, 10);
   })();
-  const validHour = /^\d{1,2}$/.test(eventHour) && Number(eventHour) >= 1 && Number(eventHour) <= 12;
-  const validMinute = /^\d{2}$/.test(eventMinute) && Number(eventMinute) >= 0 && Number(eventMinute) <= 59;
+  const validHour =
+    /^\d{1,2}$/.test(eventHour) &&
+    Number(eventHour) >= 1 &&
+    Number(eventHour) <= 12;
+  const validMinute =
+    /^\d{2}$/.test(eventMinute) &&
+    Number(eventMinute) >= 0 &&
+    Number(eventMinute) <= 59;
   const canSave = eventDate && validHour && validMinute;
 
   const imageUri =
@@ -174,7 +185,9 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
       transparent={false}
       onRequestClose={handleClose}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <ScrollView
           ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
@@ -190,7 +203,11 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
             <TouchableOpacity
               style={[
                 styles.backBtn,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor: theme.colors.surface,
+                  top: Platform.OS === "ios" ? Math.max(12, insets.top) : 12,
+                  left: Platform.OS === "ios" ? Math.max(12, insets.left) : 12,
+                },
               ]}
               onPress={handleClose}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -219,7 +236,10 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
 
             {(place.rating != null || place.price_range) && (
               <Text
-                style={[styles.ratingRow, { color: theme.colors.onSurfaceVariant }]}
+                style={[
+                  styles.ratingRow,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
               >
                 {place.rating != null
                   ? `★ ${place.rating}${place.user_ratings_total ? ` (${place.user_ratings_total})` : ""}`
@@ -231,7 +251,10 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
 
             {place.editorial_summary ? (
               <Text
-                style={[styles.summary, { color: theme.colors.onSurfaceVariant }]}
+                style={[
+                  styles.summary,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
               >
                 {place.editorial_summary}
               </Text>
@@ -262,11 +285,23 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: theme.colors.primaryContainer }]}
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: theme.colors.primaryContainer },
+                ]}
                 onPress={() => setShareVisible(true)}
               >
-                <MaterialCommunityIcons name="share-variant" size={22} color={theme.colors.onPrimaryContainer} />
-                <Text style={[styles.actionLabel, { color: theme.colors.onPrimaryContainer }]}>
+                <MaterialCommunityIcons
+                  name="share-variant"
+                  size={22}
+                  color={theme.colors.onPrimaryContainer}
+                />
+                <Text
+                  style={[
+                    styles.actionLabel,
+                    { color: theme.colors.onPrimaryContainer },
+                  ]}
+                >
                   Share
                 </Text>
               </TouchableOpacity>
@@ -303,10 +338,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
                 ]}
               >
                 <Text
-                  style={[
-                    styles.formTitle,
-                    { color: theme.colors.onSurface },
-                  ]}
+                  style={[styles.formTitle, { color: theme.colors.onSurface }]}
                 >
                   New Event
                 </Text>
@@ -393,10 +425,15 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
                         maxLength={2}
                         onFocus={handleTimeFocus}
                       />
-                      <Text style={[styles.timeSeparator, { color: theme.colors.onSurface }]}>
+                      <Text
+                        style={[
+                          styles.timeSeparator,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
                         :
                       </Text>
-                     <TextInput
+                      <TextInput
                         ref={timeInputRef}
                         style={[
                           styles.timeInput,
@@ -573,12 +610,12 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
         </ScrollView>
       </View>
 
-    <ShareToChat
-      visible={shareVisible}
-      place={place}
-      currentUserId={CURRENT_USER_ID}
-      onClose={() => setShareVisible(false)}
-    />
+      <ShareToChat
+        visible={shareVisible}
+        place={place}
+        currentUserId={CURRENT_USER_ID}
+        onClose={() => setShareVisible(false)}
+      />
     </Modal>
   );
 }
