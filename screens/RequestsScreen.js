@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -49,136 +49,107 @@ export default function RequestsScreen({ isActive = true }) {
   const currentUserId = CURRENT_USER_ID;
 
   // Reload duo partner when screen becomes active
-  useEffect(() => {
-    if (isActive) {
-      loadDuoPartner();
-    }
-  }, [isActive]);
+  const currentDuoRef = useRef(null);
 
-  const loadDuoPartner = async () => {
-    setLoading(true);
-    try {
-      const duo = await getCurrentDuoPartner(currentUserId);
-      console.log("Current duo loaded:", duo);
-      setCurrentDuo(duo);
-      if (!duo) {
-        console.log("No duo partner found");
+  useEffect(() => {
+    if (!isActive) return;
+
+    let unsubscribe = null;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const duo = await getCurrentDuoPartner(currentUserId);
+        currentDuoRef.current = duo;
+        setCurrentDuo(duo);
+
+        if (!duo) {
+          setLoading(false);
+          return;
+        }
+
+        // Open the listener immediately — no second useEffect needed
+        unsubscribe = firestore()
+          .collection("duoLikes")
+          .where("toDuoId", "==", duo.duoId)
+          .where("status", "==", "pending")
+          .onSnapshot(
+            async (snapshot) => {
+              if (snapshot.empty) {
+                setDuoLikes([]);
+                setLoading(false);
+                return;
+              }
+
+              // Fetch both profiles for every like in parallel
+              const likeResults = await Promise.all(
+                snapshot.docs.map(async (doc) => {
+                  const likeData = doc.data();
+                  const [user1Profile, user2Profile] = await Promise.all([
+                    getUserProfile(likeData.fromUser1),
+                    getUserProfile(likeData.fromUser2),
+                  ]);
+
+                  if (!user1Profile || !user2Profile) {
+                    console.error("Missing profile for like:", doc.id);
+                    return null;
+                  }
+
+                  return {
+                    id: doc.id,
+                    fromDuoId: likeData.fromDuoId,
+                    toDuoId: likeData.toDuoId,
+                    user1: user1Profile,
+                    user2: user2Profile,
+                    fromUser1Id: likeData.fromUser1,
+                    fromUser2Id: likeData.fromUser2,
+                    acceptedBy: likeData.acceptedBy || [],
+                    timestamp: likeData.timestamp,
+                    status: likeData.status,
+                  };
+                })
+              );
+
+              setDuoLikes(likeResults.filter(Boolean));
+              setLoading(false);
+            },
+            (error) => {
+              console.error("Error loading pending requests:", error);
+              setLoading(false);
+            }
+          );
+      } catch (error) {
+        console.error("Error in RequestsScreen setup:", error);
         setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading duo partner:", error);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!currentDuo) {
-      console.log("No current duo, skipping listener setup");
-      return;
-    }
-
-    console.log("Setting up duo likes listener for duoId:", currentDuo.duoId);
-
-    const unsubscribe = firestore()
-      .collection("duoLikes")
-      .where("toDuoId", "==", currentDuo.duoId)
-      .where("status", "==", "pending")
-      .onSnapshot(
-        async (snapshot) => {
-          console.log("Duo likes snapshot received, docs:", snapshot.size);
-
-          const likes = [];
-          for (const doc of snapshot.docs) {
-            const likeData = doc.data();
-            // console.log("Processing like:", doc.id, likeData);
-
-            // // Better logging for debugging
-            // console.log("Fetching profiles for:", {
-            //   fromUser1: likeData.fromUser1,
-            //   fromUser2: likeData.fromUser2,
-            // });
-
-            const user1Profile = await getUserProfile(likeData.fromUser1);
-            const user2Profile = await getUserProfile(likeData.fromUser2);
-
-            // console.log("Profiles loaded:", {
-            //   user1: user1Profile
-            //     ? `${user1Profile.name} (${user1Profile.userId})`
-            //     : "MISSING",
-            //   user2: user2Profile
-            //     ? `${user2Profile.name} (${user2Profile.userId})`
-            //     : "MISSING",
-            // });
-
-            if (user1Profile && user2Profile) {
-              likes.push({
-                id: doc.id,
-                fromDuoId: likeData.fromDuoId,
-                toDuoId: likeData.toDuoId,
-                user1: user1Profile,
-                user2: user2Profile,
-                // Store original user IDs for acceptance checking
-                fromUser1Id: likeData.fromUser1,
-                fromUser2Id: likeData.fromUser2,
-                acceptedBy: likeData.acceptedBy || [],
-                timestamp: likeData.timestamp,
-                status: likeData.status,
-              });
-            } else {
-              console.error("Missing profile data for like:", doc.id, {
-                user1Profile: !!user1Profile,
-                user2Profile: !!user2Profile,
-                fromUser1: likeData.fromUser1,
-                fromUser2: likeData.fromUser2,
-              });
-            }
-          }
-
-          // console.log("Total duo likes loaded:", likes.length);
-          setDuoLikes(likes);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error loading pending requests:", error);
-          setLoading(false);
-        },
-      );
+    })();
 
     return () => {
-      console.log("Cleaning up duo likes listener");
-      unsubscribe();
+      if (unsubscribe) unsubscribe();
     };
-  }, [currentDuo]);
+  }, [isActive]);
 
   // Check rating status when viewing a profile OR when component becomes active
   useEffect(() => {
-    const checkRatingStatus = async () => {
-      if (selectedProfile) {
-        try {
-          const profileId = selectedProfile.userId || selectedProfile.id;
-          const ratingCheck = await hasUserRatedProfile(
-            currentUserId,
-            profileId,
-          );
-          setHasRatedUser(ratingCheck.exists);
-          if (ratingCheck.exists) {
-            setExistingRating(ratingCheck.rating);
-          } else {
-            setExistingRating(null);
-          }
-        } catch (error) {
-          console.error("Error checking rating status:", error);
-          setHasRatedUser(false);
-          setExistingRating(null);
-        }
-      } else {
+    if (!selectedProfile) {
+      setHasRatedUser(false);
+      setExistingRating(null);
+      return;
+    }
+    // Only runs when selectedProfile actually changes, not on every isActive toggle
+    (async () => {
+      try {
+        const profileId = selectedProfile.userId || selectedProfile.id;
+        const ratingCheck = await hasUserRatedProfile(currentUserId, profileId);
+        setHasRatedUser(ratingCheck.exists);
+        setExistingRating(ratingCheck.exists ? ratingCheck.rating : null);
+      } catch (error) {
+        console.error("Error checking rating status:", error);
         setHasRatedUser(false);
         setExistingRating(null);
       }
-    };
-
-    checkRatingStatus();
-  }, [selectedProfile, currentUserId, isActive]);
+    })();
+  }, [selectedProfile]);
 
   const loadData = async () => {
     await loadDuoPartner();
