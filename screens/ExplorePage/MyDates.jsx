@@ -8,7 +8,6 @@ import {
   TextInput,
   Alert,
   Platform,
-  StatusBar,
   KeyboardAvoidingView
 } from "react-native";
 import { Text, useTheme } from "react-native-paper";

@@ -13,7 +13,6 @@ import {
   TextInput,
   LayoutAnimation,
   UIManager,
-  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, useTheme } from "react-native-paper";
