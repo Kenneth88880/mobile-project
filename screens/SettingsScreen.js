@@ -27,6 +27,7 @@ import {
   getUserProfile,
   updateMaxDistance,
   saveUserProfile,
+  invalidateProfileCache,
 } from "../services/profileService";
 
 export default function SettingsScreen({
@@ -81,6 +82,7 @@ export default function SettingsScreen({
     setMaxDistance(value);
     try {
       await updateMaxDistance(CURRENT_USER_ID, value);
+      invalidateProfileCache(CURRENT_USER_ID);
     } catch (error) {
       console.error("Error updating max distance:", error);
       Alert.alert("Error", "Failed to update distance preference");
