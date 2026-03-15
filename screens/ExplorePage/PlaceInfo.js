@@ -15,7 +15,7 @@ import {
   UIManager,
   KeyboardAvoidingView,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
@@ -35,7 +35,6 @@ const PLACEHOLDER_IMAGE =
 
 export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventDate, setEventDate] = useState("");
   const [eventHour, setEventHour] = useState("");
@@ -185,7 +184,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
       transparent={false}
       onRequestClose={handleClose}
     >
-      <View
+      <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <ScrollView
@@ -203,11 +202,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
             <TouchableOpacity
               style={[
                 styles.backBtn,
-                {
-                  backgroundColor: theme.colors.surface,
-                  top: Platform.OS === "ios" ? Math.max(12, insets.top) : 12,
-                  left: Platform.OS === "ios" ? Math.max(12, insets.left) : 12,
-                },
+                { backgroundColor: theme.colors.surface },
               ]}
               onPress={handleClose}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -608,7 +603,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
             ) : null}
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
 
       <ShareToChat
         visible={shareVisible}
