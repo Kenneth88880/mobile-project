@@ -196,12 +196,30 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
         >
           {/* Hero image */}
           <View style={styles.imageWrapper}>
-            <Image source={{ uri: imageUri }} style={styles.heroImage} />
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.heroImage} />
+            ) : (
+              <View
+                style={[
+                  styles.heroImage,
+                  {
+                    backgroundColor: theme.colors.surfaceVariant,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                <Text>No image available</Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
                 styles.backBtn,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor: theme.colors.surface,
+                  top: Platform.OS === "ios" ? 40 : 12,
+                },
               ]}
               onPress={handleClose}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
