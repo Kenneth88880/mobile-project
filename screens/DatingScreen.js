@@ -78,11 +78,10 @@ export default function DatingScreen({
   const loadData = async () => {
     setLoading(true);
     try {
-      // Fetch user profile, duo partner, and all pairs concurrently
-      const [currentUserProfile, duo, fetchedPairs] = await Promise.all([
+      // Step 1 — need duo ID before calling getAllDuoPairs
+      const [currentUserProfile, duo] = await Promise.all([
         getUserProfile(currentUserId),
         getCurrentDuoPartner(currentUserId),
-        getAllDuoPairs(currentUserId),
       ]);
 
       const userLocation = {
@@ -95,33 +94,35 @@ export default function DatingScreen({
       }
       setCurrentDuo(duo);
 
+      // Step 2 — pairs and partner profile fetch in parallel
+      const [fetchedPairs, partnerProfile] = await Promise.all([
+        getAllDuoPairs(currentUserId, duo?.duoId),
+        duo?.partnerId
+          ? getDuoPartnerProfile(duo.partnerId)
+          : Promise.resolve(null),
+      ]);
+
       let filteredPairs = fetchedPairs || [];
 
-      // Fetch partner profile only if needed for preference filtering
-      if (duo?.partnerId) {
-        try {
-          const partnerProfile = await getDuoPartnerProfile(duo.partnerId);
-          const currentUserPref =
-            currentUserProfile.duoPreference?.interestedIn ||
-            currentUserProfile.genderPreference || [];
-          const partnerPref =
-            partnerProfile?.duoPreference?.interestedIn ||
-            partnerProfile?.genderPreference || [];
+      if (duo?.partnerId && partnerProfile) {
+        const currentUserPref =
+          currentUserProfile.duoPreference?.interestedIn ||
+          currentUserProfile.genderPreference || [];
+        const partnerPref =
+          partnerProfile?.duoPreference?.interestedIn ||
+          partnerProfile?.genderPreference || [];
 
-          if (
-            currentUserProfile?.gender &&
-            partnerProfile?.gender &&
-            (currentUserPref.length > 0 || partnerPref.length > 0)
-          ) {
-            filteredPairs = filteredPairs.filter((pair) => {
-              const user1 = pair.user1Profile || pair.user1 || {};
-              const user2 = pair.user2Profile || pair.user2 || {};
-              if (!user1.gender || !user2.gender) return false;
-              return checkDuoPreferenceMatch(currentUserProfile, partnerProfile, user1, user2);
-            });
-          }
-        } catch (error) {
-          console.error("Error loading partner profile for filtering:", error);
+        if (
+          currentUserProfile?.gender &&
+          partnerProfile?.gender &&
+          (currentUserPref.length > 0 || partnerPref.length > 0)
+        ) {
+          filteredPairs = filteredPairs.filter((pair) => {
+            const user1 = pair.user1Profile || pair.user1 || {};
+            const user2 = pair.user2Profile || pair.user2 || {};
+            if (!user1.gender || !user2.gender) return false;
+            return checkDuoPreferenceMatch(currentUserProfile, partnerProfile, user1, user2);
+          });
         }
       }
 
@@ -145,7 +146,6 @@ export default function DatingScreen({
           : u1?.isTestAccount !== true && u2?.isTestAccount !== true;
       });
 
-      // Single state update at the end — no double render flash
       setAllFilteredPairs(filteredPairs);
       setLoadedPairs(filteredPairs.slice(0, pairsPerPage));
       setHasMorePairs(filteredPairs.length > pairsPerPage);
@@ -154,11 +154,10 @@ export default function DatingScreen({
       console.error("Error in loadData:", error);
       setLoadedPairs([]);
     } finally {
-      // Loading ends once, here, not mid-function
       setLoading(false);
     }
   };
-
+  
   const loadMorePairs = async () => {
     if (loadingMore || !hasMorePairs) return;
     setLoadingMore(true);
@@ -185,11 +184,11 @@ export default function DatingScreen({
     if (!profile) return;
     const profileId = profile.userId || profile.id;
 
-    // Show what we already have immediately — no blank state while fetching
+    // Show card data immediately — no blank screen while fetching
     setSelectedProfile(profile);
     setCurrentImageIndex(0);
 
-    // If we've fetched this profile before this session, use the cache
+    // Return early if already cached this session
     if (profileCacheRef.current[profileId]) {
       setSelectedProfile(profileCacheRef.current[profileId]);
       return;
@@ -212,6 +211,7 @@ export default function DatingScreen({
       }
     } catch (error) {
       console.error("Error loading full profile:", error);
+      // Already showing profile from card data, no fallback needed
     }
   };
 
