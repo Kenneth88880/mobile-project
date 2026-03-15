@@ -94,9 +94,7 @@ export default function ProfileScreen({
   const [devPasswordInput, setDevPasswordInput] = useState("");
 
   useEffect(() => {
-    loadProfile();
-    loadRating();
-    loadPendingRequests();
+    loadAllData();
   }, []);
 
   useEffect(() => {
@@ -108,96 +106,32 @@ export default function ProfileScreen({
   }, [searchTimeout]);
 
   // Load functions
-  const loadRating = async () => {
-    const ratingData = await getAverageRating(CURRENT_USER_ID);
-    setRating(ratingData);
-  };
-
-  const loadPendingRequests = async () => {
+  const loadAllData = async () => {
     try {
-      const querySnapshot = await firestore()
-        .collection("duoRequests")
-        .where("toUserId", "==", CURRENT_USER_ID)
-        .where("status", "==", "pending")
-        .get();
+      // Fire all top-level independent reads in parallel
+      const [userProfile, ratingData, requestsSnapshot, duosSnapshot] = await Promise.all([
+        getUserProfile(CURRENT_USER_ID),
+        getAverageRating(CURRENT_USER_ID),
+        firestore()
+          .collection("duoRequests")
+          .where("toUserId", "==", CURRENT_USER_ID)
+          .where("status", "==", "pending")
+          .get(),
+        firestore()
+          .collection("duos")
+          .where("users", "array-contains", CURRENT_USER_ID)
+          .get(),
+      ]);
 
-      const requests = [];
-      for (const docSnap of querySnapshot.docs) {
-        const requestData = docSnap.data();
-        const requesterProfile = await getUserProfile(requestData.fromUserId);
-        if (requesterProfile) {
-          requests.push({
-            id: docSnap.id,
-            ...requestData,
-            requesterProfile: {
-              ...requesterProfile,
-              tags: Array.isArray(requesterProfile.tags)
-                ? requesterProfile.tags
-                : [],
-            },
-          });
-        }
-      }
-      setPendingRequests(requests);
-    } catch (error) {
-      console.error("Error loading pending requests:", error);
-    }
-  };
+      // Set rating immediately — no extra round-trip needed
+      setRating(ratingData);
 
-  const loadDuo = async () => {
-    try {
-      const querySnapshot = await firestore()
-        .collection("duos")
-        .where("users", "array-contains", CURRENT_USER_ID)
-        .get();
-
-      if (!querySnapshot.empty) {
-        const duoDoc = querySnapshot.docs[0];
-        const duoData = duoDoc.data();
-        const partnerId = duoData.users.find((id) => id !== CURRENT_USER_ID);
-
-        if (partnerId) {
-          const partnerProfile = await getDuoPartnerProfile(partnerId);
-          if (partnerProfile) {
-            const cleanedPartnerProfile = {
-              ...partnerProfile,
-              tags: Array.isArray(partnerProfile.tags)
-                ? partnerProfile.tags
-                : [],
-            };
-            setDuoPartnerProfile(cleanedPartnerProfile);
-            setProfile((prev) => ({ ...prev, duoPartnerId: partnerId }));
-            return partnerId;
-          }
-        }
-      } else {
-        setDuoPartnerProfile(null);
-      }
-      return null;
-    } catch (error) {
-      console.error("Error loading duo:", error);
-      return null;
-    }
-  };
-
-  const loadProfile = async () => {
-    try {
-      let userProfile = await getUserProfile(CURRENT_USER_ID);
-
+      // Handle profile
       if (!userProfile) {
-        console.log("No profile found - creating empty profile for new user");
         const emptyProfile = {
-          name: "",
-          age: "",
-          description: "",
-          photos: [],
-          tags: [],
-          city: "",
-          latitude: null,
-          longitude: null,
-          showOnlineStatus: true,
-          gender: null,
-          genderPreference: [],
+          name: "", age: "", description: "", photos: [], tags: [],
+          city: "", latitude: null, longitude: null,
+          showOnlineStatus: true, gender: null, genderPreference: [],
         };
         await saveUserProfile(CURRENT_USER_ID, emptyProfile);
         setProfile(emptyProfile);
@@ -219,34 +153,98 @@ export default function ProfileScreen({
         showOnlineStatus: userProfile.showOnlineStatus !== false,
         gender: userProfile.gender || null,
         genderPreference: Array.isArray(userProfile.genderPreference)
-          ? userProfile.genderPreference
-          : [],
+          ? userProfile.genderPreference : [],
       };
-
       setProfile(cleanedProfile);
       setOriginalAge(userProfile.age || "");
       setOriginalName(userProfile.name || "");
-      await loadDuo();
+
+      // Handle duo partner — we already have the snapshot, just fetch the partner profile
+      if (!duosSnapshot.empty) {
+        const duoData = duosSnapshot.docs[0].data();
+        const partnerId = duoData.users.find((id) => id !== CURRENT_USER_ID);
+        if (partnerId) {
+          // This is the only remaining serial dependency — partner id comes from duo doc
+          const partnerProfile = await getDuoPartnerProfile(partnerId);
+          if (partnerProfile) {
+            setDuoPartnerProfile({
+              ...partnerProfile,
+              tags: Array.isArray(partnerProfile.tags) ? partnerProfile.tags : [],
+            });
+            setProfile((prev) => ({ ...prev, duoPartnerId: partnerId }));
+          }
+        }
+      } else {
+        setDuoPartnerProfile(null);
+      }
+
+      // Handle pending requests — fetch all requester profiles in parallel
+      if (!requestsSnapshot.empty) {
+        const requestResults = await Promise.all(
+          requestsSnapshot.docs.map(async (docSnap) => {
+            const requestData = docSnap.data();
+            const requesterProfile = await getUserProfile(requestData.fromUserId);
+            if (!requesterProfile) return null;
+            return {
+              id: docSnap.id,
+              ...requestData,
+              requesterProfile: {
+                ...requesterProfile,
+                tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
+              },
+            };
+          })
+        );
+        setPendingRequests(requestResults.filter(Boolean));
+      }
+
       setProfileLoaded(true);
     } catch (error) {
-      console.error("Error loading profile:", error);
+      console.error("Error loading profile data:", error);
       setProfile({
-        name: "",
-        age: "",
-        description: "",
-        photos: [],
-        tags: [],
-        duoPartnerId: null,
-        city: "",
-        latitude: null,
-        longitude: null,
-        showOnlineStatus: true,
-        gender: null,
-        genderPreference: [],
+        name: "", age: "", description: "", photos: [], tags: [],
+        duoPartnerId: null, city: "", latitude: null, longitude: null,
+        showOnlineStatus: true, gender: null, genderPreference: [],
       });
       setProfileLoaded(true);
     }
   };
+
+// Keep loadPendingRequests as a standalone for post-accept/decline refreshes,
+// but now it also uses Promise.all internally
+const loadPendingRequests = async () => {
+  try {
+    const snapshot = await firestore()
+      .collection("duoRequests")
+      .where("toUserId", "==", CURRENT_USER_ID)
+      .where("status", "==", "pending")
+      .get();
+
+    if (snapshot.empty) {
+      setPendingRequests([]);
+      return;
+    }
+
+    const results = await Promise.all(
+      snapshot.docs.map(async (docSnap) => {
+        const requestData = docSnap.data();
+        const requesterProfile = await getUserProfile(requestData.fromUserId);
+        if (!requesterProfile) return null;
+        return {
+          id: docSnap.id,
+          ...requestData,
+          requesterProfile: {
+            ...requesterProfile,
+            tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
+          },
+        };
+      })
+    );
+    setPendingRequests(results.filter(Boolean));
+  } catch (error) {
+    console.error("Error loading pending requests:", error);
+  }
+};
 
   // Save and action functions
   const handleSave = async () => {
@@ -1464,9 +1462,6 @@ export default function ProfileScreen({
     );
   }
 
-  // ========================
-  // HINGE-STYLE MAIN VIEW
-  // ========================
   if (!isEditing) {
     const hasPhotos = profile.photos && profile.photos.length > 0;
     const mainPhoto = hasPhotos ? profile.photos[0] : null;
