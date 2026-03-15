@@ -4,18 +4,21 @@
 import firestore from "@react-native-firebase/firestore";
 import { generateGeohash } from "../utils/locationUtils";
 
+// caching vars for later use 
+const profileCache = {};
+const duoPartnerCache = {};
+
 /**
  * Get a user's profile by userId
  */
 export const getUserProfile = async (userId) => {
+  if (profileCache[userId]) return profileCache[userId];
   try {
     const doc = await firestore().collection("profiles").doc(userId).get();
-
     if (doc.exists) {
-      return {
-        userId: doc.id,
-        ...doc.data(),
-      };
+      const profile = { userId: doc.id, ...doc.data() };
+      profileCache[userId] = profile;
+      return profile;
     }
     return null;
   } catch (error) {
@@ -24,25 +27,23 @@ export const getUserProfile = async (userId) => {
   }
 };
 
+// Call this after saveUserProfile so the cache doesn't serve stale data
+export const invalidateProfileCache = (userId) => {
+  delete profileCache[userId];
+};
+
 /**
  * Save/update a user's profile
  * Automatically generates geohash if latitude/longitude are present
  */
 export const saveUserProfile = async (userId, data) => {
   try {
-    // Generate geohash if coordinates exist
     const profileData = { ...data };
     if (profileData.latitude && profileData.longitude) {
-      profileData.geohash = generateGeohash(
-        profileData.latitude,
-        profileData.longitude,
-      );
+      profileData.geohash = generateGeohash(profileData.latitude, profileData.longitude);
     }
-
-    await firestore()
-      .collection("profiles")
-      .doc(userId)
-      .set(profileData, { merge: true });
+    await firestore().collection("profiles").doc(userId).set(profileData, { merge: true });
+    delete profileCache[userId]; // ← invalidate so next read is fresh
     return true;
   } catch (error) {
     console.error("Error saving user profile:", error);
@@ -85,8 +86,8 @@ export const getAverageRating = async (userId) => {
  * Get current user's duo partner
  */
 export const getCurrentDuoPartner = async (userId) => {
+  if (duoPartnerCache[userId]) return duoPartnerCache[userId];
   try {
-    // Check if user is in any active duo
     const snapshot = await firestore()
       .collection("duos")
       .where("users", "array-contains", userId)
@@ -94,29 +95,31 @@ export const getCurrentDuoPartner = async (userId) => {
       .limit(1)
       .get();
 
-    if (!snapshot.empty) {
-      const duoDoc = snapshot.docs[0];
-      const duoData = duoDoc.data();
-      const partnerId = duoData.users.find((id) => id !== userId);
+    if (snapshot.empty) return null;
 
-      if (partnerId) {
-        const partnerProfile = await getUserProfile(partnerId);
+    const duoDoc = snapshot.docs[0];
+    const duoData = duoDoc.data();
+    const partnerId = duoData.users.find((id) => id !== userId);
+    if (!partnerId) return null;
 
-        return {
-          duoId: duoDoc.id,
-          partnerId,
-          partnerName: partnerProfile?.name || "Partner",
-          partnerProfile,
-          ...duoData,
-        };
-      }
-    }
-
-    return null;
+    const partnerProfile = await getUserProfile(partnerId);
+    const result = {
+      duoId: duoDoc.id,
+      partnerId,
+      partnerName: partnerProfile?.name || "Partner",
+      partnerProfile,
+      ...duoData,
+    };
+    duoPartnerCache[userId] = result;
+    return result;
   } catch (error) {
     console.error("Error getting duo partner:", error);
     return null;
   }
+};
+
+export const invalidateDuoCache = (userId) => {
+  delete duoPartnerCache[userId];
 };
 
 /**
@@ -150,121 +153,102 @@ export const hasUserRatedProfile = async (raterId, ratedUserId) => {
 /**
  * Get all duo pairs for matching
  */
-export const getAllDuoPairs = async (userId) => {
+export const getAllDuoPairs = async (userId, currentDuoId) => {
   try {
     console.log("Loading duo pairs for user:", userId);
 
-    // Get the current user's duo
-    const currentDuo = await getCurrentDuoPartner(userId);
-    if (!currentDuo) {
-      console.log("No current duo found");
+    if (!currentDuoId) {
+      console.log("No duo ID provided");
       return [];
     }
 
-    console.log("Current duo ID:", currentDuo.duoId);
+    console.log("Current duo ID:", currentDuoId);
 
-    // Get duo pairs that have been swiped (passed)
-    const swipesSnapshot = await firestore()
-      .collection("duoSwipes")
-      .where("fromDuoId", "==", currentDuo.duoId)
-      .get();
+    // Fire all 4 independent reads simultaneously
+    const [swipesSnapshot, sentLikesSnapshot, receivedLikesSnapshot, duosSnapshot] =
+      await Promise.all([
+        firestore()
+          .collection("duoSwipes")
+          .where("fromDuoId", "==", currentDuoId)
+          .get(),
+        firestore()
+          .collection("duoLikes")
+          .where("fromDuoId", "==", currentDuoId)
+          .get(),
+        firestore()
+          .collection("duoLikes")
+          .where("toDuoId", "==", currentDuoId)
+          .get(),
+        firestore()
+          .collection("duos")
+          .where("status", "==", "active")
+          .get(),
+      ]);
 
-    const swipedDuoIds = swipesSnapshot.docs.map((doc) => doc.data().toDuoId);
-    console.log("Already swiped duo IDs:", swipedDuoIds);
+    const excludedDuoIds = new Set([
+      currentDuoId,
+      ...swipesSnapshot.docs.map((d) => d.data().toDuoId),
+      ...sentLikesSnapshot.docs.map((d) => d.data().toDuoId),
+      ...receivedLikesSnapshot.docs.map((d) => d.data().fromDuoId),
+    ]);
 
-    // Get duo pairs that have been liked
-    const likesSnapshot = await firestore()
-      .collection("duoLikes")
-      .where("fromDuoId", "==", currentDuo.duoId)
-      .get();
+    // Filter out excluded and invalid duos before any profile fetching
+    const eligibleDuos = duosSnapshot.docs.filter((doc) => {
+      if (excludedDuoIds.has(doc.id)) return false;
+      return (doc.data().users || []).length === 2;
+    });
 
-    const likedDuoIds = likesSnapshot.docs.map((doc) => doc.data().toDuoId);
-    console.log("Already liked duo IDs:", likedDuoIds);
+    if (eligibleDuos.length === 0) {
+      console.log("No eligible duos found");
+      return [];
+    }
 
-    // ✅ FIX BUG #1: Also get likes FROM other duos TO you
-    const receivedLikesSnapshot = await firestore()
-      .collection("duoLikes")
-      .where("toDuoId", "==", currentDuo.duoId)
-      .get();
+    // Collect all unique user IDs across eligible duos
+    const allUserIds = new Set();
+    eligibleDuos.forEach((doc) => {
+      const { users } = doc.data();
+      allUserIds.add(users[0]);
+      allUserIds.add(users[1]);
+    });
 
-    const duosWhoLikedYou = receivedLikesSnapshot.docs.map(
-      (doc) => doc.data().fromDuoId,
+    // Fetch all profiles in one parallel batch
+    const profileResults = await Promise.all(
+      [...allUserIds].map((id) =>
+        getUserProfile(id).then((profile) => [id, profile])
+      )
     );
-    console.log("Duos who liked you:", duosWhoLikedYou);
+    const profileMap = Object.fromEntries(
+      profileResults.filter(([, profile]) => profile != null)
+    );
 
-    // Combine all lists - exclude duos you've liked AND duos who've liked you
-    const excludedDuoIds = [
-      ...swipedDuoIds,
-      ...likedDuoIds,
-      ...duosWhoLikedYou,
-    ];
-    console.log("Total excluded duo IDs:", excludedDuoIds);
-
-    // Get all active duo pairs, excluding own duo and already interacted with
-    const duosSnapshot = await firestore()
-      .collection("duos")
-      .where("status", "==", "active")
-      .get();
-
+    // Assemble pairs — zero additional network calls
     const pairs = [];
-    for (const doc of duosSnapshot.docs) {
+    for (const doc of eligibleDuos) {
       const duoData = doc.data();
-      const duoId = doc.id;
+      const user1Profile = profileMap[duoData.users[0]];
+      const user2Profile = profileMap[duoData.users[1]];
 
-      // Skip own duo and already swiped/liked duos
-      if (duoId === currentDuo.duoId) {
-        console.log(`Skipping own duo: ${duoId}`);
+      if (!user1Profile || !user2Profile) continue;
+
+      if (!user1Profile.photos?.length || !user2Profile.photos?.length) {
+        console.log(`Skipping duo ${doc.id} - missing photos`);
         continue;
       }
 
-      if (excludedDuoIds.includes(duoId)) {
-        console.log(`Skipping already interacted duo: ${duoId}`);
-        continue;
-      }
-
-      // Get profiles for both users
-      const users = duoData.users || [];
-      if (users.length !== 2) {
-        console.log(
-          `Skipping duo ${duoId} - invalid user count: ${users.length}`,
-        );
-        continue;
-      }
-
-      const user1Profile = await getUserProfile(users[0]);
-      const user2Profile = await getUserProfile(users[1]);
-
-      if (user1Profile && user2Profile) {
-        // ✅ Check if both users have at least one photo
-        const user1HasPhoto =
-          user1Profile.photos && user1Profile.photos.length > 0;
-        const user2HasPhoto =
-          user2Profile.photos && user2Profile.photos.length > 0;
-
-        if (!user1HasPhoto || !user2HasPhoto) {
-          console.log(
-            `Skipping duo ${duoId} - missing photos (user1: ${user1HasPhoto}, user2: ${user2HasPhoto})`,
-          );
-          continue;
-        }
-
-        console.log(
-          `✅ Including duo ${duoId}: ${user1Profile.name} + ${user2Profile.name}`,
-        );
-        pairs.push({
-          id: duoId,
-          user1Profile,
-          user2Profile,
-          users: users,
-          createdAt: duoData.createdAt,
-        });
-      }
+      console.log(`✅ Including duo ${doc.id}: ${user1Profile.name} + ${user2Profile.name}`);
+      pairs.push({
+        id: doc.id,
+        user1Profile,
+        user2Profile,
+        users: duoData.users,
+        createdAt: duoData.createdAt,
+      });
     }
 
     console.log("Total duo pairs loaded:", pairs.length);
     return pairs;
   } catch (error) {
-    console.error("Error loading duo pairs:", error);
+    console.error("Error getting all duo pairs:", error);
     return [];
   }
 };

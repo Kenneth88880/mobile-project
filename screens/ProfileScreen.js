@@ -35,8 +35,9 @@ import {
   getDuoPartnerProfile,
   resetTestData,
   getCurrentDuoPartner,
+  invalidateDuoCache,
+  invalidateProfileCache,
 } from "../services/profileService";
-import PhotoPicker from "../components/PhotoPicker";
 import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import SettingsScreen from "./SettingsScreen";
@@ -397,6 +398,8 @@ const loadPendingRequests = async () => {
 
       await batch.commit();
 
+      invalidateDuoCache(CURRENT_USER_ID);
+      invalidateProfileCache(CURRENT_USER_ID);
       Alert.alert("Success", "Partner request accepted!");
       setShowPendingRequests(false);
       await loadProfile();
@@ -463,6 +466,8 @@ const loadPendingRequests = async () => {
                 });
                 await batch.commit();
 
+                invalidateDuoCache(CURRENT_USER_ID);
+                invalidateProfileCache(CURRENT_USER_ID);
                 setDuoPartnerProfile(null);
                 setProfile({ ...profile, duoPartnerId: null });
                 Alert.alert(
