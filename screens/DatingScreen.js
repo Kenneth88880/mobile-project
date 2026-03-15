@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { View, Alert, StyleSheet } from "react-native";
 import { Text, Chip, ActivityIndicator, useTheme } from "react-native-paper";
 import Animated, {
@@ -49,6 +49,7 @@ export default function DatingScreen({
   const [loadingMore, setLoadingMore] = useState(false);
   const [allFilteredPairs, setAllFilteredPairs] = useState([]);
   const pairsPerPage = 15;
+  const profileCacheRef = useRef({});
 
   const panX = useSharedValue(0);
   const panY = useSharedValue(0);
@@ -77,9 +78,11 @@ export default function DatingScreen({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [currentUserProfile, duo] = await Promise.all([
+      // Fetch user profile, duo partner, and all pairs concurrently
+      const [currentUserProfile, duo, fetchedPairs] = await Promise.all([
         getUserProfile(currentUserId),
         getCurrentDuoPartner(currentUserId),
+        getAllDuoPairs(currentUserId),
       ]);
 
       const userLocation = {
@@ -87,52 +90,34 @@ export default function DatingScreen({
         longitude: currentUserProfile?.longitude,
         city: currentUserProfile?.city || "Unknown",
       };
-
       if (userLocation.latitude && userLocation.longitude) {
         setCurrentUserLocation(userLocation);
       }
-
       setCurrentDuo(duo);
-
-      const fetchedPairs = await getAllDuoPairs(currentUserId);
-
-      const quickLoadPairs = fetchedPairs.slice(0, 5);
-      setLoadedPairs(quickLoadPairs);
-      setLoading(false);
 
       let filteredPairs = fetchedPairs || [];
 
-      if (duo && duo.partnerId) {
+      // Fetch partner profile only if needed for preference filtering
+      if (duo?.partnerId) {
         try {
           const partnerProfile = await getDuoPartnerProfile(duo.partnerId);
-
           const currentUserPref =
             currentUserProfile.duoPreference?.interestedIn ||
-            currentUserProfile.genderPreference ||
-            [];
+            currentUserProfile.genderPreference || [];
           const partnerPref =
             partnerProfile?.duoPreference?.interestedIn ||
-            partnerProfile?.genderPreference ||
-            [];
-
-          const hasPreferences =
-            currentUserPref.length > 0 || partnerPref.length > 0;
+            partnerProfile?.genderPreference || [];
 
           if (
             currentUserProfile?.gender &&
             partnerProfile?.gender &&
-            hasPreferences
+            (currentUserPref.length > 0 || partnerPref.length > 0)
           ) {
-            filteredPairs = fetchedPairs.filter((pair) => {
+            filteredPairs = filteredPairs.filter((pair) => {
               const user1 = pair.user1Profile || pair.user1 || {};
               const user2 = pair.user2Profile || pair.user2 || {};
               if (!user1.gender || !user2.gender) return false;
-              return checkDuoPreferenceMatch(
-                currentUserProfile,
-                partnerProfile,
-                user1,
-                user2,
-              );
+              return checkDuoPreferenceMatch(currentUserProfile, partnerProfile, user1, user2);
             });
           }
         } catch (error) {
@@ -141,41 +126,26 @@ export default function DatingScreen({
       }
 
       const maxDistance = currentUserProfile?.maxDistance || 200;
-
-      if (userLocation.latitude && userLocation.longitude && maxDistance) {
+      if (userLocation.latitude && userLocation.longitude) {
         filteredPairs = filteredPairs.filter((pair) => {
-          const user1 = pair.user1Profile;
-          const user2 = pair.user2Profile;
-          const user1InRange =
-            user1?.latitude &&
-            user1?.longitude &&
-            isWithinDistance(userLocation, user1, maxDistance);
-          const user2InRange =
-            user2?.latitude &&
-            user2?.longitude &&
-            isWithinDistance(userLocation, user2, maxDistance);
-          return user1InRange || user2InRange;
-        });
-
-        console.log(
-          `Filtered ${fetchedPairs.length} duos to ${filteredPairs.length} within ${maxDistance}km`,
-        );
-      }
-
-      if (devMode) {
-        filteredPairs = filteredPairs.filter((pair) => {
-          const user1 = pair.user1Profile;
-          const user2 = pair.user2Profile;
-          return user1?.isTestAccount === true && user2?.isTestAccount === true;
-        });
-      } else {
-        filteredPairs = filteredPairs.filter((pair) => {
-          const user1 = pair.user1Profile;
-          const user2 = pair.user2Profile;
-          return user1?.isTestAccount !== true && user2?.isTestAccount !== true;
+          const u1 = pair.user1Profile;
+          const u2 = pair.user2Profile;
+          return (
+            (u1?.latitude && u1?.longitude && isWithinDistance(userLocation, u1, maxDistance)) ||
+            (u2?.latitude && u2?.longitude && isWithinDistance(userLocation, u2, maxDistance))
+          );
         });
       }
 
+      filteredPairs = filteredPairs.filter((pair) => {
+        const u1 = pair.user1Profile;
+        const u2 = pair.user2Profile;
+        return devMode
+          ? u1?.isTestAccount === true && u2?.isTestAccount === true
+          : u1?.isTestAccount !== true && u2?.isTestAccount !== true;
+      });
+
+      // Single state update at the end — no double render flash
       setAllFilteredPairs(filteredPairs);
       setLoadedPairs(filteredPairs.slice(0, pairsPerPage));
       setHasMorePairs(filteredPairs.length > pairsPerPage);
@@ -183,6 +153,9 @@ export default function DatingScreen({
     } catch (error) {
       console.error("Error in loadData:", error);
       setLoadedPairs([]);
+    } finally {
+      // Loading ends once, here, not mid-function
+      setLoading(false);
     }
   };
 
@@ -210,10 +183,22 @@ export default function DatingScreen({
 
   const handleProfileClick = async (profile) => {
     if (!profile) return;
+    const profileId = profile.userId || profile.id;
+
+    // Show what we already have immediately — no blank state while fetching
+    setSelectedProfile(profile);
+    setCurrentImageIndex(0);
+
+    // If we've fetched this profile before this session, use the cache
+    if (profileCacheRef.current[profileId]) {
+      setSelectedProfile(profileCacheRef.current[profileId]);
+      return;
+    }
+
     try {
-      const fullProfile = await getUserProfile(profile.userId || profile.id);
+      const fullProfile = await getUserProfile(profileId);
       if (fullProfile) {
-        setSelectedProfile({
+        const merged = {
           ...profile,
           ...fullProfile,
           city: fullProfile.city || profile.city,
@@ -221,15 +206,13 @@ export default function DatingScreen({
           longitude: fullProfile.longitude || profile.longitude,
           lastActive: fullProfile.lastActive || profile.lastActive,
           isOnline: fullProfile.isOnline || profile.isOnline,
-        });
-      } else {
-        setSelectedProfile(profile);
+        };
+        profileCacheRef.current[profileId] = merged;
+        setSelectedProfile(merged);
       }
     } catch (error) {
       console.error("Error loading full profile:", error);
-      setSelectedProfile(profile);
     }
-    setCurrentImageIndex(0);
   };
 
   const handleBackToDouble = () => {
