@@ -13,8 +13,8 @@ import {
   TextInput,
   LayoutAnimation,
   UIManager,
+  KeyboardAvoidingView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
@@ -183,7 +183,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
       transparent={false}
       onRequestClose={handleClose}
     >
-      <SafeAreaView
+      <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <ScrollView
@@ -602,7 +602,7 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
             ) : null}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
 
       <ShareToChat
         visible={shareVisible}
