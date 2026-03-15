@@ -93,7 +93,14 @@ const deleteChat = async (chatId) => {
 const reportChat = async (chatId, reportingUserId) => {
   try {
     const chatRef = firestore().collection("chats").doc(chatId);
-    const chatDoc = await chatRef.get();
+
+    // Fire all independent reads in parallel
+    const [chatDoc, reporterProfile, messagesSnapshot] = await Promise.all([
+      chatRef.get(),
+      getUserProfile(reportingUserId),
+      chatRef.collection("messages").orderBy("createdAt", "asc").get(),
+    ]);
+
     if (!chatDoc.exists) {
       console.error("Chat not found");
       return false;
@@ -101,30 +108,25 @@ const reportChat = async (chatId, reportingUserId) => {
 
     const chatData = chatDoc.data();
     const participants = chatData.participants || [];
-    const reporterProfile = await getUserProfile(reportingUserId);
 
-    const messagesSnapshot = await chatRef
-      .collection("messages")
-      .orderBy("createdAt", "asc")
-      .get();
     const chatLogs = messagesSnapshot.docs.map((doc) => {
       const msgData = doc.data();
       const text = msgData.text || "";
       return {
         messageId: doc.id,
-        text:
-          text.length > 500 ? text.substring(0, 500) + "... [truncated]" : text,
+        text: text.length > 500 ? text.substring(0, 500) + "... [truncated]" : text,
         senderId: msgData.user._id,
         senderName: msgData.user.name,
-        createdAt: msgData.createdAt
-          ? msgData.createdAt.toDate().toISOString()
-          : null,
+        createdAt: msgData.createdAt ? msgData.createdAt.toDate().toISOString() : null,
       };
     });
 
+    // Fetch all participant profiles in parallel
+    const profileResults = await Promise.all(
+      participants.map((id) => getUserProfile(id).then((p) => [id, p]))
+    );
     const participantProfiles = {};
-    for (const participantId of participants) {
-      const profile = await getUserProfile(participantId);
+    for (const [participantId, profile] of profileResults) {
       if (profile) {
         participantProfiles[participantId] = {
           userId: participantId,
@@ -142,9 +144,16 @@ const reportChat = async (chatId, reportingUserId) => {
       }
     }
 
-    await firestore()
-      .collection("reports")
-      .add({
+    const hiddenFor = [...(chatData.hiddenFor || [])];
+    if (!hiddenFor.includes(reportingUserId)) hiddenFor.push(reportingUserId);
+    const reports = [
+      ...(chatData.reports || []),
+      { reportedBy: reportingUserId, reportedAt: Date.now(), reason: "User reported inappropriate content" },
+    ];
+
+    // Fire both writes in parallel
+    await Promise.all([
+      firestore().collection("reports").add({
         reportId: `report_${Date.now()}`,
         reportedAt: firestore.FieldValue.serverTimestamp(),
         chatId,
@@ -163,23 +172,14 @@ const reportChat = async (chatId, reportingUserId) => {
         reviewedAt: null,
         reviewedBy: null,
         action: null,
-      });
-
-    const reports = chatData.reports || [];
-    reports.push({
-      reportedBy: reportingUserId,
-      reportedAt: Date.now(),
-      reason: "User reported inappropriate content",
-    });
-    const hiddenFor = chatData.hiddenFor || [];
-    if (!hiddenFor.includes(reportingUserId)) hiddenFor.push(reportingUserId);
-
-    await chatRef.update({
-      reports,
-      hiddenFor,
-      flaggedForModeration: true,
-      lastReportedAt: firestore.FieldValue.serverTimestamp(),
-    });
+      }),
+      chatRef.update({
+        reports,
+        hiddenFor,
+        flaggedForModeration: true,
+        lastReportedAt: firestore.FieldValue.serverTimestamp(),
+      }),
+    ]);
 
     return true;
   } catch (error) {
@@ -696,35 +696,14 @@ function ChatListScreen({ onChatSelect }) {
         {
           text: "Report",
           style: "destructive",
-          onPress: () => {
-            setTimeout(async () => {
-              try {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                const success = await reportChat(chatId, currentUserId);
-                setTimeout(() => {
-                  if (success)
-                    Alert.alert(
-                      "Report Submitted",
-                      "Thank you. Our moderation team will review this chat within 24 hours. The chat has been hidden from your view.",
-                    );
-                  else
-                    Alert.alert(
-                      "Error",
-                      "Failed to submit report. Please try again.",
-                    );
-                }, 300);
-              } catch (error) {
-                console.error("Error in report flow:", error);
-                setTimeout(
-                  () =>
-                    Alert.alert(
-                      "Error",
-                      "Something went wrong. Please try again.",
-                    ),
-                  300,
-                );
-              }
-            }, 50);
+          onPress: async () => {
+            const success = await reportChat(chatId, currentUserId);
+            Alert.alert(
+              success ? "Report Submitted" : "Error",
+              success
+                ? "Thank you. Our moderation team will review this chat within 24 hours."
+                : "Failed to submit report. Please try again."
+            );
           },
         },
       ],
@@ -992,9 +971,8 @@ function IndividualChatScreen({
   const translateX = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
-    .minDistance(10)
     .activeOffsetX([40, 999])
-    .failOffsetY([-15, 15])
+    .failOffsetY([-5, 5])
     .onUpdate((event) => {
       if (event.translationX > 0) translateX.value = event.translationX * 0.6;
     })
@@ -1016,6 +994,18 @@ function IndividualChatScreen({
         translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
       }
     });
+
+  const getItemLayout = useCallback((data, index) => {
+    const item = data?.[index];
+    const height = item ? (itemHeightsRef.current[item._id] || 72) : 72;
+    // FlatList is inverted, so offset counts from the bottom
+    let offset = 0;
+    for (let i = index + 1; i < (data?.length || 0); i++) {
+      const id = data[i]?._id;
+      offset += id ? (itemHeightsRef.current[id] || 72) : 72;
+    }
+    return { length: height, offset, index };
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -1079,14 +1069,18 @@ function IndividualChatScreen({
   useEffect(() => {
     if (!chat?.participants) return;
     (async () => {
-      const allProfiles = {};
-      for (const userId of chat.participants) {
-        const profile = await getUserProfile(userId);
-        if (profile) allProfiles[userId] = { id: userId, ...profile };
-      }
+      const results = await Promise.all(
+
+        chat.participants.map((userId) =>
+          getUserProfile(userId).then((profile) => 
+            profile ? [userId, { id: userId, ...profile }] : null 
+          )
+        )
+      );
+      const allProfiles = Object.fromEntries(results.filter(Boolean));
       setUserProfiles(allProfiles);
     })();
-  }, [chat]);
+  }, [chat?.id]);
 
   useEffect(() => {
     if (!chat?.id) return;
@@ -1155,25 +1149,37 @@ function IndividualChatScreen({
   };
 
   const loadProfileRating = async (userId) => {
+    
+    setUserRating(0);
+    setHasRated(false);
+    setViewingProfileRating({ average: "0.0", count: 0 });
+
     try {
-      setUserRating(0);
-      setHasRated(false);
-      setViewingProfileRating({ average: "0.0", count: 0 });
-      const ratingData = await getAverageRating(userId);
+
+      const [ratingData, snap] = await Promise.all([
+        firestore()
+          .collection("ratings")
+          .where("toUserId", "==", userId)
+          .where("toUserId", "==", currentUserId)
+          .where("toUserId", "==", userId)
+          .limit(1)
+          .get()
+      ]);
       setViewingProfileRating(ratingData);
-      const snap = await firestore()
-        .collection("ratings")
-        .where("fromUserId", "==", currentUserId)
-        .where("toUserId", "==", userId)
-        .limit(1)
-        .get();
+
       if (!snap.empty) {
+
         setUserRating(snap.docs[0].data().rating);
         setHasRated(true);
+
       }
+
     } catch (error) {
-      console.error("Error loading rating:", error);
+
+      console.log("Error with ratings: ", error);
+
     }
+    
   };
 
   const handleProfilePicturePress = (userId) => {
@@ -1631,6 +1637,10 @@ function IndividualChatScreen({
             data={messages}
             keyExtractor={(item) => item._id}
             inverted
+            getItemLayout={getItemLayout}        
+            removeClippedSubviews={true}          
+            maxToRenderPerBatch={15}             
+            windowSize={10}                   
             contentContainerStyle={styles.messagesList}
             renderItem={({ item, index }) => {
               const isMyMessage = item.user._id === currentUserId;
