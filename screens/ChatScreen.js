@@ -963,7 +963,7 @@ function IndividualChatScreen({
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentChat, setCurrentChat] = useState(chat);
   const [replyingTo, setReplyingTo] = useState(null);
-  // ── NEW: place suggestion modal state ──
+
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
   const flatListRef = useRef(null);
   const itemHeightsRef = useRef({});
