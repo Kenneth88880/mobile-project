@@ -4,6 +4,7 @@ export default {
   expo: {
     name: "Doubly",
     slug: "doubly-yrvn0tmogrdrliugnun4w",
+    owner: "doubly-connections-inc",
     version: "1.0.6",
     orientation: "portrait",
     icon: "./assets/doubly-icon.png",
@@ -52,7 +53,7 @@ export default {
       ],
     },
     plugins: [
-      "@react-native-firebase/app",
+      "@react-native-firebase/app",      
       "./expo-firebase-plugin.cjs",
       [
         "@stripe/stripe-react-native",
@@ -66,7 +67,12 @@ export default {
         "expo-build-properties",
         {
           ios: {
-            useFrameworks: "static",
+            deploymentTarget: "16.0",
+            useSPM: true,
+          },
+           android: {
+            compileSdkVersion: 36,            
+            targetSdkVersion: 35,
           },
         },
       ],
