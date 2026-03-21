@@ -18,9 +18,9 @@ function withFirebaseFix(config) {
       end
     end`;
 
-          // Inject after react_native_post_install block closes
+          // Match the closing ) of react_native_post_install on its own line
           contents = contents.replace(
-            /(react_native_post_install\([\s\S]*?\))/,
+            /(react_native_post_install\([\s\S]*?^\s*\))/m,
             `$1${fix}`
           );
           writeFileSync(podfilePath, contents);
