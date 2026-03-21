@@ -15,10 +15,12 @@ function withFirebaseFix(config) {
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-        # Fix for RCT_EXPORT_METHOD with Xcode 26 strict C99
-        if target.name.start_with?('RNFB') || target.name == 'RNFBStorage'
-          config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Wno-implicit-int -Wno-error=implicit-int'
+        if target.name.start_with?('RNFB')
+          config.build_settings['OTHER_CFLAGS'] = '$(inherited) -Wno-implicit-int -Wno-error=implicit-int -Wno-implicit-function-declaration'
           config.build_settings['GCC_WARN_ABOUT_IMPLICIT_FUNCTION_DECLARATIONS'] = 'NO'
+          config.build_settings['CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF'] = 'NO'
+          config.build_settings['GCC_WARN_64_TO_32_BIT_CONVERSION'] = 'NO'
+          config.build_settings['WARNING_CFLAGS'] = '-Wno-everything'
         end
       end
     end`;
