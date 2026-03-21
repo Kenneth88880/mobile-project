@@ -33,7 +33,6 @@ export default {
           reservedClientId:
             "com.googleusercontent.apps.418458858405-4o85k2vfuoqjdduvjobjgsds6k9bmvfm",
         },
-        googleMapsApiKey: process.env.GOOGLE_PLACES_API_KEY,
       },
     },
     android: {
