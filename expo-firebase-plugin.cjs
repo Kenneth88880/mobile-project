@@ -15,16 +15,17 @@ function withFirebaseFix(config) {
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+        config.build_settings['SWIFT_SUPPRESS_WARNINGS'] = 'YES'
       end
     end`;
 
-          // Match the closing ) of react_native_post_install on its own line
           contents = contents.replace(
             /(react_native_post_install\([\s\S]*?^\s*\))/m,
             `$1${fix}`
           );
           writeFileSync(podfilePath, contents);
-          console.log("✅ Added CLANG_ALLOW_NON_MODULAR_INCLUDES fix");
+          console.log("✅ Added Firebase compatibility fixes");
         } else {
           console.log("ℹ️ Fix already present");
         }
