@@ -14,11 +14,10 @@ function withFirebaseFix(config) {
 
         if (!contents.includes("modular_headers")) {
           const podOverrides = `
-  pod 'Firebase', '~> 11.0', :modular_headers => true
-  pod 'FirebaseAuth', '~> 11.0', :modular_headers => true
+  pod 'FirebaseAuth', :modular_headers => true
   pod 'FirebaseCoreInternal', :modular_headers => true
-  pod 'FirebaseFirestore', '~> 11.0', :modular_headers => true
-  pod 'FirebaseStorage', '~> 11.0', :modular_headers => true
+  pod 'FirebaseFirestore', :modular_headers => true
+  pod 'FirebaseStorage', :modular_headers => true
   pod 'GoogleUtilities', :modular_headers => true
   pod 'FirebaseAuthInterop', :modular_headers => true
   pod 'FirebaseAppCheckInterop', :modular_headers => true
@@ -30,7 +29,7 @@ function withFirebaseFix(config) {
             podOverrides + "\n  config = use_native_modules!(config_command)"
           );
           writeFileSync(podfilePath, contents);
-          console.log("✅ Added Firebase version pins and modular headers");
+          console.log("✅ Added modular headers for Firebase pods");
         } else {
           console.log("ℹ️ Firebase overrides already present");
         }
