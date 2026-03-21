@@ -1,0 +1,12 @@
+diff --git a/node_modules/@react-native-firebase/storage/ios/RNFBStorage/RNFBStorageModule.m b/node_modules/@react-native-firebase/storage/ios/RNFBStorage/RNFBStorageModule.m
+index a3695b6..d5d5e13 100644
+--- a/node_modules/@react-native-firebase/storage/ios/RNFBStorage/RNFBStorageModule.m
++++ b/node_modules/@react-native-firebase/storage/ios/RNFBStorage/RNFBStorageModule.m
+@@ -22,6 +22,7 @@
+ #import "RNFBSharedUtils.h"
+ #import "RNFBStorageCommon.h"
+ #import "RNFBStorageModule.h"
++#import <React/RCTBridgeModule.h>
+ 
+ static NSString *const RNFB_STORAGE_EVENT = @"storage_event";
+ static NSString *const RNFB_STORAGE_STATE_CHANGED = @"state_changed";
