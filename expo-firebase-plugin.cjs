@@ -1,8 +1,8 @@
-const { withDangerousMod, withXcodeProject } = require("expo/config-plugins");
+const { withDangerousMod } = require("expo/config-plugins");
 const { resolve } = require("path");
 const { readFileSync, writeFileSync } = require("fs");
 
-function withFirebaseModularHeaders(config) {
+function withFirebaseFix(config) {
   return withDangerousMod(config, [
     "ios",
     async (cfg) => {
@@ -12,15 +12,26 @@ function withFirebaseModularHeaders(config) {
       try {
         let contents = readFileSync(podfilePath, "utf-8");
 
-        if (!contents.includes("use_modular_headers!")) {
+        if (!contents.includes("modular_headers")) {
+          const modularHeaders = `
+  pod 'FirebaseAuth', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'FirebaseFirestore', :modular_headers => true
+  pod 'FirebaseStorage', :modular_headers => true
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'FirebaseAuthInterop', :modular_headers => true
+  pod 'FirebaseAppCheckInterop', :modular_headers => true
+  pod 'RecaptchaInterop', :modular_headers => true
+  pod 'FirebaseFirestoreInternal', :modular_headers => true
+`;
           contents = contents.replace(
-            "prepare_react_native_project!",
-            "use_modular_headers!\n\nprepare_react_native_project!"
+            "  config = use_native_modules!(config_command)",
+            modularHeaders + "\n  config = use_native_modules!(config_command)"
           );
           writeFileSync(podfilePath, contents);
-          console.log("✅ Added use_modular_headers!");
+          console.log("✅ Added modular headers for Firebase pods");
         } else {
-          console.log("ℹ️ use_modular_headers! already present");
+          console.log("ℹ️ Modular headers already present");
         }
       } catch (error) {
         console.error("❌ Error modifying Podfile:", error);
@@ -29,11 +40,6 @@ function withFirebaseModularHeaders(config) {
       return cfg;
     },
   ]);
-}
-
-function withFirebaseFix(config) {
-  const { withPlugins } = require("expo/config-plugins");
-  return withPlugins(config, [withFirebaseModularHeaders]);
 }
 
 module.exports = withFirebaseFix;
