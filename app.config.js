@@ -53,7 +53,11 @@ export default {
       ],
     },
     plugins: [
-      "@react-native-firebase/app",      
+      "@react-native-firebase/app", {
+        "ios": {
+          "modularHeaders": true
+        }
+      },
       "./expo-firebase-plugin.cjs",
       [
         "@stripe/stripe-react-native",
