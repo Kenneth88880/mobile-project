@@ -68,6 +68,7 @@ export default {
         {
           ios: {
             deploymentTarget: "16.0",
+            useFrameworks: "static",
             useSPM: true,
           },
            android: {
