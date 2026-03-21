@@ -10,7 +10,7 @@ function withFirebaseFix(config) {
       if (config && config.buildSettings) {
         config.buildSettings["CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES"] = "YES";
         config.buildSettings["GCC_C_LANGUAGE_STANDARD"] = "gnu11";
-        config.buildSettings["CLANG_CXX_LANGUAGE_STANDARD"] = "gnu++17";
+        config.buildSettings["CLANG_CXX_LANGUAGE_STANDARD"] = '"gnu++17"';
       }
     }
 
