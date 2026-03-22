@@ -107,10 +107,12 @@ export default function DatingScreen({
       if (duo?.partnerId && partnerProfile) {
         const currentUserPref =
           currentUserProfile.duoPreference?.interestedIn ||
-          currentUserProfile.genderPreference || [];
+          currentUserProfile.genderPreference ||
+          [];
         const partnerPref =
           partnerProfile?.duoPreference?.interestedIn ||
-          partnerProfile?.genderPreference || [];
+          partnerProfile?.genderPreference ||
+          [];
 
         if (
           currentUserProfile?.gender &&
@@ -121,7 +123,12 @@ export default function DatingScreen({
             const user1 = pair.user1Profile || pair.user1 || {};
             const user2 = pair.user2Profile || pair.user2 || {};
             if (!user1.gender || !user2.gender) return false;
-            return checkDuoPreferenceMatch(currentUserProfile, partnerProfile, user1, user2);
+            return checkDuoPreferenceMatch(
+              currentUserProfile,
+              partnerProfile,
+              user1,
+              user2,
+            );
           });
         }
       }
@@ -132,8 +139,12 @@ export default function DatingScreen({
           const u1 = pair.user1Profile;
           const u2 = pair.user2Profile;
           return (
-            (u1?.latitude && u1?.longitude && isWithinDistance(userLocation, u1, maxDistance)) ||
-            (u2?.latitude && u2?.longitude && isWithinDistance(userLocation, u2, maxDistance))
+            (u1?.latitude &&
+              u1?.longitude &&
+              isWithinDistance(userLocation, u1, maxDistance)) ||
+            (u2?.latitude &&
+              u2?.longitude &&
+              isWithinDistance(userLocation, u2, maxDistance))
           );
         });
       }
@@ -157,7 +168,7 @@ export default function DatingScreen({
       setLoading(false);
     }
   };
-  
+
   const loadMorePairs = async () => {
     if (loadingMore || !hasMorePairs) return;
     setLoadingMore(true);
@@ -188,13 +199,8 @@ export default function DatingScreen({
     setSelectedProfile(profile);
     setCurrentImageIndex(0);
 
-    // Return early if already cached this session
-    if (profileCacheRef.current[profileId]) {
-      setSelectedProfile(profileCacheRef.current[profileId]);
-      return;
-    }
-
     try {
+      // Always fetch the latest profile to ensure updated photos are shown
       const fullProfile = await getUserProfile(profileId);
       if (fullProfile) {
         const merged = {
@@ -259,23 +265,23 @@ export default function DatingScreen({
 
   const afterSwipeComplete = async (action, currentDuoPair) => {
     try {
-      if (action === "like") {
-        await deleteDuoLikeBetween(currentDuo.duoId, currentDuoPair.id);
-        await saveDuoLike(
-          currentDuo.duoId,
-          currentDuoPair.id,
-          currentUserId,
-          currentDuo.partnerId,
-          currentDuoPair.users?.[0],
-          currentDuoPair.users?.[1],
-        );
-      } else {
-        await saveDuoSwipe(currentDuo.duoId, currentDuoPair.id, "pass");
+      const currentDuoId = currentDuo?.duoId;
+      if (!currentDuoId) {
+        console.error("No duo ID found");
+        return;
       }
 
-      setLoadedPairs((prevPairs) =>
-        prevPairs.filter((pair) => pair.id !== currentDuoPair.id),
-      );
+      if (action === "like") {
+        const duo1 = currentDuoId;
+        const duo2 = currentDuoPair.duoId;
+        await saveDuoLike(duo1, duo2);
+      } else if (action === "pass") {
+        const duo1 = currentDuoId;
+        const duo2 = currentDuoPair.duoId;
+        await saveDuoSwipe(duo1, duo2, "pass");
+      }
+
+      setCurrentPairIndex((prev) => prev + 1);
       panX.value = 0;
       panY.value = 0;
       rotateVal.value = 0;
