@@ -52,13 +52,19 @@ export default {
       ],
     },
     plugins: [
-      "@react-native-firebase/app", 
+      "@react-native-firebase/app",
       "./expo-firebase-plugin.cjs",
       [
         "@stripe/stripe-react-native",
         {
           merchantIdentifier: "", // Replace with actual merchant ID
           enableGooglePay: false, // or true if you want Google Pay
+        },
+      ],
+      [
+        "expo-maps",
+        {
+          googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
         },
       ],
       "expo-router",
@@ -70,8 +76,8 @@ export default {
             useFrameworks: "static",
             useSPM: true,
           },
-           android: {
-            compileSdkVersion: 36,            
+          android: {
+            compileSdkVersion: 36,
             targetSdkVersion: 35,
           },
         },
