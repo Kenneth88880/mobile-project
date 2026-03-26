@@ -110,19 +110,20 @@ export default function ProfileScreen({
   const loadAllData = async () => {
     try {
       // Fire all top-level independent reads in parallel
-      const [userProfile, ratingData, requestsSnapshot, duosSnapshot] = await Promise.all([
-        getUserProfile(CURRENT_USER_ID),
-        getAverageRating(CURRENT_USER_ID),
-        firestore()
-          .collection("duoRequests")
-          .where("toUserId", "==", CURRENT_USER_ID)
-          .where("status", "==", "pending")
-          .get(),
-        firestore()
-          .collection("duos")
-          .where("users", "array-contains", CURRENT_USER_ID)
-          .get(),
-      ]);
+      const [userProfile, ratingData, requestsSnapshot, duosSnapshot] =
+        await Promise.all([
+          getUserProfile(CURRENT_USER_ID),
+          getAverageRating(CURRENT_USER_ID),
+          firestore()
+            .collection("duoRequests")
+            .where("toUserId", "==", CURRENT_USER_ID)
+            .where("status", "==", "pending")
+            .get(),
+          firestore()
+            .collection("duos")
+            .where("users", "array-contains", CURRENT_USER_ID)
+            .get(),
+        ]);
 
       // Set rating immediately — no extra round-trip needed
       setRating(ratingData);
@@ -130,9 +131,17 @@ export default function ProfileScreen({
       // Handle profile
       if (!userProfile) {
         const emptyProfile = {
-          name: "", age: "", description: "", photos: [], tags: [],
-          city: "", latitude: null, longitude: null,
-          showOnlineStatus: true, gender: null, genderPreference: [],
+          name: "",
+          age: "",
+          description: "",
+          photos: [],
+          tags: [],
+          city: "",
+          latitude: null,
+          longitude: null,
+          showOnlineStatus: true,
+          gender: null,
+          genderPreference: [],
         };
         await saveUserProfile(CURRENT_USER_ID, emptyProfile);
         setProfile(emptyProfile);
@@ -154,7 +163,8 @@ export default function ProfileScreen({
         showOnlineStatus: userProfile.showOnlineStatus !== false,
         gender: userProfile.gender || null,
         genderPreference: Array.isArray(userProfile.genderPreference)
-          ? userProfile.genderPreference : [],
+          ? userProfile.genderPreference
+          : [],
       };
       setProfile(cleanedProfile);
       setOriginalAge(userProfile.age || "");
@@ -170,7 +180,9 @@ export default function ProfileScreen({
           if (partnerProfile) {
             setDuoPartnerProfile({
               ...partnerProfile,
-              tags: Array.isArray(partnerProfile.tags) ? partnerProfile.tags : [],
+              tags: Array.isArray(partnerProfile.tags)
+                ? partnerProfile.tags
+                : [],
             });
             setProfile((prev) => ({ ...prev, duoPartnerId: partnerId }));
           }
@@ -184,17 +196,21 @@ export default function ProfileScreen({
         const requestResults = await Promise.all(
           requestsSnapshot.docs.map(async (docSnap) => {
             const requestData = docSnap.data();
-            const requesterProfile = await getUserProfile(requestData.fromUserId);
+            const requesterProfile = await getUserProfile(
+              requestData.fromUserId,
+            );
             if (!requesterProfile) return null;
             return {
               id: docSnap.id,
               ...requestData,
               requesterProfile: {
                 ...requesterProfile,
-                tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
+                tags: Array.isArray(requesterProfile.tags)
+                  ? requesterProfile.tags
+                  : [],
               },
             };
-          })
+          }),
         );
         setPendingRequests(requestResults.filter(Boolean));
       }
@@ -203,49 +219,60 @@ export default function ProfileScreen({
     } catch (error) {
       console.error("Error loading profile data:", error);
       setProfile({
-        name: "", age: "", description: "", photos: [], tags: [],
-        duoPartnerId: null, city: "", latitude: null, longitude: null,
-        showOnlineStatus: true, gender: null, genderPreference: [],
+        name: "",
+        age: "",
+        description: "",
+        photos: [],
+        tags: [],
+        duoPartnerId: null,
+        city: "",
+        latitude: null,
+        longitude: null,
+        showOnlineStatus: true,
+        gender: null,
+        genderPreference: [],
       });
       setProfileLoaded(true);
     }
   };
 
-// Keep loadPendingRequests as a standalone for post-accept/decline refreshes,
-// but now it also uses Promise.all internally
-const loadPendingRequests = async () => {
-  try {
-    const snapshot = await firestore()
-      .collection("duoRequests")
-      .where("toUserId", "==", CURRENT_USER_ID)
-      .where("status", "==", "pending")
-      .get();
+  // Keep loadPendingRequests as a standalone for post-accept/decline refreshes,
+  // but now it also uses Promise.all internally
+  const loadPendingRequests = async () => {
+    try {
+      const snapshot = await firestore()
+        .collection("duoRequests")
+        .where("toUserId", "==", CURRENT_USER_ID)
+        .where("status", "==", "pending")
+        .get();
 
-    if (snapshot.empty) {
-      setPendingRequests([]);
-      return;
+      if (snapshot.empty) {
+        setPendingRequests([]);
+        return;
+      }
+
+      const results = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const requestData = docSnap.data();
+          const requesterProfile = await getUserProfile(requestData.fromUserId);
+          if (!requesterProfile) return null;
+          return {
+            id: docSnap.id,
+            ...requestData,
+            requesterProfile: {
+              ...requesterProfile,
+              tags: Array.isArray(requesterProfile.tags)
+                ? requesterProfile.tags
+                : [],
+            },
+          };
+        }),
+      );
+      setPendingRequests(results.filter(Boolean));
+    } catch (error) {
+      console.error("Error loading pending requests:", error);
     }
-
-    const results = await Promise.all(
-      snapshot.docs.map(async (docSnap) => {
-        const requestData = docSnap.data();
-        const requesterProfile = await getUserProfile(requestData.fromUserId);
-        if (!requesterProfile) return null;
-        return {
-          id: docSnap.id,
-          ...requestData,
-          requesterProfile: {
-            ...requesterProfile,
-            tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
-          },
-        };
-      })
-    );
-    setPendingRequests(results.filter(Boolean));
-  } catch (error) {
-    console.error("Error loading pending requests:", error);
-  }
-};
+  };
 
   // Save and action functions
   const handleSave = async () => {
@@ -383,6 +410,40 @@ const loadPendingRequests = async () => {
 
   const handleAcceptRequest = async (requestId, fromUserId) => {
     try {
+      // Check if YOU already have a duo partner
+      const myDuoSnapshot = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", CURRENT_USER_ID)
+        .where("status", "==", "active")
+        .limit(1)
+        .get();
+
+      if (!myDuoSnapshot.empty) {
+        Alert.alert(
+          "Already Partnered",
+          "You already have a duo partner. Remove your current partner first.",
+        );
+        return;
+      }
+
+      // Check if the REQUESTER already has a duo partner
+      const theirDuoSnapshot = await firestore()
+        .collection("duos")
+        .where("users", "array-contains", fromUserId)
+        .where("status", "==", "active")
+        .limit(1)
+        .get();
+
+      if (!theirDuoSnapshot.empty) {
+        // Auto-decline since they're no longer available
+        await firestore().collection("duoRequests").doc(requestId).update({
+          status: "declined",
+        });
+        Alert.alert("Unavailable", "This user already has a duo partner.");
+        await loadPendingRequests();
+        return;
+      }
+
       const batch = firestore().batch();
 
       const duoRef = firestore().collection("duos").doc();
@@ -402,7 +463,7 @@ const loadPendingRequests = async () => {
       invalidateProfileCache(CURRENT_USER_ID);
       Alert.alert("Success", "Partner request accepted!");
       setShowPendingRequests(false);
-      await loadProfile();
+      await loadAllData();
       await loadPendingRequests();
     } catch (error) {
       console.error("Error accepting request:", error);
@@ -1847,7 +1908,7 @@ const loadPendingRequests = async () => {
       onClose={() => {
         console.log("Closing EditProfileModal");
         setIsEditing(false);
-        loadProfile(); // Reload profile after editing
+        loadAllData(); // Reload profile after editing
       }}
     />
   );
