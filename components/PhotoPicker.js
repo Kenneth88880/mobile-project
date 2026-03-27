@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import {
   View,
-  ScrollView,
   Image,
   TouchableOpacity,
   Alert,
@@ -17,6 +16,7 @@ import {
   uploadProfilePhoto,
   deleteProfilePhoto,
 } from "../services/photoService";
+import IntroPhotoCropModal from "./IntroPhotoCropModal";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const PHOTO_MARGIN = 4;
@@ -32,47 +32,41 @@ export default function PhotoPicker({
   photos = [],
   onPhotosChange,
   maxPhotos = 6,
+  photoCropY = 0,
+  onPhotoCropYChange,
 }) {
   const theme = useTheme();
   const [uploading, setUploading] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState(null);
+  const [showCropPositionModal, setShowCropPositionModal] = useState(false);
 
   const validateImageFormat = (uri) => {
     const extension = uri.split(".").pop().toLowerCase();
     return ALLOWED_FORMATS.includes(extension);
   };
 
-  /**
-   * ✅ FIXED: Compress and resize image to max 1080p
-   * Now using let variables instead of trying to modify read-only properties
-   */
   const processImage = async (imageUri) => {
     try {
-      // Get image dimensions using React Native Image API
       const dimensions = await new Promise((resolve, reject) => {
         Image.getSize(
           imageUri,
           (width, height) => resolve({ width, height }),
-          (error) => reject(error)
+          (error) => reject(error),
         );
       });
 
-      // ✅ Use mutable variables instead of modifying the read-only object
       let width = dimensions.width;
       let height = dimensions.height;
 
       console.log(`Original dimensions: ${width}x${height}`);
 
-      // Calculate aspect ratio
       const aspectRatio = width / height;
-
-      const MIN_ASPECT = 0.75; // 3:4 portrait
-      const MAX_ASPECT = 1.33; // 4:3 landscape
+      const MIN_ASPECT = 0.75;
+      const MAX_ASPECT = 1.33;
 
       let cropActions = [];
 
       if (aspectRatio < MIN_ASPECT) {
-        // Too tall - crop height
         const newHeight = width / MIN_ASPECT;
         const cropY = (height - newHeight) / 2;
         cropActions.push({
@@ -83,10 +77,8 @@ export default function PhotoPicker({
             height: newHeight,
           },
         });
-        height = newHeight; // ✅ Now this works because height is a mutable variable
-        console.log(`Image too tall, cropping to ${width}x${newHeight}`);
+        height = newHeight;
       } else if (aspectRatio > MAX_ASPECT) {
-        // Too wide - crop width
         const newWidth = height * MAX_ASPECT;
         const cropX = (width - newWidth) / 2;
         cropActions.push({
@@ -97,11 +89,9 @@ export default function PhotoPicker({
             height: height,
           },
         });
-        width = newWidth; // ✅ Now this works because width is a mutable variable
-        console.log(`Image too wide, cropping to ${newWidth}x${height}`);
+        width = newWidth;
       }
 
-      // Calculate resize dimensions to max 1080p
       let resizeWidth = width;
       let resizeHeight = height;
 
@@ -112,11 +102,8 @@ export default function PhotoPicker({
 
         resizeWidth = Math.round(width * ratio);
         resizeHeight = Math.round(height * ratio);
-
-        console.log(`Resizing to ${resizeWidth}x${resizeHeight}`);
       }
 
-      // Apply manipulations
       const actions = [
         ...cropActions,
         {
@@ -132,8 +119,6 @@ export default function PhotoPicker({
         format: SaveFormat.JPEG,
       });
 
-      console.log(`Processed dimensions: ${resizeWidth}x${resizeHeight}`);
-
       return manipulatedImage.uri;
     } catch (error) {
       console.error("Error processing image:", error);
@@ -147,7 +132,7 @@ export default function PhotoPicker({
         Alert.alert(
           "Maximum Photos Reached",
           `You can only upload up to ${maxPhotos} photos.`,
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -158,7 +143,7 @@ export default function PhotoPicker({
         Alert.alert(
           "Permission Required",
           "Please allow access to your photo library to upload photos.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -180,9 +165,9 @@ export default function PhotoPicker({
         Alert.alert(
           "Invalid Format",
           `Please select a valid image format (${ALLOWED_FORMATS.join(
-            ", "
+            ", ",
           ).toUpperCase()}).`,
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -195,12 +180,18 @@ export default function PhotoPicker({
 
       const updatedPhotos = [...photos, downloadUrl];
       onPhotosChange(updatedPhotos);
+
+      // If this is the first photo, prompt crop position
+      if (photos.length === 0 && onPhotoCropYChange) {
+        // Small delay so state updates before modal opens
+        setTimeout(() => setShowCropPositionModal(true), 500);
+      }
     } catch (error) {
       console.error("Error picking image:", error);
       Alert.alert(
         "Upload Failed",
         "There was an error uploading your photo. Please try again.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     } finally {
       setUploading(false);
@@ -216,7 +207,7 @@ export default function PhotoPicker({
         Alert.alert(
           "Permission Required",
           "Please allow access to your photo library to upload photos.",
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -238,9 +229,9 @@ export default function PhotoPicker({
         Alert.alert(
           "Invalid Format",
           `Please select a valid image format (${ALLOWED_FORMATS.join(
-            ", "
+            ", ",
           ).toUpperCase()}).`,
-          [{ text: "OK" }]
+          [{ text: "OK" }],
         );
         return;
       }
@@ -251,20 +242,23 @@ export default function PhotoPicker({
       const processedUri = await processImage(imageUri);
       const downloadUrl = await uploadProfilePhoto(processedUri);
 
-      // Delete the old photo
       const oldPhotoUrl = photos[index];
       await deleteProfilePhoto(oldPhotoUrl);
 
-      // Update photos array with new photo at the same index
       const updatedPhotos = [...photos];
       updatedPhotos[index] = downloadUrl;
       onPhotosChange(updatedPhotos);
+
+      // If replacing the first photo, prompt to re-adjust crop position
+      if (index === 0 && onPhotoCropYChange) {
+        setTimeout(() => setShowCropPositionModal(true), 500);
+      }
     } catch (error) {
       console.error("Error replacing photo:", error);
       Alert.alert(
         "Upload Failed",
         "There was an error replacing your photo. Please try again.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     } finally {
       setUploading(false);
@@ -273,12 +267,11 @@ export default function PhotoPicker({
   };
 
   const removePhoto = async (index) => {
-    // Prevent removing the first photo
     if (index === 0) {
       Alert.alert(
         "Cannot Remove",
         "You must have at least one photo. Use the replace button to change your main photo.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
       return;
     }
@@ -324,16 +317,26 @@ export default function PhotoPicker({
                     resizeMode="cover"
                   />
                   {index === 0 ? (
-                    // First photo: Show replace button
-                    <IconButton
-                      icon="camera-retake"
-                      size={24}
-                      iconColor="#fff"
-                      style={styles.replaceButton}
-                      onPress={() => replacePhoto(index)}
-                    />
+                    // First photo: replace button (top-right) + adjust button (bottom-right)
+                    <>
+                      <IconButton
+                        icon="camera-retake"
+                        size={24}
+                        iconColor="#fff"
+                        style={styles.replaceButton}
+                        onPress={() => replacePhoto(index)}
+                      />
+                      {onPhotoCropYChange && (
+                        <IconButton
+                          icon="crop"
+                          size={20}
+                          iconColor="#fff"
+                          style={styles.adjustButton}
+                          onPress={() => setShowCropPositionModal(true)}
+                        />
+                      )}
+                    </>
                   ) : (
-                    // Other photos: Show remove button
                     <IconButton
                       icon="close-circle"
                       size={24}
@@ -407,8 +410,23 @@ export default function PhotoPicker({
         • Upload up to {maxPhotos} photos{"\n"}• Supported formats: JPG, PNG,
         WebP{"\n"}• Images will be resized to max 1080p{"\n"}• Extreme aspect
         ratios will be cropped{"\n"}• First photo can be replaced but not
-        removed
+        removed{"\n"}• Tap the crop icon on your first photo to adjust its
+        position on the dating card
       </Text>
+
+      {/* Intro Photo Crop Position Modal */}
+      <IntroPhotoCropModal
+        visible={showCropPositionModal}
+        photoUri={photos.length > 0 ? photos[0] : null}
+        initialCropY={photoCropY}
+        onConfirm={(cropY) => {
+          setShowCropPositionModal(false);
+          if (onPhotoCropYChange) {
+            onPhotoCropYChange(cropY);
+          }
+        }}
+        onCancel={() => setShowCropPositionModal(false)}
+      />
     </View>
   );
 }
@@ -449,7 +467,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -8,
     right: -8,
-    backgroundColor: "rgba(139, 74, 97, 0.9)", // Use your app's primary color
+    backgroundColor: "rgba(139, 74, 97, 0.9)",
+    margin: 0,
+  },
+  adjustButton: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    backgroundColor: "rgba(139, 74, 97, 0.9)",
     margin: 0,
   },
   emptySlot: {
