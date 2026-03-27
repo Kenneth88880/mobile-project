@@ -12,7 +12,6 @@ import {
 import { ActivityIndicator, Avatar, Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import firestore from "@react-native-firebase/firestore";
-import { getPlacesPhotoUrl } from "./PlaceItem";
 import { getPhotoUrl } from "../../services/placesService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");

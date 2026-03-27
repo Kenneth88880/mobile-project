@@ -14,7 +14,7 @@ import PlaceItem from "./ExplorePage/PlaceItem";
 import PlaceInfo from "./ExplorePage/PlaceInfo";
 import Categories, { CATEGORIES } from "./ExplorePage/Categories";
 import MyDates from "./ExplorePage/MyDates";
-import { searchNearbyPlaces } from "../services/placesService";
+import { searchNearbyPlaces, getPlaceDetails } from "../services/placesService";
 import firestore from "@react-native-firebase/firestore";
 
 const PAGE_SIZE = 10;
@@ -235,7 +235,19 @@ export default function ExploreScreenNew({ currentUserId }) {
   const hasMore = visibleCount < filteredPlaces.length;
 
   const renderPlaceItem = ({ item }) => (
-    <PlaceItem place={item} onPress={() => setSelectedPlace(item)} />
+    <PlaceItem
+      place={item}
+      onPress={async () => {
+        setSelectedPlace(item); // show modal immediately with basic info
+        try {
+          const detailed = await getPlaceDetails(item.id);
+          setSelectedPlace(detailed); // update with full details once loaded
+        } catch (err) {
+          console.error("Failed to load place details:", err);
+          // modal stays open with basic info if details fail
+        }
+      }}
+    />
   );
 
   const renderListHeader = () => (
