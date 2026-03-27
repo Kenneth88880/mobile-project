@@ -38,6 +38,7 @@ export default function EditProfileModal({ visible, onClose }) {
   const [photos, setPhotos] = useState([]);
   const [selectedTags, setSelectedTags] = useState([]);
   const [gender, setGender] = useState("male");
+  const [photoCropY, setPhotoCropY] = useState(0);
 
   useEffect(() => {
     if (visible && currentUser) {
@@ -66,6 +67,7 @@ export default function EditProfileModal({ visible, onClose }) {
         setPhotos(profileData.photos || []);
         setSelectedTags(profileData.tags || []);
         setGender(profileData.gender || "male");
+        setPhotoCropY(profileData.photoCropY || 0);
       } else {
         console.log("Profile document doesn't exist");
       }
@@ -133,6 +135,7 @@ export default function EditProfileModal({ visible, onClose }) {
         photos: photos,
         tags: selectedTags,
         gender: gender,
+        photoCropY: photoCropY,
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
@@ -244,6 +247,8 @@ export default function EditProfileModal({ visible, onClose }) {
               photos={photos}
               onPhotosChange={setPhotos}
               maxPhotos={6}
+              photoCropY={photoCropY}
+              onPhotoCropYChange={setPhotoCropY}
             />
           </View>
 
