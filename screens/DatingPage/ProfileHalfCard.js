@@ -1,8 +1,13 @@
+// screens/DatingPage/ProfileHalfCard.js
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Image, StyleSheet, Platform } from "react-native";
 import { Text, Card, IconButton } from "react-native-paper";
 import { getDistanceToProfile } from "../../utils/locationUtils";
 import { formatLastActive } from "../../utils/locationTracker";
+
+const CARD_HEIGHT = 250;
+const IMAGE_RENDER_HEIGHT = CARD_HEIGHT * 2;
+const MAX_OFFSET = IMAGE_RENDER_HEIGHT - CARD_HEIGHT;
 
 export default function ProfileHalfCard({
   profile,
@@ -12,11 +17,27 @@ export default function ProfileHalfCard({
   currentUserLocation,
   onPress,
 }) {
+  const hasCropOffset = profile?.photoCropY != null && profile.photoCropY > 0;
+
   return (
     <Card style={styles.halfCard} onPress={onPress}>
-      <Card.Cover source={{ uri: photo }} />
+      {hasCropOffset ? (
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: photo }}
+            style={[
+              styles.croppedImage,
+              { marginTop: -(profile.photoCropY * MAX_OFFSET) },
+            ]}
+            resizeMode="cover"
+          />
+        </View>
+      ) : (
+        <Card.Cover source={{ uri: photo }} style={styles.defaultCover} />
+      )}
+
       <Card.Content style={styles.cardOverlay}>
-        <Text variant="titleLarge" style={styles.overlayText}>
+        <Text style={[styles.overlayText, styles.nameText]}>
           {name}, {age}
         </Text>
         {profile?.showOnlineStatus !== false && profile?.lastActive && (
@@ -55,7 +76,22 @@ export default function ProfileHalfCard({
 const styles = StyleSheet.create({
   halfCard: {
     marginVertical: 8,
-    height: 250,
+    height: CARD_HEIGHT,
+    overflow: "hidden",
+  },
+  imageContainer: {
+    width: "100%",
+    height: CARD_HEIGHT,
+    overflow: "hidden",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  croppedImage: {
+    width: "100%",
+    height: IMAGE_RENDER_HEIGHT,
+  },
+  defaultCover: {
+    height: CARD_HEIGHT,
   },
   cardOverlay: {
     position: "absolute",
@@ -76,5 +112,13 @@ const styles = StyleSheet.create({
   cityIcon: {
     margin: 0,
     padding: 0,
+  },
+
+  nameText: {
+    fontSize: 22,
+    width: 150,
+    weight: 425,
+    // save fonts for later fontFamily: "FredokaBubble",
+    letterSpacing: 1,
   },
 });
