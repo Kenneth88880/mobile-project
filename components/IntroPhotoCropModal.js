@@ -1,5 +1,6 @@
 // components/IntroPhotoCropModal.js
 import React, { useState, useRef, useEffect } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Image,
@@ -8,13 +9,12 @@ import {
   Dimensions,
   PanResponder,
   Animated,
-  SafeAreaView,
 } from "react-native";
 import { Text, Button, IconButton, useTheme } from "react-native-paper";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
-const FRAME_HEIGHT = 250; // Matches ProfileHalfCard height
+const FRAME_HEIGHT = 250;
 const HEADER_HEIGHT = 60;
 const FOOTER_HEIGHT = 150;
 const AVAILABLE_HEIGHT = SCREEN_HEIGHT - HEADER_HEIGHT - FOOTER_HEIGHT;
@@ -28,6 +28,7 @@ export default function IntroPhotoCropModal({
   onCancel,
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [imageNaturalSize, setImageNaturalSize] = useState(null);
   const panY = useRef(new Animated.Value(0)).current;
   const lastPanY = useRef(0);
@@ -100,8 +101,15 @@ export default function IntroPhotoCropModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.background,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          },
+        ]}
       >
         {/* Header */}
         <View
@@ -178,7 +186,7 @@ export default function IntroPhotoCropModal({
             </Button>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -193,7 +201,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    height: HEADER_HEIGHT,
+    minHeight: HEADER_HEIGHT,
     borderBottomWidth: 1,
   },
   cropArea: {
@@ -228,7 +236,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    height: FOOTER_HEIGHT,
+    minHeight: FOOTER_HEIGHT,
     justifyContent: "center",
   },
   buttonRow: {
