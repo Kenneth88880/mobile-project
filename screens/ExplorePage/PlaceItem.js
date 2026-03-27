@@ -34,16 +34,13 @@ const PlaceItem = ({ place, onPress }) => {
         >
           {place.category}
         </Text>
-        {place.rating != null && (
-          <Text
-            style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}
-            numberOfLines={1}
-          >
+        {place.rating != null ? (
+          <Text style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>
             ★ {place.rating}
             {place.user_ratings_total ? ` (${place.user_ratings_total})` : ""}
             {place.price_range ? `  ·  ${place.price_range}` : ""}
           </Text>
-        )}
+        ) : null}
         {!place.rating && place.price_range ? (
           <Text
             style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}
