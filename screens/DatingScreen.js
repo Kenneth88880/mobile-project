@@ -274,11 +274,16 @@ export default function DatingScreen({
       if (action === "like") {
         const duo1 = currentDuoId;
         const duo2 = currentDuoPair.id;
-        await saveDuoLike(duo1, duo2);
+        const fromUser1 =
+          currentDuo?.partnerProfile?.userId || currentDuo?.partnerId;
+        const fromUser2 = currentUserId;
+        const toUser1 = currentDuoPair.users[0];
+        const toUser2 = currentDuoPair.users[1];
+        await saveDuoLike(duo1, duo2, fromUser1, fromUser2, toUser1, toUser2);
       } else if (action === "pass") {
         const duo1 = currentDuoId;
         const duo2 = currentDuoPair.id;
-        await saveDuoSwipe(duo1, duo2, "pass");
+        await saveDuoSwipe(duo1, duo2);
       }
 
       setCurrentPairIndex((prev) => prev + 1);

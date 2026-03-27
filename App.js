@@ -25,6 +25,7 @@ import Animated, {
   useAnimatedStyle,
 } from "react-native-reanimated";
 
+// save fonts for later import { useFonts } from "expo-font";
 import { CURRENT_USER_ID, setCurrentUserId } from "./services/UserConfig";
 import DatingScreen from "./screens/DatingScreen";
 import ExploreScreenNew from "./screens/ExploreScreenNew";
@@ -67,9 +68,12 @@ export default function App() {
   const [publishableKey, setPublishableKey] = useState("");
   const cardSwipingRef = useRef(false);
   const chatGestures = useRef(false);
+  // const [fontsLoaded] = useFonts({
+  //   FredokaBubble: require("./assets/fonts/Fredoka_SemiExpanded-Light.ttf"),
+  // });
 
-  
-  const API_URL = "https://us-central1-doubly-messenging.cloudfunctions.net/api";
+  const API_URL =
+    "https://us-central1-doubly-messenging.cloudfunctions.net/api";
 
   const translateX = useSharedValue(0);
   const isAnimating = useSharedValue(false);
@@ -262,22 +266,37 @@ export default function App() {
     }
   };
 
-  const swipeGesture = useMemo(() =>
-    Gesture.Pan()
-      .activeOffsetX([-40, 40])
-      .failOffsetY([-15, 15])
-      .onUpdate((event) => {
-        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current || chatGestures.current) return;
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-40, 40])
+        .failOffsetY([-15, 15])
+        .onUpdate((event) => {
+          if (
+            isAnimating.value ||
+            categoryScrollingRef.current ||
+            cardSwipingRef.current ||
+            chatGestures.current
+          )
+            return;
 
-        const currentIndex = routes.findIndex((r) => r.key === activeTab);
-        const isAtStart = currentIndex === 0 && event.translationX > 0;
-        const isAtEnd = currentIndex === routes.length - 1 && event.translationX < 0;
-        translateX.value = isAtStart || isAtEnd
-          ? event.translationX * 0.2
-          : event.translationX;
-      })
-      .onEnd((event) => {
-        if (isAnimating.value || categoryScrollingRef.current || cardSwipingRef.current || chatGestures.current) return;
+          const currentIndex = routes.findIndex((r) => r.key === activeTab);
+          const isAtStart = currentIndex === 0 && event.translationX > 0;
+          const isAtEnd =
+            currentIndex === routes.length - 1 && event.translationX < 0;
+          translateX.value =
+            isAtStart || isAtEnd
+              ? event.translationX * 0.2
+              : event.translationX;
+        })
+        .onEnd((event) => {
+          if (
+            isAnimating.value ||
+            categoryScrollingRef.current ||
+            cardSwipingRef.current ||
+            chatGestures.current
+          )
+            return;
 
           const { translationX, velocityX } = event;
           const currentIndex = routes.findIndex((r) => r.key === activeTab);
@@ -322,14 +341,26 @@ export default function App() {
   );
 
   const sceneMap = {
-    dating:   () => <DatingScreen devMode={devMode}
-                                  onCardSwipeStart={() => { cardSwipingRef.current = true; }}
-                                  onCardSwipeEnd={() => { cardSwipingRef.current = false; }} />,
-    likes:    () => <RequestsScreen />,
-    explore:  () => (
+    dating: () => (
+      <DatingScreen
+        devMode={devMode}
+        onCardSwipeStart={() => {
+          cardSwipingRef.current = true;
+        }}
+        onCardSwipeEnd={() => {
+          cardSwipingRef.current = false;
+        }}
+      />
+    ),
+    likes: () => <RequestsScreen />,
+    explore: () => (
       <ExploreScreenNew
-        onCategoryScrollStart={() => { categoryScrollingRef.current = true; }}
-        onCategoryScrollEnd={() => { categoryScrollingRef.current = false; }}
+        onCategoryScrollStart={() => {
+          categoryScrollingRef.current = true;
+        }}
+        onCategoryScrollEnd={() => {
+          categoryScrollingRef.current = false;
+        }}
         currentUserId={CURRENT_USER_ID}
       />
     ),
