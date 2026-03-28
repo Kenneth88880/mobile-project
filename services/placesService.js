@@ -25,6 +25,7 @@ const BASE = "https://places.googleapis.com/v1";
 // Results are cached for 2 hours before being considered stale
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 const CACHE_PREFIX = "places_cache:";
+const BASE_PLACES_KEY = "base_places";
 
 // In-memory cache for the current session (faster than AsyncStorage)
 const memoryCache = new Map();
@@ -58,7 +59,6 @@ async function getCached(key) {
       await AsyncStorage.removeItem(CACHE_PREFIX + key);
     }
   } catch (e) {
-    // Cache read failure is non-fatal
     console.warn("[PlacesCache] Read error:", e);
   }
 
@@ -71,8 +71,32 @@ async function setCached(key, data) {
   try {
     await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
   } catch (e) {
-    // Cache write failure is non-fatal
     console.warn("[PlacesCache] Write error:", e);
+  }
+}
+
+// ─── Base Places Cache ────────────────────────────────────────────────────
+// Persists the initial all-category interleaved pool across component
+// remounts and app reopens (within 2 hour TTL). This prevents the 8
+// parallel Nearby Search calls from firing every time the explore screen
+// mounts, such as when navigating away and back.
+
+export async function getBasePlacesCache() {
+  return getCached(BASE_PLACES_KEY);
+}
+
+export async function setBasePlacesCache(places) {
+  await setCached(BASE_PLACES_KEY, places);
+  if (__DEV__) console.log(`[PlacesCache] Base places cached: ${places.length} results`);
+}
+
+export async function clearBasePlacesCache() {
+  memoryCache.delete(BASE_PLACES_KEY);
+  try {
+    await AsyncStorage.removeItem(CACHE_PREFIX + BASE_PLACES_KEY);
+    if (__DEV__) console.log(`[PlacesCache] Base places cache cleared`);
+  } catch (e) {
+    console.warn("[PlacesCache] Clear base places error:", e);
   }
 }
 
@@ -98,11 +122,11 @@ export function debounceSearch(fn, key, delay = 500) {
 }
 
 // ─── Nearby Search (New) ──────────────────────────────────────────────────
-// Field mask is intentionally slim — only Basic + Pro tier fields.
-// Atmosphere fields (rating, priceLevel, editorialSummary, currentOpeningHours)
+// Field mask is intentionally slim — only Pro tier fields.
+// Atmosphere fields (rating, priceLevel, editorialSummary)
 // are deferred to getPlaceDetails(), which only fires when a user taps a place.
 // This keeps Nearby Search off the Enterprise + Atmosphere billing tier (~$0.035)
-// and on the Basic/Pro tier (~$0.017), roughly halving the cost per search.
+// and on the Pro tier (~$0.017), roughly halving the cost per search.
 export async function searchNearbyPlaces({
   latitude,
   longitude,
@@ -110,7 +134,7 @@ export async function searchNearbyPlaces({
   includedTypes,
   excludedTypes,
   includedPrimaryTypes,
-  maxResultCount = 10, // reduced from 20 — users rarely scroll all 20 results
+  maxResultCount = 10,
   rankPreference,
 } = {}) {
   const cacheKey = JSON.stringify({
@@ -149,7 +173,7 @@ export async function searchNearbyPlaces({
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": API_KEY,
-      // Basic + Pro fields only — no atmosphere fields here
+      // Pro fields only — no atmosphere fields here
       "X-Goog-FieldMask": [
         "places.id",
         "places.displayName",
@@ -159,7 +183,7 @@ export async function searchNearbyPlaces({
         "places.primaryType",
         "places.primaryTypeDisplayName",
         "places.types",
-        "places.photos",          // Pro tier, but cheap and needed for list cards
+        "places.photos",
       ].join(","),
     },
     body: JSON.stringify(body),
@@ -217,7 +241,6 @@ export async function getPlaceDetails(placeId) {
         "priceLevel",
         "websiteUri",
         "nationalPhoneNumber",
-        "currentOpeningHours",
         "editorialSummary",
       ].join(","),
     },
@@ -296,6 +319,5 @@ function normalisePlaceResult(raw) {
     user_ratings_total: raw.userRatingCount ?? null,
     price_range: formatPriceLevel(raw.priceLevel),
     editorial_summary: raw.editorialSummary?.text || null,
-    opening_hours: raw.currentOpeningHours || null,
   };
 }
