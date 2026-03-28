@@ -22,17 +22,48 @@ if (!API_KEY) {
 const BASE = "https://places.googleapis.com/v1";
 
 // ─── Cache Config ─────────────────────────────────────────────────────────
-// Results are cached for 2 hours before being considered stale
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 const CACHE_PREFIX = "places_cache:";
 const BASE_PLACES_KEY = "base_places";
 
 // In-memory cache for the current session (faster than AsyncStorage)
 const memoryCache = new Map();
 
-// Dev-only request counter to track how many API calls are made per session
+// Dev-only request counter
 let requestCount = 0;
 
+// ─── Session Guard ────────────────────────────────────────────────────────
+// Caps API calls per app session to protect against bots and runaway bugs.
+// Cached results do NOT count toward these limits — only real API calls.
+// Limits reset when the user closes and reopens the app.
+const SESSION_LIMITS = {
+  nearbySearch: 30, // max 30 real Nearby Search calls per session
+  placeDetails: 20, // max 20 real Place Details calls per session
+};
+
+const sessionCounts = {
+  nearbySearch: 0,
+  placeDetails: 0,
+};
+
+export const SESSION_LIMIT_ERROR = "SESSION_LIMIT_EXCEEDED";
+
+function checkSessionLimit(type) {
+  if (sessionCounts[type] >= SESSION_LIMITS[type]) {
+    if (__DEV__)
+      console.warn(
+        `[PlacesAPI] Session limit reached for ${type} (${SESSION_LIMITS[type]} calls)`
+      );
+    throw new Error(SESSION_LIMIT_ERROR);
+  }
+  sessionCounts[type]++;
+  if (__DEV__)
+    console.log(
+      `[PlacesAPI] ${type} session count: ${sessionCounts[type]}/${SESSION_LIMITS[type]}`
+    );
+}
+
+// ─── Cache Helpers ────────────────────────────────────────────────────────
 async function getCached(key) {
   // Check memory cache first
   if (memoryCache.has(key)) {
@@ -44,18 +75,16 @@ async function getCached(key) {
     memoryCache.delete(key);
   }
 
-  // Fall back to AsyncStorage for persistence across sessions
+  // Fall back to AsyncStorage
   try {
     const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
     if (raw) {
       const { data, timestamp } = JSON.parse(raw);
       if (Date.now() - timestamp < CACHE_TTL_MS) {
         if (__DEV__) console.log(`[PlacesCache] Storage hit: ${key}`);
-        // Promote back to memory cache
         memoryCache.set(key, { data, timestamp });
         return data;
       }
-      // Expired — clean up
       await AsyncStorage.removeItem(CACHE_PREFIX + key);
     }
   } catch (e) {
@@ -77,9 +106,8 @@ async function setCached(key, data) {
 
 // ─── Base Places Cache ────────────────────────────────────────────────────
 // Persists the initial all-category interleaved pool across component
-// remounts and app reopens (within 2 hour TTL). This prevents the 8
-// parallel Nearby Search calls from firing every time the explore screen
-// mounts, such as when navigating away and back.
+// remounts and app reopens within the 2 hour TTL, preventing the 8
+// parallel Nearby Search calls from firing on every screen remount.
 
 export async function getBasePlacesCache() {
   return getCached(BASE_PLACES_KEY);
@@ -87,7 +115,8 @@ export async function getBasePlacesCache() {
 
 export async function setBasePlacesCache(places) {
   await setCached(BASE_PLACES_KEY, places);
-  if (__DEV__) console.log(`[PlacesCache] Base places cached: ${places.length} results`);
+  if (__DEV__)
+    console.log(`[PlacesCache] Base places cached: ${places.length} results`);
 }
 
 export async function clearBasePlacesCache() {
@@ -122,11 +151,9 @@ export function debounceSearch(fn, key, delay = 500) {
 }
 
 // ─── Nearby Search (New) ──────────────────────────────────────────────────
-// Field mask is intentionally slim — only Pro tier fields.
-// Atmosphere fields (rating, priceLevel, editorialSummary)
-// are deferred to getPlaceDetails(), which only fires when a user taps a place.
-// This keeps Nearby Search off the Enterprise + Atmosphere billing tier (~$0.035)
-// and on the Pro tier (~$0.017), roughly halving the cost per search.
+// Field mask is Pro tier only — no atmosphere fields.
+// Atmosphere fields are deferred to getPlaceDetails() which only fires
+// on explicit user tap, keeping Nearby Search off the Enterprise billing tier.
 export async function searchNearbyPlaces({
   latitude,
   longitude,
@@ -138,7 +165,7 @@ export async function searchNearbyPlaces({
   rankPreference,
 } = {}) {
   const cacheKey = JSON.stringify({
-    latitude: latitude?.toFixed(3), // ~111m precision, avoids cache misses for tiny movements
+    latitude: latitude?.toFixed(3), // ~111m precision
     longitude: longitude?.toFixed(3),
     radius,
     includedTypes,
@@ -148,8 +175,12 @@ export async function searchNearbyPlaces({
     rankPreference,
   });
 
+  // Cache check comes before session limit — cached results are free
   const cached = await getCached(cacheKey);
   if (cached) return cached;
+
+  // Only count real API calls against the session limit
+  checkSessionLimit("nearbySearch");
 
   if (__DEV__) {
     requestCount++;
@@ -165,7 +196,8 @@ export async function searchNearbyPlaces({
 
   if (includedTypes?.length) body.includedTypes = includedTypes;
   if (excludedTypes?.length) body.excludedTypes = excludedTypes;
-  if (includedPrimaryTypes?.length) body.includedPrimaryTypes = includedPrimaryTypes;
+  if (includedPrimaryTypes?.length)
+    body.includedPrimaryTypes = includedPrimaryTypes;
   if (rankPreference) body.rankPreference = rankPreference;
 
   const res = await fetch(`${BASE}/places:searchNearby`, {
@@ -173,7 +205,6 @@ export async function searchNearbyPlaces({
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": API_KEY,
-      // Pro fields only — no atmosphere fields here
       "X-Goog-FieldMask": [
         "places.id",
         "places.displayName",
@@ -182,16 +213,13 @@ export async function searchNearbyPlaces({
         "places.location",
         "places.primaryType",
         "places.primaryTypeDisplayName",
-        "places.types",
         "places.photos",
       ].join(","),
     },
     body: JSON.stringify(body),
   });
 
-  if (__DEV__) {
-    console.log(`[PlacesAPI] Nearby Search status: ${res.status}`);
-  }
+  if (__DEV__) console.log(`[PlacesAPI] Nearby Search status: ${res.status}`);
 
   if (!res.ok) {
     const err = await res.text();
@@ -207,13 +235,18 @@ export async function searchNearbyPlaces({
 }
 
 // ─── Place Details (New) ──────────────────────────────────────────────────
-// Full atmosphere fields are fetched here, only when a user taps a specific place.
-// Place Details calls are much less frequent than Nearby Search calls.
+// Only fires on explicit user tap. Full atmosphere fields are fine here
+// since this is called rarely compared to Nearby Search.
+// Unused fields (types, currentOpeningHours) have been removed.
 export async function getPlaceDetails(placeId) {
   const cacheKey = `details:${placeId}`;
 
+  // Cache check before session limit — tapping the same place twice is free
   const cached = await getCached(cacheKey);
   if (cached) return cached;
+
+  // Only count real API calls against the session limit
+  checkSessionLimit("placeDetails");
 
   if (__DEV__) {
     requestCount++;
@@ -224,8 +257,6 @@ export async function getPlaceDetails(placeId) {
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": API_KEY,
-      // Full field mask here — atmosphere fields are fine on Details
-      // since this only fires on explicit user tap
       "X-Goog-FieldMask": [
         "id",
         "displayName",
@@ -234,7 +265,6 @@ export async function getPlaceDetails(placeId) {
         "location",
         "primaryType",
         "primaryTypeDisplayName",
-        "types",
         "photos",
         "rating",
         "userRatingCount",
@@ -242,13 +272,13 @@ export async function getPlaceDetails(placeId) {
         "websiteUri",
         "nationalPhoneNumber",
         "editorialSummary",
+        // "types" — removed, never displayed in UI
+        // "currentOpeningHours" — removed, never displayed in UI
       ].join(","),
     },
   });
 
-  if (__DEV__) {
-    console.log(`[PlacesAPI] Place Details status: ${res.status}`);
-  }
+  if (__DEV__) console.log(`[PlacesAPI] Place Details status: ${res.status}`);
 
   if (!res.ok) {
     const err = await res.text();
@@ -268,14 +298,14 @@ export function getPhotoUrl(photoName, maxWidth = 600) {
 }
 
 // ─── Cache Management ─────────────────────────────────────────────────────
-// Call this if you ever need to force-refresh results (e.g. pull to refresh)
 export async function clearPlacesCache() {
   memoryCache.clear();
   try {
     const keys = await AsyncStorage.getAllKeys();
     const cacheKeys = keys.filter((k) => k.startsWith(CACHE_PREFIX));
     await AsyncStorage.multiRemove(cacheKeys);
-    if (__DEV__) console.log(`[PlacesCache] Cleared ${cacheKeys.length} entries`);
+    if (__DEV__)
+      console.log(`[PlacesCache] Cleared ${cacheKeys.length} entries`);
   } catch (e) {
     console.warn("[PlacesCache] Clear error:", e);
   }
@@ -306,7 +336,6 @@ function normalisePlaceResult(raw) {
     name: raw.displayName?.text ?? "",
     category:
       raw.primaryTypeDisplayName?.text || formatType(raw.primaryType) || "",
-    types: raw.types || [],
     primaryType: raw.primaryType || "",
     address: raw.formattedAddress || raw.shortFormattedAddress || "",
     latitude: raw.location?.latitude,
