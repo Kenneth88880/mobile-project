@@ -14,7 +14,13 @@ import PlaceItem from "./ExplorePage/PlaceItem";
 import PlaceInfo from "./ExplorePage/PlaceInfo";
 import Categories, { CATEGORIES } from "./ExplorePage/Categories";
 import MyDates from "./ExplorePage/MyDates";
-import { searchNearbyPlaces, getPlaceDetails } from "../services/placesService";
+import {
+  searchNearbyPlaces,
+  getPlaceDetails,
+  getBasePlacesCache,
+  setBasePlacesCache,
+  clearBasePlacesCache,
+} from "../services/placesService";
 import firestore from "@react-native-firebase/firestore";
 
 const PAGE_SIZE = 10;
@@ -49,7 +55,8 @@ export default function ExploreScreenNew({ currentUserId }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [retryKey, setRetryKey] = useState(0);
 
-  // basePlacesRef holds the initial all-category preload.
+  // basePlacesRef holds the initial all-category preload in memory.
+  // The persistent version lives in AsyncStorage via setBasePlacesCache.
   const basePlacesRef = useRef([]);
   // Cache the device location so we only request it once.
   const locationRef = useRef(null);
@@ -100,35 +107,48 @@ export default function ExploreScreenNew({ currentUserId }) {
         let results;
 
         if (selectedCategory) {
-          // Category selected — fetch up to 20 of that type.
+          // Category selected — fetch up to 10 of that type.
           results = await searchNearbyPlaces({
             latitude,
             longitude,
             radius: 1500,
             includedTypes: [selectedCategory],
-            maxResultCount: 20,
+            maxResultCount: 10,
             rankPreference: "POPULARITY",
           });
         } else if (basePlacesRef.current.length > 0) {
-          // No category and we already have the base pool — reuse it.
+          // No category and we already have the base pool in memory — reuse it.
           results = basePlacesRef.current;
         } else {
-          // Initial load (or after a retry) — fetch 5 from each category
-          // in parallel then interleave for variety.
-          const batches = await Promise.all(
-            CATEGORIES.map((cat) =>
-              searchNearbyPlaces({
-                latitude,
-                longitude,
-                radius: 1500,
-                includedPrimaryTypes: [cat.type],
-                maxResultCount: 5,
-                rankPreference: "POPULARITY",
-              }).catch(() => [])
-            )
-          );
-          results = interleave(batches);
-          basePlacesRef.current = results;
+          // Check AsyncStorage cache before firing 8 API calls.
+          // This handles the case where the component remounts (e.g. navigating
+          // away and back) within the 2 hour TTL — zero API calls needed.
+          const persistedBase = await getBasePlacesCache();
+          if (persistedBase) {
+            if (__DEV__) console.log(`[ExploreScreen] Loaded ${persistedBase.length} places from persistent cache`);
+            basePlacesRef.current = persistedBase;
+            results = persistedBase;
+          } else {
+            // No cache — initial load. Fetch 5 from each category in parallel
+            // then interleave for variety.
+            if (__DEV__) console.log(`[ExploreScreen] No cache found, fetching all categories`);
+            const batches = await Promise.all(
+              CATEGORIES.map((cat) =>
+                searchNearbyPlaces({
+                  latitude,
+                  longitude,
+                  radius: 1500,
+                  includedPrimaryTypes: [cat.type],
+                  maxResultCount: 5,
+                  rankPreference: "POPULARITY",
+                }).catch(() => [])
+              )
+            );
+            results = interleave(batches);
+            basePlacesRef.current = results;
+            // Persist to AsyncStorage so remounts within 2hrs cost nothing
+            await setBasePlacesCache(results);
+          }
         }
 
         if (!cancelled) setAllPlaces(results);
@@ -191,7 +211,6 @@ export default function ExploreScreenNew({ currentUserId }) {
           date: updated.date,
           time: updated.time,
         });
-      // onSnapshot handles state update
     } catch (error) {
       console.error("Error updating event:", error);
     }
@@ -207,7 +226,6 @@ export default function ExploreScreenNew({ currentUserId }) {
         .collection("events")
         .doc(eventToDelete.id)
         .delete();
-      // onSnapshot handles state update
     } catch (error) {
       console.error("Error deleting event:", error);
     }
@@ -297,8 +315,10 @@ export default function ExploreScreenNew({ currentUserId }) {
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={() => {
+              // Clear everything including persistent cache on retry
               basePlacesRef.current = [];
               locationRef.current = null;
+              clearBasePlacesCache();
               setRetryKey((k) => k + 1);
             }}
           >
