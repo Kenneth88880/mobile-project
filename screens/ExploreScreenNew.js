@@ -20,6 +20,7 @@ import {
   getBasePlacesCache,
   setBasePlacesCache,
   clearBasePlacesCache,
+  SESSION_LIMIT_ERROR,
 } from "../services/placesService";
 import firestore from "@react-native-firebase/firestore";
 
@@ -125,13 +126,17 @@ export default function ExploreScreenNew({ currentUserId }) {
           // away and back) within the 2 hour TTL — zero API calls needed.
           const persistedBase = await getBasePlacesCache();
           if (persistedBase) {
-            if (__DEV__) console.log(`[ExploreScreen] Loaded ${persistedBase.length} places from persistent cache`);
+            if (__DEV__)
+              console.log(
+                `[ExploreScreen] Loaded ${persistedBase.length} places from persistent cache`
+              );
             basePlacesRef.current = persistedBase;
             results = persistedBase;
           } else {
             // No cache — initial load. Fetch 5 from each category in parallel
             // then interleave for variety.
-            if (__DEV__) console.log(`[ExploreScreen] No cache found, fetching all categories`);
+            if (__DEV__)
+              console.log(`[ExploreScreen] No cache found, fetching all categories`);
             const batches = await Promise.all(
               CATEGORIES.map((cat) =>
                 searchNearbyPlaces({
@@ -153,18 +158,25 @@ export default function ExploreScreenNew({ currentUserId }) {
 
         if (!cancelled) setAllPlaces(results);
       } catch (err) {
-        console.error("Failed to load places:", err);
         if (!cancelled) {
-          const msg = err?.message || "";
-          if (
-            msg.toLowerCase().includes("location") ||
-            msg.toLowerCase().includes("unavailable")
-          ) {
-            setLocationError(
-              "Location unavailable. Please enable location services and try again."
-            );
+          // Session limit hit — show cached results silently if available,
+          // otherwise show a friendly message rather than a generic error
+          if (err.message === SESSION_LIMIT_ERROR) {
+            if (__DEV__) console.warn("[ExploreScreen] Session search limit reached");
+            // Don't show an error — just stop loading, user sees what's already loaded
           } else {
-            setLocationError("Failed to load places. Please try again.");
+            console.error("Failed to load places:", err);
+            const msg = err?.message || "";
+            if (
+              msg.toLowerCase().includes("location") ||
+              msg.toLowerCase().includes("unavailable")
+            ) {
+              setLocationError(
+                "Location unavailable. Please enable location services and try again."
+              );
+            } else {
+              setLocationError("Failed to load places. Please try again.");
+            }
           }
         }
       } finally {
@@ -196,7 +208,6 @@ export default function ExploreScreenNew({ currentUserId }) {
     }
   };
 
-  // Resolve the event by index to get its Firestore id
   const updateEvent = async (originalDate, index, updated) => {
     try {
       const eventToUpdate = (events[originalDate] || [])[index];
@@ -234,8 +245,6 @@ export default function ExploreScreenNew({ currentUserId }) {
   const filteredPlaces = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return allPlaces;
-    // When searching, use the full base pool so the selected category
-    // doesn't restrict what the user can find.
     const pool =
       basePlacesRef.current.length > 0 ? basePlacesRef.current : allPlaces;
     return pool.filter(
@@ -261,8 +270,13 @@ export default function ExploreScreenNew({ currentUserId }) {
           const detailed = await getPlaceDetails(item.id);
           setSelectedPlace(detailed); // update with full details once loaded
         } catch (err) {
-          console.error("Failed to load place details:", err);
-          // modal stays open with basic info if details fail
+          if (err.message === SESSION_LIMIT_ERROR) {
+            // Session limit hit — silently keep basic info, don't show error
+            if (__DEV__) console.warn("[ExploreScreen] Session details limit reached");
+          } else {
+            console.error("Failed to load place details:", err);
+            // Modal stays open with basic info
+          }
         }
       }}
     />
@@ -315,7 +329,6 @@ export default function ExploreScreenNew({ currentUserId }) {
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={() => {
-              // Clear everything including persistent cache on retry
               basePlacesRef.current = [];
               locationRef.current = null;
               clearBasePlacesCache();
