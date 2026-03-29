@@ -329,7 +329,13 @@ function formatType(type) {
 }
 
 function normalisePlaceResult(raw) {
-  const firstPhoto = raw.photos?.[0];
+  // Photos can come from Nearby Search (places[].photos) or Place Details (photos)
+  // Both return an array of objects with a "name" field (resource path string)
+  // e.g. "places/ChIJ.../photos/AXCi..."
+  const photos = Array.isArray(raw.photos) ? raw.photos : [];
+  const firstPhoto = photos.find((p) => typeof p?.name === "string") || null;
+  const photoName = firstPhoto?.name || null;
+
   return {
     id: raw.id,
     place_id: raw.id,
@@ -342,8 +348,8 @@ function normalisePlaceResult(raw) {
     longitude: raw.location?.longitude,
     phone: raw.nationalPhoneNumber || null,
     website: raw.websiteUri || null,
-    photo_name: firstPhoto?.name || null,
-    image_url: firstPhoto ? getPhotoUrl(firstPhoto.name, 600) : null,
+    photo_name: photoName,
+    image_url: photoName ? getPhotoUrl(photoName, 600) : null,
     rating: raw.rating ?? null,
     user_ratings_total: raw.userRatingCount ?? null,
     price_range: formatPriceLevel(raw.priceLevel),
