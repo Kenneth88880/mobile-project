@@ -349,7 +349,10 @@ function normalisePlaceResult(raw) {
     phone: raw.nationalPhoneNumber || null,
     website: raw.websiteUri || null,
     photo_name: photoName,
-    image_url: photoName ? getPhotoUrl(photoName, 600) : null,
+    // Use 800px so the list card and detail screen share the same URL —
+    // React Native's image cache serves the detail hero for free since
+    // it was already downloaded for the list card.
+    image_url: photoName ? getPhotoUrl(photoName, 800) : null,
     rating: raw.rating ?? null,
     user_ratings_total: raw.userRatingCount ?? null,
     price_range: formatPriceLevel(raw.priceLevel),

@@ -18,7 +18,7 @@ import {
 import { Text, useTheme } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
-import { getPhotoUrl } from "../../services/placesService";
+
 import ShareToChat from "./ShareToChat";
 import { CURRENT_USER_ID } from "../../services/UserConfig";
 
@@ -73,10 +73,10 @@ export default function PlaceInfo({ place, visible, onClose, onCreateEvent }) {
     Number(eventMinute) <= 59;
   const canSave = eventDate && validHour && validMinute;
 
-  const imageUri =
-    (place.photo_name && getPhotoUrl(place.photo_name, 800)) ||
-    place.image_url ||
-    PLACEHOLDER_IMAGE;
+  // Use image_url directly — it's built at 800px in normalisePlaceResult,
+  // matching the detail screen size so React Native's image cache serves
+  // this for free rather than making a second photo request to Google.
+  const imageUri = place.image_url || PLACEHOLDER_IMAGE;
 
   const openMaps = () => {
     const { latitude, longitude, name } = place;
