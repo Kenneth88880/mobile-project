@@ -37,8 +37,8 @@ let requestCount = 0;
 // Cached results do NOT count toward these limits — only real API calls.
 // Limits reset when the user closes and reopens the app.
 const SESSION_LIMITS = {
-  nearbySearch: 30, // max 30 real Nearby Search calls per session
-  placeDetails: 20, // max 20 real Place Details calls per session
+  nearbySearch: 25, // max 30 real Nearby Search calls per session
+  placeDetails: 15, // max 20 real Place Details calls per session
 };
 
 const sessionCounts = {
