@@ -24,7 +24,7 @@ import {
 } from "../services/placesService";
 import firestore from "@react-native-firebase/firestore";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 const TABS = [
   { key: "explore", label: "Explore" },
@@ -418,6 +418,10 @@ export default function ExploreScreenNew({ currentUserId }) {
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          windowSize={3}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          removeClippedSubviews={true}
         />
       ) : (
         <MyDates
