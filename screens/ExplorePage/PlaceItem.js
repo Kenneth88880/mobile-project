@@ -1,18 +1,20 @@
 import React from "react";
-import { View, StyleSheet, Image, TouchableOpacity } from "react-native";
+import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { Text, useTheme } from "react-native-paper";
-import { getPhotoUrl } from "../../services/placesService";
+import { Image } from "expo-image";
 
-const PLACEHOLDER_IMAGE =
-  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
+// expo-image handles lazy loading and aggressive memory+disk caching.
+// Images are cached to disk permanently so a user who saw a restaurant
+// yesterday won't trigger a new photo request today.
+const PLACEHOLDER_BLURHASH = "L6PZfSi_.AyE_3t7t7R**0o#DgR4";
 
 const PlaceItem = ({ place, onPress }) => {
   const theme = useTheme();
 
-  const imageUri =
-    (place.photo_name && getPhotoUrl(place.photo_name)) ||
-    place.image_url ||
-    PLACEHOLDER_IMAGE;
+  // Use image_url directly — it's pre-built at 800px in normalisePlaceResult
+  // so it matches the detail screen URL and React Native's cache serves
+  // PlaceInfo's hero image for free after the list card loads it.
+  const imageUri = place.image_url || null;
 
   return (
     <TouchableOpacity
@@ -20,7 +22,15 @@ const PlaceItem = ({ place, onPress }) => {
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Image source={{ uri: imageUri }} style={styles.image} />
+      <Image
+        source={imageUri ? { uri: imageUri } : null}
+        style={styles.image}
+        contentFit="cover"
+        transition={200}
+        placeholder={PLACEHOLDER_BLURHASH}
+        cachePolicy="memory-disk"  // caches aggressively to disk, survives app restarts
+        recyclingKey={place.id}    // tells expo-image to reuse this slot when list scrolls
+      />
       <View style={styles.info}>
         <Text
           style={[styles.name, { color: theme.colors.onSurface }]}
