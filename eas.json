@@ -9,7 +9,7 @@
       "distribution": "internal",
       "ios": {
         "buildConfiguration": "Debug",
-        "image": "macos-sequoia-15.6-xcode-16.4"
+        "image": "latest"
       },
       "android": {
         "buildType": "apk"
@@ -22,7 +22,7 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "image": "macos-sequoia-15.6-xcode-16.4"
+        "image": "latest"
       },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
@@ -32,7 +32,7 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "image": "macos-sequoia-15.6-xcode-16.4"
+        "image": "latest"
       },
       "env": {
         "GOOGLE_PLACES_API_KEY": "@GOOGLE_PLACES_API_KEY",
