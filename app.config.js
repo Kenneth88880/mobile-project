@@ -5,7 +5,7 @@ export default {
     name: "Doubly",
     slug: "doubly-yrvn0tmogrdrliugnun4w",
     owner: "doubly-connections-inc",
-    version: "1.0.6",
+    version: "1.0.7",
     orientation: "portrait",
     icon: "./assets/doubly-icon.png",
     userInterfaceStyle: "light",
