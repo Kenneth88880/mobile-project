@@ -6,6 +6,8 @@
 
 ## Things in progress
 
+- framework for premium users
+- framework for handeling user payments and user refunds
 - Explore system, calander, maps, planning
 - change chat text box to be smaller
 - change chat bubble text more soft/round
