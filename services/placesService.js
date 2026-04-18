@@ -17,6 +17,8 @@ if (!API_KEY) {
       "Make sure your .env contains EXPO_PUBLIC_GOOGLE_PLACES_API_KEY or " +
       "you expose it via app.config.js → extra.googlePlacesApiKey."
   );
+  
+
 }
 
 const BASE = "https://places.googleapis.com/v1";

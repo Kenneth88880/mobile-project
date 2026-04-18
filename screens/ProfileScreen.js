@@ -94,6 +94,15 @@ export default function ProfileScreen({
   const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState("");
 
+  const checkSubscription = async () => {
+    const uid = auth().currentUser?.uid;
+    const doc = await firestore().collection("profiles").doc(uid).get();
+    const status = doc.data()?.subscriptionStatus;
+    return status === "active";
+  };
+
+  console.log("Sub satus: ", checkSubscription === "active");
+
   useEffect(() => {
     loadAllData();
   }, []);
