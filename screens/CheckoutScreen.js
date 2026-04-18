@@ -87,7 +87,7 @@ export default function CheckoutScreen({ navigation }) {
   // Wait for Firebase auth to be ready
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
-      console.log("Auth state changed, uid:", firebaseUser?.uid);
+      // console.log("Auth state changed, uid:", firebaseUser?.uid);
       setUser(firebaseUser);
     });
     return unsubscribe;
@@ -104,7 +104,7 @@ export default function CheckoutScreen({ navigation }) {
   const fetchPaymentSheetParams = async (plan) => {
     const uid = user?.uid;
     const priceId = PLANS[plan].priceId;
-    console.log("Fetching with uid:", uid, "priceId:", priceId);
+    // console.log("Fetching with uid:", uid, "priceId:", priceId);
 
     const response = await fetch(`${API_URL}/payment-sheet`, {
       method: "POST",
@@ -112,7 +112,7 @@ export default function CheckoutScreen({ navigation }) {
       body: JSON.stringify({ priceId, uid }),
     });
     const data = await response.json();
-    console.log("RAW backend response:", JSON.stringify(data));
+    // console.log("RAW backend response:", JSON.stringify(data));
     return {
       paymentIntent: data.paymentIntent,
       customerSessionClientSecret: data.customerSessionClientSecret,
@@ -134,7 +134,7 @@ export default function CheckoutScreen({ navigation }) {
       }
 
       const { error } = await initPaymentSheet({
-        merchantDisplayName: "Example, Inc.",
+        merchantDisplayName: "Doubly Connections Inc.",
         customerId: customer,
         customerSessionClientSecret,
         paymentIntentClientSecret: paymentIntent,
@@ -168,7 +168,7 @@ export default function CheckoutScreen({ navigation }) {
     const { error } = await presentPaymentSheet();
 
     if (error) {
-      console.error("presentPaymentSheet error:", JSON.stringify(error));
+      // console.error("presentPaymentSheet error:", JSON.stringify(error));
       // Canceled by user — do nothing at all
       if (error.code !== "Canceled") {
         Alert.alert(`Error code: ${error.code}`, error.message);

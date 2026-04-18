@@ -376,20 +376,8 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
   }
 };
 
-export const getSubscriptionStatus = async (userId) => {
-  try {
-    const profile = await getUserProfile(userId);
-    return profile?.subscriptionStatus || null;
-  } catch (error) {
-    console.error("Error getting subscription status:", error);
-    return null;
-  }
-};
-
 /**
  * Update user's gender
- * @param {string} userId - The user's ID
- * @param {string} gender - Gender value ("male", "female", or "non-binary")
  */
 export const updateUserGender = async (userId, gender) => {
   try {
@@ -407,8 +395,6 @@ export const updateUserGender = async (userId, gender) => {
 
 /**
  * Update user's duo preference
- * @param {string} userId - The user's ID
- * @param {Object} duoPreference - Object with interestedIn array
  */
 export const updateDuoPreference = async (userId, duoPreference) => {
   try {
@@ -426,8 +412,6 @@ export const updateDuoPreference = async (userId, duoPreference) => {
 
 /**
  * Get duo partner's profile including their gender and preferences
- * @param {string} partnerId - The partner's user ID
- * @returns {Object|null} Partner profile or null
  */
 export const getDuoPartnerProfile = async (partnerId) => {
   try {
@@ -452,17 +436,7 @@ export const getDuoPartnerProfile = async (partnerId) => {
 };
 
 /**
- * ✅ FIXED: Check if two duos match based on their gender preferences
- *
- * NEW LOGIC: Each person's preference must match ALL members of the other duo
- *
- * Example: If both men prefer women, they should ONLY see duos where BOTH members are women
- *
- * @param {Object} duo1User1 - First user of duo 1 (you)
- * @param {Object} duo1User2 - Second user of duo 1 (your partner)
- * @param {Object} duo2User1 - First user of duo 2
- * @param {Object} duo2User2 - Second user of duo 2
- * @returns {boolean} True if preferences match on BOTH sides
+ * Check if two duos match based on their gender preferences
  */
 export const checkDuoPreferenceMatch = (
   duo1User1,
@@ -472,7 +446,6 @@ export const checkDuoPreferenceMatch = (
 ) => {
   console.log("=== CHECKING DUO PREFERENCE MATCH ===");
 
-  // Get preferences - supporting both duoPreference.interestedIn and genderPreference
   const duo1Pref1 =
     duo1User1.duoPreference?.interestedIn || duo1User1.genderPreference || [];
   const duo1Pref2 =
@@ -482,117 +455,37 @@ export const checkDuoPreferenceMatch = (
   const duo2Pref2 =
     duo2User2.duoPreference?.interestedIn || duo2User2.genderPreference || [];
 
-  console.log("Duo 1:", {
-    user1: { gender: duo1User1.gender, preferences: duo1Pref1 },
-    user2: { gender: duo1User2.gender, preferences: duo1Pref2 },
-  });
+  const duo1User1InterestedInDuo2 =
+    duo1Pref1.length === 0
+      ? true
+      : duo1Pref1.includes(duo2User1.gender) && duo1Pref1.includes(duo2User2.gender);
 
-  console.log("Duo 2:", {
-    user1: { gender: duo2User1.gender, preferences: duo2Pref1 },
-    user2: { gender: duo2User2.gender, preferences: duo2Pref2 },
-  });
+  const duo1User2InterestedInDuo2 =
+    duo1Pref2.length === 0
+      ? true
+      : duo1Pref2.includes(duo2User1.gender) && duo1Pref2.includes(duo2User2.gender);
 
-  // ===== CHECK IF DUO 1 IS INTERESTED IN DUO 2 =====
+  const duo1InterestedInDuo2 = duo1User1InterestedInDuo2 && duo1User2InterestedInDuo2;
 
-  // Duo1 User1's preference: If they have preferences, BOTH members of Duo2 must match
-  let duo1User1InterestedInDuo2;
-  if (duo1Pref1.length === 0) {
-    // No preference = interested in anyone
-    duo1User1InterestedInDuo2 = true;
-    console.log("Duo1 User1: No preference set (matches anyone)");
-  } else {
-    // BOTH members of Duo2 must be in their preference list
-    duo1User1InterestedInDuo2 =
-      duo1Pref1.includes(duo2User1.gender) &&
-      duo1Pref1.includes(duo2User2.gender);
-    console.log(
-      `Duo1 User1 wants [${duo1Pref1}], Duo2 has [${duo2User1.gender}, ${
-        duo2User2.gender
-      }]: ${duo1User1InterestedInDuo2 ? "✅ MATCH" : "❌ NO MATCH"}`,
-    );
-  }
+  const duo2User1InterestedInDuo1 =
+    duo2Pref1.length === 0
+      ? true
+      : duo2Pref1.includes(duo1User1.gender) && duo2Pref1.includes(duo1User2.gender);
 
-  // Duo1 User2's preference: If they have preferences, BOTH members of Duo2 must match
-  let duo1User2InterestedInDuo2;
-  if (duo1Pref2.length === 0) {
-    duo1User2InterestedInDuo2 = true;
-    console.log("Duo1 User2: No preference set (matches anyone)");
-  } else {
-    duo1User2InterestedInDuo2 =
-      duo1Pref2.includes(duo2User1.gender) &&
-      duo1Pref2.includes(duo2User2.gender);
-    console.log(
-      `Duo1 User2 wants [${duo1Pref2}], Duo2 has [${duo2User1.gender}, ${
-        duo2User2.gender
-      }]: ${duo1User2InterestedInDuo2 ? "✅ MATCH" : "❌ NO MATCH"}`,
-    );
-  }
+  const duo2User2InterestedInDuo1 =
+    duo2Pref2.length === 0
+      ? true
+      : duo2Pref2.includes(duo1User1.gender) && duo2Pref2.includes(duo1User2.gender);
 
-  // BOTH users in Duo1 must be satisfied with Duo2
-  const duo1InterestedInDuo2 =
-    duo1User1InterestedInDuo2 && duo1User2InterestedInDuo2;
-  console.log(
-    `Duo1 interested in Duo2: ${duo1InterestedInDuo2 ? "✅ YES" : "❌ NO"}`,
-  );
+  const duo2InterestedInDuo1 = duo2User1InterestedInDuo1 && duo2User2InterestedInDuo1;
 
-  // ===== CHECK IF DUO 2 IS INTERESTED IN DUO 1 =====
-
-  // Duo2 User1's preference: If they have preferences, BOTH members of Duo1 must match
-  let duo2User1InterestedInDuo1;
-  if (duo2Pref1.length === 0) {
-    duo2User1InterestedInDuo1 = true;
-    console.log("Duo2 User1: No preference set (matches anyone)");
-  } else {
-    duo2User1InterestedInDuo1 =
-      duo2Pref1.includes(duo1User1.gender) &&
-      duo2Pref1.includes(duo1User2.gender);
-    console.log(
-      `Duo2 User1 wants [${duo2Pref1}], Duo1 has [${duo1User1.gender}, ${
-        duo1User2.gender
-      }]: ${duo2User1InterestedInDuo1 ? "✅ MATCH" : "❌ NO MATCH"}`,
-    );
-  }
-
-  // Duo2 User2's preference: If they have preferences, BOTH members of Duo1 must match
-  let duo2User2InterestedInDuo1;
-  if (duo2Pref2.length === 0) {
-    duo2User2InterestedInDuo1 = true;
-    console.log("Duo2 User2: No preference set (matches anyone)");
-  } else {
-    duo2User2InterestedInDuo1 =
-      duo2Pref2.includes(duo1User1.gender) &&
-      duo2Pref2.includes(duo1User2.gender);
-    console.log(
-      `Duo2 User2 wants [${duo2Pref2}], Duo1 has [${duo1User1.gender}, ${
-        duo1User2.gender
-      }]: ${duo2User2InterestedInDuo1 ? "✅ MATCH" : "❌ NO MATCH"}`,
-    );
-  }
-
-  // BOTH users in Duo2 must be satisfied with Duo1
-  const duo2InterestedInDuo1 =
-    duo2User1InterestedInDuo1 && duo2User2InterestedInDuo1;
-  console.log(
-    `Duo2 interested in Duo1: ${duo2InterestedInDuo1 ? "✅ YES" : "❌ NO"}`,
-  );
-
-  // ===== FINAL RESULT =====
-  // BOTH duos must be mutually interested
   const finalMatch = duo1InterestedInDuo2 && duo2InterestedInDuo1;
-  console.log(
-    `FINAL RESULT: ${finalMatch ? "✅✅ MUTUAL MATCH" : "❌ NO MATCH"}`,
-  );
-  console.log("=====================================");
-
+  console.log(`FINAL RESULT: ${finalMatch ? "✅✅ MUTUAL MATCH" : "❌ NO MATCH"}`);
   return finalMatch;
 };
 
 /**
  * Get potential matches for a duo, filtered by gender preferences
- * @param {Object} currentUser - Current user profile
- * @param {Object} duoPartner - Duo partner profile
- * @param {number} maxDistance - Optional max distance in km
- * @returns {Array} Array of potential match profiles
  */
 export const getFilteredPotentialMatches = async (
   currentUser,
@@ -600,7 +493,6 @@ export const getFilteredPotentialMatches = async (
   maxDistance,
 ) => {
   try {
-    // First, get all users who have a duo partner
     const usersSnapshot = await firestore()
       .collection("profiles")
       .where("duoPartnerId", "!=", null)
@@ -612,18 +504,10 @@ export const getFilteredPotentialMatches = async (
     for (const userDoc of usersSnapshot.docs) {
       const user = { uid: userDoc.id, userId: userDoc.id, ...userDoc.data() };
 
-      // Skip current user and their partner
-      if (user.uid === currentUser.uid || user.uid === duoPartner.uid) {
-        continue;
-      }
+      if (user.uid === currentUser.uid || user.uid === duoPartner.uid) continue;
 
-      // Skip if we've already processed this duo
       const duoKey = [user.uid, user.duoPartnerId].sort().join("_");
-      if (processedDuos.has(duoKey)) {
-        continue;
-      }
-
-      // Get the other person in this duo
+      if (processedDuos.has(duoKey)) continue;
       if (!user.duoPartnerId) continue;
 
       const otherPartnerDoc = await firestore()
@@ -639,7 +523,6 @@ export const getFilteredPotentialMatches = async (
         ...otherPartnerDoc.data(),
       };
 
-      // Check gender preference match
       const preferencesMatch = checkDuoPreferenceMatch(
         currentUser,
         duoPartner,
@@ -647,11 +530,8 @@ export const getFilteredPotentialMatches = async (
         otherPartner,
       );
 
-      if (!preferencesMatch) {
-        continue;
-      }
+      if (!preferencesMatch) continue;
 
-      // Optional: Check distance if location is available
       if (maxDistance && currentUser.location && user.location) {
         const distance = calculateDistance(
           currentUser.location.latitude,
@@ -659,13 +539,9 @@ export const getFilteredPotentialMatches = async (
           user.location.latitude,
           user.location.longitude,
         );
-
-        if (distance > maxDistance) {
-          continue;
-        }
+        if (distance > maxDistance) continue;
       }
 
-      // Add both members of the matching duo
       potentialMatches.push(user);
       processedDuos.add(duoKey);
     }
@@ -677,11 +553,8 @@ export const getFilteredPotentialMatches = async (
   }
 };
 
-/**
- * Calculate distance between two coordinates in kilometers
- */
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Radius of the Earth in kilometers
+  const R = 6371;
   const dLat = toRadians(lat2 - lat1);
   const dLon = toRadians(lon2 - lon1);
   const a =
@@ -694,11 +567,10 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const toRadians = (degrees) => {
-  return degrees * (Math.PI / 180);
-};
+const toRadians = (degrees) => degrees * (Math.PI / 180);
+
 /**
- * Update max distance preference for a user -- server side rather than client side for scalability
+ * Update max distance preference for a user
  */
 export const updateMaxDistance = async (userId, maxDistance) => {
   try {
@@ -742,7 +614,6 @@ export const updateUserLocation = async (userId, latitude, longitude, city) => {
 
 /**
  * Query profiles within distance using geohash bounds
- * This is a server-side optimized query
  */
 export const getProfilesWithinDistance = async (
   centerLat,
@@ -761,7 +632,6 @@ export const getProfilesWithinDistance = async (
         .orderBy("geohash")
         .startAt(bound[0])
         .endAt(bound[1]);
-
       promises.push(q.get());
     }
 
@@ -772,12 +642,7 @@ export const getProfilesWithinDistance = async (
     for (const snap of snapshots) {
       for (const doc of snap.docs) {
         const profile = { userId: doc.id, ...doc.data() };
-
-        // Skip duplicates and excluded user
-        if (seenIds.has(doc.id) || doc.id === excludeUserId) {
-          continue;
-        }
-
+        if (seenIds.has(doc.id) || doc.id === excludeUserId) continue;
         seenIds.add(doc.id);
         profiles.push(profile);
       }
@@ -792,8 +657,8 @@ export const getProfilesWithinDistance = async (
 };
 
 /**
- * Accept a duo like
- * If all 4 people accept, create a group chat
+ * Accept a duo like.
+ * If all 4 people accept, create a group chat.
  */
 export const acceptDuoLike = async (
   likeId,
@@ -802,48 +667,22 @@ export const acceptDuoLike = async (
   fromDuoId,
 ) => {
   try {
-    console.log("Accepting duo like:", {
-      likeId,
-      currentUserId,
-      currentDuoId,
-      fromDuoId,
-    });
+    console.log("Accepting duo like:", { likeId, currentUserId, currentDuoId, fromDuoId });
 
-    // Get the duo like document
     const likeDoc = await firestore().collection("duoLikes").doc(likeId).get();
-
-    if (!likeDoc.exists) {
-      throw new Error("Duo like not found");
-    }
+    if (!likeDoc.exists) throw new Error("Duo like not found");
 
     const likeData = likeDoc.data();
-
-    // Initialize acceptedBy array if it doesn't exist
     const acceptedBy = likeData.acceptedBy || [];
 
-    // Add current user to acceptedBy if not already there
-    if (!acceptedBy.includes(currentUserId)) {
-      acceptedBy.push(currentUserId);
-    }
+    if (!acceptedBy.includes(currentUserId)) acceptedBy.push(currentUserId);
 
-    // Update the like document with the new acceptedBy list
-    await firestore().collection("duoLikes").doc(likeId).update({
-      acceptedBy: acceptedBy,
-    });
+    await firestore().collection("duoLikes").doc(likeId).update({ acceptedBy });
 
-    // Get both duos to find all 4 user IDs
-    const fromDuoDoc = await firestore()
-      .collection("duos")
-      .doc(fromDuoId)
-      .get();
-    const toDuoDoc = await firestore()
-      .collection("duos")
-      .doc(currentDuoId)
-      .get();
+    const fromDuoDoc = await firestore().collection("duos").doc(fromDuoId).get();
+    const toDuoDoc = await firestore().collection("duos").doc(currentDuoId).get();
 
-    if (!fromDuoDoc.exists || !toDuoDoc.exists) {
-      throw new Error("One or both duos not found");
-    }
+    if (!fromDuoDoc.exists || !toDuoDoc.exists) throw new Error("One or both duos not found");
 
     const fromDuoUsers = fromDuoDoc.data().users || [];
     const toDuoUsers = toDuoDoc.data().users || [];
@@ -852,27 +691,17 @@ export const acceptDuoLike = async (
     console.log("All users involved:", allUsers);
     console.log("Users who accepted:", acceptedBy);
 
-    // Check if all 4 users have accepted
     if (acceptedBy.length === 4) {
       console.log("All 4 users accepted! Creating group chat...");
 
-      // Get all participant profiles to create group name
       const profilePromises = allUsers.map((userId) => getUserProfile(userId));
       const profiles = await Promise.all(profilePromises);
+      const names = profiles.map((p) => p?.name || "Unknown").join(", ");
 
-      // Create group name from all participant names
-      const names = profiles
-        .map((profile) => profile?.name || "Unknown")
-        .join(", ");
-      const groupName = names;
-
-      console.log("Creating chat with name:", groupName);
-
-      // Create a group chat
       const chatData = {
         participants: allUsers,
         duoIds: [fromDuoId, currentDuoId],
-        groupName: groupName,
+        groupName: names,
         isGroupChat: true,
         isPrivate: false,
         createdAt: firestore.FieldValue.serverTimestamp(),
@@ -884,27 +713,14 @@ export const acceptDuoLike = async (
       const chatRef = await firestore().collection("chats").add(chatData);
       console.log("Created chat:", chatRef.id);
 
-      // Delete the duo like since it's now a match
       await firestore().collection("duoLikes").doc(likeId).delete();
-      console.log("Deleted duo like");
-
-      // Also create duoSwipes in both directions so they don't show up again
       await saveDuoSwipe(currentDuoId, fromDuoId);
       await saveDuoSwipe(fromDuoId, currentDuoId);
-      console.log("Created duoSwipes to prevent re-showing");
 
-      return {
-        success: true,
-        matched: true,
-        chatId: chatRef.id,
-      };
+      return { success: true, matched: true, chatId: chatRef.id };
     } else {
       console.log(`Waiting for more acceptances (${acceptedBy.length}/4)`);
-      return {
-        success: true,
-        matched: false,
-        acceptedCount: acceptedBy.length,
-      };
+      return { success: true, matched: false, acceptedCount: acceptedBy.length };
     }
   } catch (error) {
     console.error("Error accepting duo like:", error);
@@ -913,22 +729,15 @@ export const acceptDuoLike = async (
 };
 
 /**
- * Decline a duo like
- * Immediately removes the like and creates swipes so they don't show up again
+ * Decline a duo like.
+ * Immediately removes the like and creates swipes so they don't show up again.
  */
 export const declineDuoLike = async (likeId, currentDuoId, fromDuoId) => {
   try {
     console.log("Declining duo like:", { likeId, currentDuoId, fromDuoId });
-
-    // Delete the like
     await firestore().collection("duoLikes").doc(likeId).delete();
-    console.log("Duo like deleted");
-
-    // Create duoSwipes in both directions so they don't show up again
     await saveDuoSwipe(currentDuoId, fromDuoId);
     await saveDuoSwipe(fromDuoId, currentDuoId);
-    console.log("Created duoSwipes to prevent re-showing");
-
     return { success: true };
   } catch (error) {
     console.error("Error declining duo like:", error);
@@ -937,60 +746,26 @@ export const declineDuoLike = async (likeId, currentDuoId, fromDuoId) => {
 };
 
 /**
- * Reset test data for dev mode
- * Clears all likes and swipes for the current duo
+ * Reset test data for dev mode.
+ * Clears all likes and swipes for the current duo.
  */
 export const resetTestData = async (currentDuoId) => {
   try {
     console.log("Resetting test data for duo:", currentDuoId);
 
-    // Delete all duoLikes FROM this duo
-    const likesFromSnapshot = await firestore()
-      .collection("duoLikes")
-      .where("fromDuoId", "==", currentDuoId)
-      .get();
+    const [likesFrom, likesTo, swipesFrom, swipesTo] = await Promise.all([
+      firestore().collection("duoLikes").where("fromDuoId", "==", currentDuoId).get(),
+      firestore().collection("duoLikes").where("toDuoId", "==", currentDuoId).get(),
+      firestore().collection("duoSwipes").where("fromDuoId", "==", currentDuoId).get(),
+      firestore().collection("duoSwipes").where("toDuoId", "==", currentDuoId).get(),
+    ]);
 
-    const deleteLikesFromPromises = likesFromSnapshot.docs.map((doc) =>
-      doc.ref.delete(),
-    );
-    await Promise.all(deleteLikesFromPromises);
-    console.log(`Deleted ${likesFromSnapshot.size} likes FROM this duo`);
-
-    // Delete all duoLikes TO this duo
-    const likesToSnapshot = await firestore()
-      .collection("duoLikes")
-      .where("toDuoId", "==", currentDuoId)
-      .get();
-
-    const deleteLikesToPromises = likesToSnapshot.docs.map((doc) =>
-      doc.ref.delete(),
-    );
-    await Promise.all(deleteLikesToPromises);
-    console.log(`Deleted ${likesToSnapshot.size} likes TO this duo`);
-
-    // Delete all duoSwipes FROM this duo
-    const swipesFromSnapshot = await firestore()
-      .collection("duoSwipes")
-      .where("fromDuoId", "==", currentDuoId)
-      .get();
-
-    const deleteSwipesFromPromises = swipesFromSnapshot.docs.map((doc) =>
-      doc.ref.delete(),
-    );
-    await Promise.all(deleteSwipesFromPromises);
-    console.log(`Deleted ${swipesFromSnapshot.size} swipes FROM this duo`);
-
-    // Delete all duoSwipes TO this duo (so they can see you again)
-    const swipesToSnapshot = await firestore()
-      .collection("duoSwipes")
-      .where("toDuoId", "==", currentDuoId)
-      .get();
-
-    const deleteSwipesToPromises = swipesToSnapshot.docs.map((doc) =>
-      doc.ref.delete(),
-    );
-    await Promise.all(deleteSwipesToPromises);
-    console.log(`Deleted ${swipesToSnapshot.size} swipes TO this duo`);
+    await Promise.all([
+      ...likesFrom.docs.map((d) => d.ref.delete()),
+      ...likesTo.docs.map((d) => d.ref.delete()),
+      ...swipesFrom.docs.map((d) => d.ref.delete()),
+      ...swipesTo.docs.map((d) => d.ref.delete()),
+    ]);
 
     console.log("✅ Test data reset complete!");
     return { success: true };
@@ -998,4 +773,44 @@ export const resetTestData = async (currentDuoId) => {
     console.error("Error resetting test data:", error);
     throw error;
   }
+};
+
+/**
+ * Get a user's subscription status.
+ * Uses the cached profile to avoid an extra Firestore read.
+ * Returns "active" | "past_due" | "canceled" | null
+ */
+export const getSubscriptionStatus = async (userId) => {
+  try {
+    const profile = await getUserProfile(userId);
+    return profile?.subscriptionStatus ?? null;
+  } catch (error) {
+    console.error("Error getting subscription status:", error);
+    return null;
+  }
+};
+
+/**
+ * Subscribe to real-time subscription status updates.
+ * Returns an unsubscribe function — call it in useEffect cleanup.
+ *
+ * Usage:
+ *   const unsub = subscribeToSubscriptionStatus(uid, (status) => {
+ *     setSubscriptionStatus(status);
+ *   });
+ *   return () => unsub();
+ */
+export const subscribeToSubscriptionStatus = (userId, onChange) => {
+  return firestore()
+    .collection("profiles")
+    .doc(userId)
+    .onSnapshot(
+      (doc) => {
+        const status = doc.exists ? (doc.data()?.subscriptionStatus ?? null) : null;
+        onChange(status);
+      },
+      (error) => {
+        console.error("Error listening to subscription status:", error);
+      }
+    );
 };
