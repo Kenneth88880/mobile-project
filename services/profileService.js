@@ -376,6 +376,16 @@ export const saveRating = async (fromUserId, toUserId, rating) => {
   }
 };
 
+export const getSubscriptionStatus = async (userId) => {
+  try {
+    const profile = await getUserProfile(userId);
+    return profile?.subscriptionStatus || null;
+  } catch (error) {
+    console.error("Error getting subscription status:", error);
+    return null;
+  }
+};
+
 /**
  * Update user's gender
  * @param {string} userId - The user's ID
