@@ -1,4 +1,4 @@
-const {onCall, HttpsError, onRequest} = require("firebase-functions/v2/https");
+const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const express = require("express");
@@ -7,7 +7,7 @@ admin.initializeApp();
 
 const app = express();
 
-// MUST be before express.json()
+// Raw body for Stripe webhook verification, JSON for everything else
 app.use((req, res, next) => {
   if (req.originalUrl === "/webhook") {
     express.raw({ type: "application/json" })(req, res, next);
@@ -28,13 +28,15 @@ function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// ─── Email Verification ───────────────────────────────────────────────────────
+
 exports.sendEmailVerificationCode = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
   const userId = request.auth.uid;
-  const {email} = request.data;
+  const { email } = request.data;
 
   if (!email) {
     throw new HttpsError("invalid-argument", "Email is required");
@@ -45,9 +47,9 @@ exports.sendEmailVerificationCode = onCall(async (request) => {
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
     await admin.firestore().collection("emailVerificationCodes").doc(userId).set({
-      code: code,
-      email: email,
-      expiresAt: expiresAt,
+      code,
+      email,
+      expiresAt,
       verified: false,
       createdAt: Date.now(),
     });
@@ -68,9 +70,8 @@ exports.sendEmailVerificationCode = onCall(async (request) => {
     };
 
     await transporter.sendMail(mailOptions);
-
     console.log(`Verification code sent to ${email}`);
-    return {success: true, message: "Verification code sent"};
+    return { success: true, message: "Verification code sent" };
   } catch (error) {
     console.error("Error sending verification code:", error);
     throw new HttpsError("internal", "Failed to send verification code");
@@ -83,7 +84,7 @@ exports.verifyEmailCode = onCall(async (request) => {
   }
 
   const userId = request.auth.uid;
-  const {code} = request.data;
+  const { code } = request.data;
 
   if (!code) {
     throw new HttpsError("invalid-argument", "Verification code is required");
@@ -107,7 +108,7 @@ exports.verifyEmailCode = onCall(async (request) => {
     }
 
     if (data.verified) {
-      return {success: true, message: "Email already verified"};
+      return { success: true, message: "Email already verified" };
     }
 
     await admin.firestore().collection("emailVerificationCodes").doc(userId).update({
@@ -116,17 +117,15 @@ exports.verifyEmailCode = onCall(async (request) => {
     });
 
     await admin.firestore().collection("profiles").doc(userId).set(
-        {emailVerified: true},
-        {merge: true},
+      { emailVerified: true },
+      { merge: true }
     );
 
     console.log(`Email verified for user ${userId}`);
-    return {success: true, message: "Email verified successfully"};
+    return { success: true, message: "Email verified successfully" };
   } catch (error) {
     console.error("Error verifying code:", error);
-    if (error instanceof HttpsError) {
-      throw error;
-    }
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", "Failed to verify code");
   }
 });
@@ -151,10 +150,24 @@ app.post("/payment-sheet", async (req, res) => {
       return res.status(400).json({ error: "priceId and uid are required" });
     }
 
-    const customer = await stripe.customers.create();
+    // Reuse existing Stripe customer if one already exists for this user
+    let customerId;
+    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
+    const profileData = profileDoc.exists ? profileDoc.data() : null;
+
+    if (profileData?.stripeCustomerId) {
+      customerId = profileData.stripeCustomerId;
+      console.log("Reusing existing Stripe customer:", customerId);
+    } else {
+      const customer = await stripe.customers.create({
+        metadata: { firebaseUid: uid },
+      });
+      customerId = customer.id;
+      console.log("Created new Stripe customer:", customerId);
+    }
 
     const customerSession = await stripe.customerSessions.create({
-      customer: customer.id,
+      customer: customerId,
       components: {
         mobile_payment_element: {
           enabled: true,
@@ -168,7 +181,7 @@ app.post("/payment-sheet", async (req, res) => {
     });
 
     const subscription = await stripe.subscriptions.create({
-      customer: customer.id,
+      customer: customerId,
       items: [{ price: priceId }],
       payment_behavior: "default_incomplete",
       collection_method: "charge_automatically",
@@ -176,20 +189,22 @@ app.post("/payment-sheet", async (req, res) => {
         save_default_payment_method: "on_subscription",
         payment_method_types: ["card"],
       },
+      metadata: { firebaseUid: uid },
       expand: ["latest_invoice.payment_intent"],
     });
 
-    const invoice = await stripe.invoices.retrieve(
-      subscription.latest_invoice.id,
-      { expand: ["payment_intent"] }
-    );
+    console.log("Created subscription:", subscription.id, "with metadata:", JSON.stringify(subscription.metadata));
+
+    const invoice = await stripe.invoices.retrieve(subscription.latest_invoice.id, {
+      expand: ["payment_intent"],
+    });
 
     let clientSecret;
     if (invoice.payment_intent?.client_secret) {
       clientSecret = invoice.payment_intent.client_secret;
     } else {
       const paymentIntents = await stripe.paymentIntents.list({
-        customer: customer.id,
+        customer: customerId,
         limit: 1,
       });
       const pi = paymentIntents.data[0];
@@ -197,23 +212,23 @@ app.post("/payment-sheet", async (req, res) => {
       clientSecret = pi.client_secret;
     }
 
-    // Save to Firestore linked to Firebase user
+    // Save Stripe IDs only — subscriptionStatus is never written here.
+    // The webhook owns all status updates.
     await admin.firestore().collection("profiles").doc(uid).set({
-      stripeCustomerId: customer.id,
+      stripeCustomerId: customerId,
       subscriptionId: subscription.id,
-      subscriptionStatus: subscription.status,
-      priceId: priceId,
+      priceId,
       updatedAt: Date.now(),
     }, { merge: true });
 
     res.json({
       paymentIntent: clientSecret,
       customerSessionClientSecret: customerSession.client_secret,
-      customer: customer.id,
+      customer: customerId,
       subscriptionId: subscription.id,
     });
   } catch (err) {
-    console.error(err);
+    console.error("payment-sheet error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -227,7 +242,7 @@ app.post("/webhook", async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.rawBody, 
+      req.rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -236,64 +251,80 @@ app.post("/webhook", async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log("Webhook event:", event.type);
+  console.log("Webhook event received:", event.type);
+
+  // Helper: get firebaseUid from a subscription ID
+  const getUidFromSubscriptionId = async (subscriptionId) => {
+    console.log("Fetching subscription:", subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    console.log("Subscription metadata:", JSON.stringify(subscription.metadata));
+    return subscription.metadata?.firebaseUid || null;
+  };
+
+  // Helper: update subscriptionStatus on the profile
+  const updateStatus = async (uid, status) => {
+    console.log(`Updating subscriptionStatus to "${status}" for uid: ${uid}`);
+    await admin.firestore().collection("profiles").doc(uid).set({
+      subscriptionStatus: status,
+      updatedAt: Date.now(),
+    }, { merge: true });
+    console.log(`Successfully updated subscriptionStatus to "${status}" for uid: ${uid}`);
+  };
 
   try {
-    if (event.type === "invoice.payment_succeeded") {
-      const invoice = event.data.object;
-      const customerId = invoice.customer;
+    switch (event.type) {
 
-      const snapshot = await admin.firestore()
-        .collection("profiles")
-        .where("stripeCustomerId", "==", customerId)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        await snapshot.docs[0].ref.set({
-          subscriptionStatus: "active",
-          updatedAt: Date.now(),
-        }, { merge: true });
-        console.log("Subscription activated for customer:", customerId);
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        console.log("invoice.payment_succeeded — subscription:", invoice.subscription);
+        const uid = await getUidFromSubscriptionId(invoice.subscription);
+        console.log("Resolved uid:", uid);
+        if (uid) await updateStatus(uid, "active");
+        else console.warn("No firebaseUid found for subscription:", invoice.subscription);
+        break;
       }
-    }
 
-    if (event.type === "invoice.payment_failed") {
-      const invoice = event.data.object;
-      const customerId = invoice.customer;
-
-      const snapshot = await admin.firestore()
-        .collection("profiles")
-        .where("stripeCustomerId", "==", customerId)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        await snapshot.docs[0].ref.set({
-          subscriptionStatus: "past_due",
-          updatedAt: Date.now(),
-        }, { merge: true });
-        console.log("Payment failed for customer:", customerId);
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+        console.log("invoice.payment_failed — subscription:", invoice.subscription);
+        const uid = await getUidFromSubscriptionId(invoice.subscription);
+        console.log("Resolved uid:", uid);
+        if (uid) await updateStatus(uid, "past_due");
+        else console.warn("No firebaseUid found for subscription:", invoice.subscription);
+        break;
       }
-    }
 
-    if (event.type === "customer.subscription.deleted") {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-
-      const snapshot = await admin.firestore()
-        .collection("profiles")
-        .where("stripeCustomerId", "==", customerId)
-        .limit(1)
-        .get();
-
-      if (!snapshot.empty) {
-        await snapshot.docs[0].ref.set({
-          subscriptionStatus: "canceled",
-          updatedAt: Date.now(),
-        }, { merge: true });
-        console.log("Subscription canceled for customer:", customerId);
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        console.log("customer.subscription.deleted — id:", subscription.id);
+        console.log("Full metadata:", JSON.stringify(subscription.metadata));
+        const uid = subscription.metadata?.firebaseUid;
+        console.log("Extracted uid:", uid);
+        if (uid) {
+          await updateStatus(uid, "canceled");
+        } else {
+          // Metadata missing — fall back to querying Firestore by subscriptionId
+          console.warn("No firebaseUid in metadata, falling back to Firestore query by subscriptionId");
+          const snapshot = await admin.firestore()
+            .collection("profiles")
+            .where("subscriptionId", "==", subscription.id)
+            .limit(1)
+            .get();
+          if (!snapshot.empty) {
+            await snapshot.docs[0].ref.set({
+              subscriptionStatus: "canceled",
+              updatedAt: Date.now(),
+            }, { merge: true });
+            console.log("Fallback succeeded: canceled via subscriptionId:", subscription.id);
+          } else {
+            console.error("Fallback failed: no profile found for subscriptionId:", subscription.id);
+          }
+        }
+        break;
       }
+
+      default:
+        console.log("Unhandled event type:", event.type);
     }
   } catch (err) {
     console.error("Webhook handler error:", err);

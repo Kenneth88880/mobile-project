@@ -1,5 +1,3 @@
-// This is a drop-in replacement for your existing ProfileScreen.js
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -69,7 +67,6 @@ export default function ProfileScreen({
   });
   const [originalAge, setOriginalAge] = useState("");
   const [originalName, setOriginalName] = useState("");
-
   const [isEditing, setIsEditing] = useState(false);
   const [duoPartnerProfile, setDuoPartnerProfile] = useState(null);
   const [rating, setRating] = useState({ average: "0.0", count: 0 });
@@ -93,18 +90,21 @@ export default function ProfileScreen({
   const [sendingBugReport, setSendingBugReport] = useState(false);
   const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState("");
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
 
-  const checkSubscription = async () => {
-    const uid = auth().currentUser?.uid;
-    const doc = await firestore().collection("profiles").doc(uid).get();
-    const status = doc.data()?.subscriptionStatus;
-    return status === "active";
-  };
-
-  console.log("Sub satus: ", checkSubscription === "active");
+  useEffect(() => {
+    const fetchSubscriptionStatus = async () => {
+      const uid = auth().currentUser?.uid;
+      if (!uid) return;
+      const doc = await firestore().collection("profiles").doc(uid).get();
+      setSubscriptionStatus(doc.data()?.subscriptionStatus ?? null);
+    };
+    fetchSubscriptionStatus();
+  }, []);
 
   useEffect(() => {
     loadAllData();
+    console.log(subscriptionStatus);
   }, []);
 
   useEffect(() => {
@@ -115,10 +115,8 @@ export default function ProfileScreen({
     };
   }, [searchTimeout]);
 
-  // Load functions
   const loadAllData = async () => {
     try {
-      // Fire all top-level independent reads in parallel
       const [userProfile, ratingData, requestsSnapshot, duosSnapshot] =
         await Promise.all([
           getUserProfile(CURRENT_USER_ID),
@@ -134,10 +132,8 @@ export default function ProfileScreen({
             .get(),
         ]);
 
-      // Set rating immediately — no extra round-trip needed
       setRating(ratingData);
 
-      // Handle profile
       if (!userProfile) {
         const emptyProfile = {
           name: "",
@@ -179,12 +175,10 @@ export default function ProfileScreen({
       setOriginalAge(userProfile.age || "");
       setOriginalName(userProfile.name || "");
 
-      // Handle duo partner — we already have the snapshot, just fetch the partner profile
       if (!duosSnapshot.empty) {
         const duoData = duosSnapshot.docs[0].data();
         const partnerId = duoData.users.find((id) => id !== CURRENT_USER_ID);
         if (partnerId) {
-          // This is the only remaining serial dependency — partner id comes from duo doc
           const partnerProfile = await getDuoPartnerProfile(partnerId);
           if (partnerProfile) {
             setDuoPartnerProfile({
@@ -200,7 +194,6 @@ export default function ProfileScreen({
         setDuoPartnerProfile(null);
       }
 
-      // Handle pending requests — fetch all requester profiles in parallel
       if (!requestsSnapshot.empty) {
         const requestResults = await Promise.all(
           requestsSnapshot.docs.map(async (docSnap) => {
@@ -245,8 +238,6 @@ export default function ProfileScreen({
     }
   };
 
-  // Keep loadPendingRequests as a standalone for post-accept/decline refreshes,
-  // but now it also uses Promise.all internally
   const loadPendingRequests = async () => {
     try {
       const snapshot = await firestore()
@@ -283,7 +274,6 @@ export default function ProfileScreen({
     }
   };
 
-  // Save and action functions
   const handleSave = async () => {
     try {
       if (!profile.name || !profile.age) {
@@ -304,7 +294,6 @@ export default function ProfileScreen({
 
       await saveUserProfile(CURRENT_USER_ID, profileToSave);
       setIsEditing(false);
-      loadRating();
     } catch (error) {
       console.error("Error saving profile:", error);
       Alert.alert("Error", "Failed to save profile");
@@ -327,7 +316,7 @@ export default function ProfileScreen({
       setProfile({ ...profile, tags: [...currentTags, tag] });
     }
   };
-  // Partner search functions
+
   const searchPartners = async (query) => {
     if (!query || query.length < 10) {
       setSearchResults([]);
@@ -372,12 +361,7 @@ export default function ProfileScreen({
           return;
         }
 
-        setSearchResults([
-          {
-            id: userDoc.id,
-            ...userData,
-          },
-        ]);
+        setSearchResults([{ id: userDoc.id, ...userData }]);
       } else {
         setSearchResults([]);
         Alert.alert("Not Found", "No user found with this ID");
@@ -419,7 +403,6 @@ export default function ProfileScreen({
 
   const handleAcceptRequest = async (requestId, fromUserId) => {
     try {
-      // Check if YOU already have a duo partner
       const myDuoSnapshot = await firestore()
         .collection("duos")
         .where("users", "array-contains", CURRENT_USER_ID)
@@ -435,7 +418,6 @@ export default function ProfileScreen({
         return;
       }
 
-      // Check if the REQUESTER already has a duo partner
       const theirDuoSnapshot = await firestore()
         .collection("duos")
         .where("users", "array-contains", fromUserId)
@@ -444,7 +426,6 @@ export default function ProfileScreen({
         .get();
 
       if (!theirDuoSnapshot.empty) {
-        // Auto-decline since they're no longer available
         await firestore().collection("duoRequests").doc(requestId).update({
           status: "declined",
         });
@@ -517,10 +498,8 @@ export default function ProfileScreen({
                 .get();
 
               if (!duosSnapshot.empty) {
-                // Delete the duo partnership
                 await duosSnapshot.docs[0].ref.delete();
 
-                // Archive all chats associated with this duo
                 const chatsSnapshot = await firestore()
                   .collection("chats")
                   .where("participants", "array-contains", CURRENT_USER_ID)
@@ -558,9 +537,6 @@ export default function ProfileScreen({
     );
   };
 
-  // Updated handleSubmitBugReport for Firebase Trigger Email Extension
-  // Replace your existing handleSubmitBugReport function with this:
-
   const handleSubmitBugReport = async () => {
     if (!bugReport.title.trim() || !bugReport.description.trim()) {
       Alert.alert(
@@ -572,7 +548,6 @@ export default function ProfileScreen({
 
     setSendingBugReport(true);
     try {
-      // 1. Save the bug report to Firestore
       const bugReportRef = await firestore()
         .collection("bugReports")
         .add({
@@ -586,13 +561,10 @@ export default function ProfileScreen({
           status: "new",
         });
 
-      console.log("✅ Bug report created:", bugReportRef.id);
-
-      // 2. Trigger email by adding document to 'mail' collection
       await firestore()
         .collection("mail")
         .add({
-          to: process.env.EXPO_PUBLIC_CONTACT_EMAIL, // Replace with your work email
+          to: process.env.EXPO_PUBLIC_CONTACT_EMAIL,
           message: {
             subject: `New Bug Report: ${bugReport.title}`,
             html: `
@@ -600,77 +572,27 @@ export default function ProfileScreen({
               <div style="background-color: #8B4A61; color: white; padding: 20px; border-radius: 10px 10px 0 0;">
                 <h2 style="margin: 0;">New Bug Report</h2>
               </div>
-              
               <div style="background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-top: none;">
-                <h3 style="margin-top: 0; color: #8B4A61;">${
-                  bugReport.title
-                }</h3>
-                
+                <h3 style="margin-top: 0; color: #8B4A61;">${bugReport.title}</h3>
                 <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0;">
                   <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                      <td style="padding: 8px; font-weight: bold; width: 150px;">Report ID:</td>
-                      <td style="padding: 8px; font-family: monospace;">${
-                        bugReportRef.id
-                      }</td>
-                    </tr>
-                    <tr style="background-color: #f5f5f5;">
-                      <td style="padding: 8px; font-weight: bold;">Submitted By:</td>
-                      <td style="padding: 8px;">${
-                        profile.name || "Unknown"
-                      }</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px; font-weight: bold;">User Email:</td>
-                      <td style="padding: 8px;">${
-                        auth().currentUser?.email || "No email"
-                      }</td>
-                    </tr>
-                    <tr style="background-color: #f5f5f5;">
-                      <td style="padding: 8px; font-weight: bold;">User ID:</td>
-                      <td style="padding: 8px; font-family: monospace; font-size: 12px;">${CURRENT_USER_ID}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px; font-weight: bold;">Device:</td>
-                      <td style="padding: 8px;">${
-                        Platform.OS === "ios" ? "iOS" : "Android"
-                      }</td>
-                    </tr>
-                    <tr style="background-color: #f5f5f5;">
-                      <td style="padding: 8px; font-weight: bold;">Date:</td>
-                      <td style="padding: 8px;">${new Date().toLocaleString()}</td>
-                    </tr>
+                    <tr><td style="padding: 8px; font-weight: bold; width: 150px;">Report ID:</td><td style="padding: 8px; font-family: monospace;">${bugReportRef.id}</td></tr>
+                    <tr style="background-color: #f5f5f5;"><td style="padding: 8px; font-weight: bold;">Submitted By:</td><td style="padding: 8px;">${profile.name || "Unknown"}</td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold;">User Email:</td><td style="padding: 8px;">${auth().currentUser?.email || "No email"}</td></tr>
+                    <tr style="background-color: #f5f5f5;"><td style="padding: 8px; font-weight: bold;">User ID:</td><td style="padding: 8px; font-family: monospace; font-size: 12px;">${CURRENT_USER_ID}</td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold;">Device:</td><td style="padding: 8px;">${Platform.OS === "ios" ? "iOS" : "Android"}</td></tr>
+                    <tr style="background-color: #f5f5f5;"><td style="padding: 8px; font-weight: bold;">Date:</td><td style="padding: 8px;">${new Date().toLocaleString()}</td></tr>
                   </table>
                 </div>
-                
                 <div style="background-color: white; padding: 20px; border-radius: 5px; margin: 15px 0;">
                   <h4 style="margin-top: 0; color: #8B4A61;">Description:</h4>
-                  <p style="white-space: pre-wrap; line-height: 1.6; margin: 0;">${
-                    bugReport.description
-                  }</p>
+                  <p style="white-space: pre-wrap; line-height: 1.6; margin: 0;">${bugReport.description}</p>
                 </div>
-                
-                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50;">
-                  <p style="margin: 0; font-weight: bold; color: #2e7d32;">⚠️ Action Required</p>
-                  <p style="margin: 10px 0 0 0;">Please review this bug report in your Firebase Console:</p>
-                  <a href="https://console.firebase.google.com/project/_/firestore/data/bugReports/${
-                    bugReportRef.id
-                  }" 
-                     style="display: inline-block; margin-top: 15px; padding: 12px 24px; background-color: #8B4A61; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                    View in Firebase Console →
-                  </a>
-                </div>
-              </div>
-              
-              <div style="background-color: #f0f0f0; padding: 15px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px; color: #666;">
-                <p style="margin: 0;">This is an automated email from your app's bug reporting system.</p>
               </div>
             </div>
           `,
           },
         });
-
-      console.log("✅ Email queued successfully");
 
       Alert.alert(
         "Thank You!",
@@ -686,9 +608,7 @@ export default function ProfileScreen({
         ],
       );
     } catch (error) {
-      console.error("❌ Error submitting bug report:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
+      console.error("Error submitting bug report:", error);
       Alert.alert("Error", "Failed to submit bug report. Please try again.");
     } finally {
       setSendingBugReport(false);
@@ -714,7 +634,7 @@ export default function ProfileScreen({
   const handleDevModeToggle = () => {
     if (devPasswordInput === process.env.EXPO_PUBLIC_DEV_PASSWORD_PROD) {
       const newDevMode = !devMode;
-      setDevMode(newDevMode); // Call parent's setDevMode from App.js
+      setDevMode(newDevMode);
       setShowDevPasswordModal(false);
       setDevPasswordInput("");
       Alert.alert(
@@ -763,7 +683,6 @@ export default function ProfileScreen({
     );
   };
 
-  // Helper to render stars
   const renderStars = (average) => {
     const rating = parseFloat(average);
     const stars = [];
@@ -777,240 +696,79 @@ export default function ProfileScreen({
     return stars;
   };
 
-  // Modals
   const TagPickerModal = () => (
     <Modal
       visible={showTagPicker}
       animationType="slide"
       onRequestClose={() => setShowTagPicker(false)}
     >
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.outline,
-          }}
-        >
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>
           <Text variant="headlineMedium">Select Tags (Max 5)</Text>
-          <IconButton
-            icon="close"
-            size={24}
-            onPress={() => setShowTagPicker(false)}
-          />
+          <IconButton icon="close" size={24} onPress={() => setShowTagPicker(false)} />
         </View>
-
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-        >
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
           <View style={styles.tagsGrid}>
             {AVAILABLE_TAGS.map((tag, index) => (
-              <Chip
-                key={index}
-                selected={profile.tags.includes(tag)}
-                onPress={() => toggleTag(tag)}
-                style={styles.tagChip}
-              >
+              <Chip key={index} selected={profile.tags.includes(tag)} onPress={() => toggleTag(tag)} style={styles.tagChip}>
                 {tag}
               </Chip>
             ))}
           </View>
         </ScrollView>
-
-        <View
-          style={{
-            padding: 16,
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.outline,
-          }}
-        >
-          <Button
-            mode="contained"
-            onPress={() => setShowTagPicker(false)}
-            icon="check"
-          >
-            Done
-          </Button>
+        <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.outline }}>
+          <Button mode="contained" onPress={() => setShowTagPicker(false)} icon="check">Done</Button>
         </View>
       </SafeAreaView>
     </Modal>
   );
 
   const PartnerSearchModal = () => (
-    <Modal
-      visible={showPartnerSearch}
-      animationType="slide"
-      onRequestClose={() => setShowPartnerSearch(false)}
-    >
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-        >
+    <Modal visible={showPartnerSearch} animationType="slide" onRequestClose={() => setShowPartnerSearch(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}>
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">Find a Duo Partner</Text>
-            <IconButton
-              icon="close"
-              onPress={() => {
-                setShowPartnerSearch(false);
-                setSearchQuery("");
-                setSearchResults([]);
-              }}
-            />
+            <IconButton icon="close" onPress={() => { setShowPartnerSearch(false); setSearchQuery(""); setSearchResults([]); }} />
           </View>
-
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 15, paddingBottom: 40 }}
-            keyboardShouldPersistTaps="handled"
-          >
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 15, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
             <Card style={{ marginBottom: 16 }}>
               <Card.Content>
-                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
-                  To add a duo partner:
-                </Text>
-                <Text variant="bodySmall" style={{ lineHeight: 20 }}>
-                  1. Ask your friend to share their User ID{"\n"}
-                  2. Paste their User ID below{"\n"}
-                  3. Send them a partner request
-                </Text>
+                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>To add a duo partner:</Text>
+                <Text variant="bodySmall" style={{ lineHeight: 20 }}>1. Ask your friend to share their User ID{"\n"}2. Paste their User ID below{"\n"}3. Send them a partner request</Text>
               </Card.Content>
             </Card>
-
-            <Card
-              style={{
-                marginBottom: 16,
-                backgroundColor: theme.colors.primaryContainer,
-              }}
-            >
+            <Card style={{ marginBottom: 16, backgroundColor: theme.colors.primaryContainer }}>
               <Card.Content>
-                <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                  Your User ID:
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    Clipboard.setString(CURRENT_USER_ID);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 3000);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor: theme.colors.surface,
-                    borderRadius: 8,
-                    padding: 12,
-                  }}
-                >
-                  <Text
-                    variant="bodyMedium"
-                    style={{
-                      fontFamily: "monospace",
-                      flex: 1,
-                    }}
-                    selectable={true}
-                  >
-                    {CURRENT_USER_ID}
-                  </Text>
-                  <IconButton
-                    icon={copied ? "check" : "content-copy"}
-                    size={20}
-                    iconColor={copied ? "#4CAF50" : theme.colors.primary}
-                  />
+                <Text variant="titleSmall" style={{ marginBottom: 8 }}>Your User ID:</Text>
+                <TouchableOpacity onPress={() => { Clipboard.setString(CURRENT_USER_ID); setCopied(true); setTimeout(() => setCopied(false), 3000); }} style={{ flexDirection: "row", alignItems: "center", backgroundColor: theme.colors.surface, borderRadius: 8, padding: 12 }}>
+                  <Text variant="bodyMedium" style={{ fontFamily: "monospace", flex: 1 }} selectable={true}>{CURRENT_USER_ID}</Text>
+                  <IconButton icon={copied ? "check" : "content-copy"} size={20} iconColor={copied ? "#4CAF50" : theme.colors.primary} />
                 </TouchableOpacity>
-                <Text
-                  variant="bodySmall"
-                  style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}
-                >
-                  Tap to copy
-                </Text>
+                <Text variant="bodySmall" style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}>Tap to copy</Text>
               </Card.Content>
             </Card>
-
-            <TextInput
-              label="Enter Partner's User ID"
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              mode="outlined"
-              style={styles.searchInput}
-              left={<TextInput.Icon icon="account-search" />}
-              right={
-                searching ? (
-                  <TextInput.Icon icon={() => <ActivityIndicator />} />
-                ) : null
-              }
-              placeholder="Paste your friend's User ID here"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              keyboardType="default"
-              textContentType="none"
-              selectTextOnFocus={true}
-            />
-
+            <TextInput label="Enter Partner's User ID" value={searchQuery} onChangeText={handleSearchChange} mode="outlined" style={styles.searchInput} left={<TextInput.Icon icon="account-search" />} right={searching ? <TextInput.Icon icon={() => <ActivityIndicator />} /> : null} placeholder="Paste your friend's User ID here" autoCapitalize="none" autoCorrect={false} autoComplete="off" keyboardType="default" textContentType="none" selectTextOnFocus={true} />
             {searchResults.length === 0 && searchQuery.length >= 10 ? (
-              <View style={styles.emptyState}>
-                <Text>No user found with this ID</Text>
-              </View>
+              <View style={styles.emptyState}><Text>No user found with this ID</Text></View>
             ) : (
               searchResults.map((item) => (
                 <Card key={item.id} style={styles.searchResultCard}>
                   <Card.Content>
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      <Avatar.Image
-                        size={50}
-                        source={{
-                          uri:
-                            item.photos?.[0] ||
-                            "https://via.placeholder.com/150",
-                        }}
-                      />
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Avatar.Image size={50} source={{ uri: item.photos?.[0] || "https://via.placeholder.com/150" }} />
                       <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text variant="titleMedium">{item.name}</Text>
-                        <Text variant="bodySmall">
-                          {item.age} years old •{" "}
-                          {item.city || "Location unknown"}
-                        </Text>
+                        <Text variant="bodySmall">{item.age} years old • {item.city || "Location unknown"}</Text>
                       </View>
                     </View>
-
                     {item.tags && item.tags.length > 0 && (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          marginTop: 8,
-                        }}
-                      >
-                        {item.tags.slice(0, 3).map((tag, index) => (
-                          <Chip key={index} compact>
-                            {tag}
-                          </Chip>
-                        ))}
-                        {item.tags.length > 3 && (
-                          <Chip compact>+{item.tags.length - 3} more</Chip>
-                        )}
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
+                        {item.tags.slice(0, 3).map((tag, index) => (<Chip key={index} compact>{tag}</Chip>))}
+                        {item.tags.length > 3 && <Chip compact>+{item.tags.length - 3} more</Chip>}
                       </View>
                     )}
-
-                    <Button
-                      mode="contained"
-                      onPress={() => handleSendPartnerRequest(item.id)}
-                      style={{ marginTop: 12 }}
-                      icon="account-plus"
-                    >
-                      Send Request
-                    </Button>
+                    <Button mode="contained" onPress={() => handleSendPartnerRequest(item.id)} style={{ marginTop: 12 }} icon="account-plus">Send Request</Button>
                   </Card.Content>
                 </Card>
               ))
@@ -1022,108 +780,30 @@ export default function ProfileScreen({
   );
 
   const PendingRequestsModal = () => (
-    <Modal
-      visible={showPendingRequests}
-      animationType="slide"
-      onRequestClose={() => setShowPendingRequests(false)}
-    >
-      <SafeAreaView
-        style={{
-          flex: 1,
-          backgroundColor: theme.colors.background,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: 16,
-            paddingTop: 8,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.outline,
-          }}
-        >
-          <Text variant="headlineMedium">
-            Pending Requests ({pendingRequests.length})
-          </Text>
-          <IconButton
-            icon="close"
-            size={24}
-            onPress={() => setShowPendingRequests(false)}
-          />
+    <Modal visible={showPendingRequests} animationType="slide" onRequestClose={() => setShowPendingRequests(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, paddingTop: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>
+          <Text variant="headlineMedium">Pending Requests ({pendingRequests.length})</Text>
+          <IconButton icon="close" size={24} onPress={() => setShowPendingRequests(false)} />
         </View>
-
-        <Text
-          variant="bodySmall"
-          style={{
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            fontStyle: "italic",
-            opacity: 0.7,
-          }}
-        >
-          Tap on a request to view their full profile
-        </Text>
-
+        <Text variant="bodySmall" style={{ paddingHorizontal: 16, paddingVertical: 12, fontStyle: "italic", opacity: 0.7 }}>Tap on a request to view their full profile</Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           {pendingRequests.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text>No pending requests</Text>
-            </View>
+            <View style={styles.emptyState}><Text>No pending requests</Text></View>
           ) : (
             pendingRequests.map((request) => (
-              <Card
-                key={request.id}
-                style={styles.requestCard}
-                onPress={() => {
-                  setViewingRequesterProfile(request.requesterProfile);
-                  setRequesterImageIndex(0);
-                }}
-              >
+              <Card key={request.id} style={styles.requestCard} onPress={() => { setViewingRequesterProfile(request.requesterProfile); setRequesterImageIndex(0); }}>
                 <Card.Content>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Avatar.Image
-                      size={50}
-                      source={{
-                        uri:
-                          request.requesterProfile.photos?.[0] ||
-                          "https://via.placeholder.com/150",
-                      }}
-                    />
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                    <Avatar.Image size={50} source={{ uri: request.requesterProfile.photos?.[0] || "https://via.placeholder.com/150" }} />
                     <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text variant="titleMedium">
-                        {request.requesterProfile.name}
-                      </Text>
-                      <Text variant="bodySmall">
-                        {request.requesterProfile.age} years old
-                      </Text>
+                      <Text variant="titleMedium">{request.requesterProfile.name}</Text>
+                      <Text variant="bodySmall">{request.requesterProfile.age} years old</Text>
                     </View>
                   </View>
-
                   <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                    <Button
-                      mode="contained"
-                      onPress={() =>
-                        handleAcceptRequest(request.id, request.fromUserId)
-                      }
-                      style={{ flex: 1 }}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      onPress={() => handleDeclineRequest(request.id)}
-                      style={{ flex: 1 }}
-                    >
-                      Decline
-                    </Button>
+                    <Button mode="contained" onPress={() => handleAcceptRequest(request.id, request.fromUserId)} style={{ flex: 1 }}>Accept</Button>
+                    <Button mode="outlined" onPress={() => handleDeclineRequest(request.id)} style={{ flex: 1 }}>Decline</Button>
                   </View>
                 </Card.Content>
               </Card>
@@ -1135,241 +815,77 @@ export default function ProfileScreen({
   );
 
   const BugReportModal = () => (
-    <Modal
-      visible={showBugReportModal}
-      animationType="slide"
-      onRequestClose={() => setShowBugReportModal(false)}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: theme.colors.background }}
-        >
+    <Modal visible={showBugReportModal} animationType="slide" onRequestClose={() => setShowBugReportModal(false)}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
           <View style={styles.modalHeader}>
             <Text variant="headlineMedium">Report a Bug</Text>
-            <IconButton
-              icon="close"
-              onPress={() => {
-                setShowBugReportModal(false);
-                setBugReport({ title: "", description: "" });
-              }}
-            />
+            <IconButton icon="close" onPress={() => { setShowBugReportModal(false); setBugReport({ title: "", description: "" }); }} />
           </View>
-
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ padding: 16 }}
-            keyboardShouldPersistTaps="handled"
-          >
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
             <Card style={{ marginBottom: 16 }}>
               <Card.Content>
-                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>
-                  Help us improve the app by reporting any issues you encounter.
-                </Text>
-                <Text
-                  variant="bodySmall"
-                  style={{ fontStyle: "italic", opacity: 0.7 }}
-                >
-                  We'll review your report and work on a fix as soon as
-                  possible.
-                </Text>
+                <Text variant="bodyMedium" style={{ marginBottom: 8 }}>Help us improve the app by reporting any issues you encounter.</Text>
+                <Text variant="bodySmall" style={{ fontStyle: "italic", opacity: 0.7 }}>We'll review your report and work on a fix as soon as possible.</Text>
               </Card.Content>
             </Card>
-
-            <TextInput
-              label="Bug Title *"
-              value={bugReport.title}
-              onChangeText={(text) =>
-                setBugReport({ ...bugReport, title: text })
-              }
-              mode="outlined"
-              style={{ marginBottom: 16 }}
-              placeholder="Brief description of the issue"
-              maxLength={100}
-            />
-
-            <TextInput
-              label="Detailed Description *"
-              value={bugReport.description}
-              onChangeText={(text) =>
-                setBugReport({ ...bugReport, description: text })
-              }
-              mode="outlined"
-              multiline
-              numberOfLines={8}
-              style={{ marginBottom: 16 }}
-              placeholder="What happened? What were you doing when the bug occurred? Any steps to reproduce?"
-            />
-
-            <Text
-              variant="bodySmall"
-              style={{ fontStyle: "italic", opacity: 0.7, marginBottom: 16 }}
-            >
-              * Required fields
-            </Text>
-
-            <Button
-              mode="contained"
-              onPress={handleSubmitBugReport}
-              icon="send"
-              loading={sendingBugReport}
-              disabled={sendingBugReport}
-            >
-              Submit Bug Report
-            </Button>
+            <TextInput label="Bug Title *" value={bugReport.title} onChangeText={(text) => setBugReport({ ...bugReport, title: text })} mode="outlined" style={{ marginBottom: 16 }} placeholder="Brief description of the issue" maxLength={100} />
+            <TextInput label="Detailed Description *" value={bugReport.description} onChangeText={(text) => setBugReport({ ...bugReport, description: text })} mode="outlined" multiline numberOfLines={8} style={{ marginBottom: 16 }} placeholder="What happened? What were you doing when the bug occurred?" />
+            <Text variant="bodySmall" style={{ fontStyle: "italic", opacity: 0.7, marginBottom: 16 }}>* Required fields</Text>
+            <Button mode="contained" onPress={handleSubmitBugReport} icon="send" loading={sendingBugReport} disabled={sendingBugReport}>Submit Bug Report</Button>
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );
 
-  // Requester Profile View Modal
   if (viewingRequesterProfile) {
-    const hasPhotos =
-      viewingRequesterProfile.photos &&
-      viewingRequesterProfile.photos.length > 0;
-    const currentPhoto = hasPhotos
-      ? viewingRequesterProfile.photos[requesterImageIndex]
-      : null;
+    const hasPhotos = viewingRequesterProfile.photos && viewingRequesterProfile.photos.length > 0;
+    const currentPhoto = hasPhotos ? viewingRequesterProfile.photos[requesterImageIndex] : null;
 
     return (
-      <Modal
-        visible={true}
-        animationType="slide"
-        onRequestClose={() => setViewingRequesterProfile(null)}
-      >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: theme.colors.background }}
-        >
-          <Surface
-            style={{ flexDirection: "row", alignItems: "center", padding: 16 }}
-            elevation={2}
-          >
-            <IconButton
-              icon="arrow-left"
-              onPress={() => setViewingRequesterProfile(null)}
-            />
-            <Text variant="titleLarge">
-              {viewingRequesterProfile.name}'s Profile
-            </Text>
+      <Modal visible={true} animationType="slide" onRequestClose={() => setViewingRequesterProfile(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <Surface style={{ flexDirection: "row", alignItems: "center", padding: 16 }} elevation={2}>
+            <IconButton icon="arrow-left" onPress={() => setViewingRequesterProfile(null)} />
+            <Text variant="titleLarge">{viewingRequesterProfile.name}'s Profile</Text>
           </Surface>
-
           <ScrollView>
             <Card style={styles.card}>
               {currentPhoto ? (
-                <Card.Cover
-                  source={{ uri: currentPhoto }}
-                  style={{ height: 400 }}
-                />
+                <Card.Cover source={{ uri: currentPhoto }} style={{ height: 400 }} />
               ) : (
-                <View
-                  style={{
-                    height: 400,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: "#f0f0f0",
-                  }}
-                >
+                <View style={{ height: 400, justifyContent: "center", alignItems: "center", backgroundColor: "#f0f0f0" }}>
                   <Avatar.Icon size={120} icon="account" />
-                  <Text variant="bodyLarge" style={{ marginTop: 8 }}>
-                    No photos
-                  </Text>
+                  <Text variant="bodyLarge" style={{ marginTop: 8 }}>No photos</Text>
                 </View>
               )}
-
               {hasPhotos && viewingRequesterProfile.photos.length > 1 && (
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: 16,
-                    left: 0,
-                    right: 0,
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <IconButton
-                    icon="chevron-left"
-                    iconColor="white"
-                    onPress={() =>
-                      setRequesterImageIndex((prev) =>
-                        prev === 0
-                          ? viewingRequesterProfile.photos.length - 1
-                          : prev - 1,
-                      )
-                    }
-                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                  />
+                <View style={{ position: "absolute", bottom: 16, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <IconButton icon="chevron-left" iconColor="white" onPress={() => setRequesterImageIndex((prev) => prev === 0 ? viewingRequesterProfile.photos.length - 1 : prev - 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {viewingRequesterProfile.photos.map((_, index) => (
-                      <View
-                        key={index}
-                        style={{
-                          width: index === requesterImageIndex ? 10 : 8,
-                          height: index === requesterImageIndex ? 10 : 8,
-                          borderRadius: index === requesterImageIndex ? 5 : 4,
-                          backgroundColor:
-                            index === requesterImageIndex
-                              ? "white"
-                              : "rgba(255, 255, 255, 0.5)",
-                        }}
-                      />
+                      <View key={index} style={{ width: index === requesterImageIndex ? 10 : 8, height: index === requesterImageIndex ? 10 : 8, borderRadius: index === requesterImageIndex ? 5 : 4, backgroundColor: index === requesterImageIndex ? "white" : "rgba(255, 255, 255, 0.5)" }} />
                     ))}
                   </View>
-                  <IconButton
-                    icon="chevron-right"
-                    iconColor="white"
-                    onPress={() =>
-                      setRequesterImageIndex((prev) =>
-                        prev === viewingRequesterProfile.photos.length - 1
-                          ? 0
-                          : prev + 1,
-                      )
-                    }
-                    style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                  />
+                  <IconButton icon="chevron-right" iconColor="white" onPress={() => setRequesterImageIndex((prev) => prev === viewingRequesterProfile.photos.length - 1 ? 0 : prev + 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
                 </View>
               )}
             </Card>
-
             <Card style={styles.card}>
               <Card.Content>
-                <Text variant="headlineMedium">
-                  {viewingRequesterProfile.name}, {viewingRequesterProfile.age}
-                </Text>
-                {viewingRequesterProfile.city && (
-                  <Text variant="bodyMedium" style={{ marginTop: 4 }}>
-                    📍 {viewingRequesterProfile.city}
-                  </Text>
+                <Text variant="headlineMedium">{viewingRequesterProfile.name}, {viewingRequesterProfile.age}</Text>
+                {viewingRequesterProfile.city && <Text variant="bodyMedium" style={{ marginTop: 4 }}>📍 {viewingRequesterProfile.city}</Text>}
+                <Text style={styles.description}>{viewingRequesterProfile.description || "No description"}</Text>
+                {viewingRequesterProfile.tags && viewingRequesterProfile.tags.length > 0 && (
+                  <>
+                    <Divider style={styles.divider} />
+                    <Text variant="titleMedium" style={styles.sectionTitle}>Interests</Text>
+                    <View style={styles.tagsDisplay}>
+                      {viewingRequesterProfile.tags.map((tag, index) => (<Chip key={index} style={styles.tagDisplay}>{tag}</Chip>))}
+                    </View>
+                  </>
                 )}
-
-                {viewingRequesterProfile.description ? (
-                  <Text style={styles.description}>
-                    {viewingRequesterProfile.description}
-                  </Text>
-                ) : (
-                  <Text style={styles.description}>No description</Text>
-                )}
-
-                {viewingRequesterProfile.tags &&
-                  viewingRequesterProfile.tags.length > 0 && (
-                    <>
-                      <Divider style={styles.divider} />
-                      <Text variant="titleMedium" style={styles.sectionTitle}>
-                        Interests
-                      </Text>
-                      <View style={styles.tagsDisplay}>
-                        {viewingRequesterProfile.tags.map((tag, index) => (
-                          <Chip key={index} style={styles.tagDisplay}>
-                            {tag}
-                          </Chip>
-                        ))}
-                      </View>
-                    </>
-                  )}
               </Card.Content>
             </Card>
           </ScrollView>
@@ -1378,160 +894,55 @@ export default function ProfileScreen({
     );
   }
 
-  // Partner Profile View Modal
   if (viewingPartnerProfile && duoPartnerProfile) {
-    const hasPhotos =
-      duoPartnerProfile.photos && duoPartnerProfile.photos.length > 0;
-    const currentPhoto = hasPhotos
-      ? duoPartnerProfile.photos[currentImageIndex]
-      : null;
+    const hasPhotos = duoPartnerProfile.photos && duoPartnerProfile.photos.length > 0;
+    const currentPhoto = hasPhotos ? duoPartnerProfile.photos[currentImageIndex] : null;
 
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <Surface
-          style={{ flexDirection: "row", alignItems: "center", padding: 16 }}
-          elevation={2}
-        >
-          <IconButton
-            icon="arrow-left"
-            onPress={() => setViewingPartnerProfile(false)}
-          />
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Surface style={{ flexDirection: "row", alignItems: "center", padding: 16 }} elevation={2}>
+          <IconButton icon="arrow-left" onPress={() => setViewingPartnerProfile(false)} />
           <Text variant="titleLarge">{duoPartnerProfile.name}'s Profile</Text>
         </Surface>
-
         <ScrollView>
           <Card style={styles.card}>
             {currentPhoto ? (
-              <Card.Cover
-                source={{ uri: currentPhoto }}
-                style={{ height: 400 }}
-              />
+              <Card.Cover source={{ uri: currentPhoto }} style={{ height: 400 }} />
             ) : (
-              <View
-                style={{
-                  height: 400,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#f0f0f0",
-                }}
-              >
+              <View style={{ height: 400, justifyContent: "center", alignItems: "center", backgroundColor: "#f0f0f0" }}>
                 <Avatar.Icon size={120} icon="account" />
-                <Text variant="bodyLarge" style={{ marginTop: 8 }}>
-                  No photos
-                </Text>
+                <Text variant="bodyLarge" style={{ marginTop: 8 }}>No photos</Text>
               </View>
             )}
-
             {hasPhotos && duoPartnerProfile.photos.length > 1 && (
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 16,
-                  left: 0,
-                  right: 0,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <IconButton
-                  icon="chevron-left"
-                  iconColor="white"
-                  onPress={() =>
-                    setCurrentImageIndex((prev) =>
-                      prev === 0
-                        ? duoPartnerProfile.photos.length - 1
-                        : prev - 1,
-                    )
-                  }
-                  style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                />
+              <View style={{ position: "absolute", bottom: 16, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <IconButton icon="chevron-left" iconColor="white" onPress={() => setCurrentImageIndex((prev) => prev === 0 ? duoPartnerProfile.photos.length - 1 : prev - 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {duoPartnerProfile.photos.map((_, index) => (
-                    <View
-                      key={index}
-                      style={{
-                        width: index === currentImageIndex ? 10 : 8,
-                        height: index === currentImageIndex ? 10 : 8,
-                        borderRadius: index === currentImageIndex ? 5 : 4,
-                        backgroundColor:
-                          index === currentImageIndex
-                            ? "white"
-                            : "rgba(255, 255, 255, 0.5)",
-                      }}
-                    />
+                    <View key={index} style={{ width: index === currentImageIndex ? 10 : 8, height: index === currentImageIndex ? 10 : 8, borderRadius: index === currentImageIndex ? 5 : 4, backgroundColor: index === currentImageIndex ? "white" : "rgba(255, 255, 255, 0.5)" }} />
                   ))}
                 </View>
-                <IconButton
-                  icon="chevron-right"
-                  iconColor="white"
-                  onPress={() =>
-                    setCurrentImageIndex((prev) =>
-                      prev === duoPartnerProfile.photos.length - 1
-                        ? 0
-                        : prev + 1,
-                    )
-                  }
-                  style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-                />
+                <IconButton icon="chevron-right" iconColor="white" onPress={() => setCurrentImageIndex((prev) => prev === duoPartnerProfile.photos.length - 1 ? 0 : prev + 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
               </View>
             )}
           </Card>
-
           <Card style={styles.card}>
             <Card.Content>
-              <Text variant="headlineMedium">
-                {duoPartnerProfile.name}, {duoPartnerProfile.age}
-              </Text>
-              <Text
-                variant="bodyMedium"
-                style={{
-                  marginTop: 8,
-                  fontStyle: "italic",
-                  color: theme.colors.primary,
-                }}
-              >
-                Your Duo Partner
-              </Text>
-
-              {duoPartnerProfile.city && (
-                <Text variant="bodyMedium" style={{ marginTop: 4 }}>
-                  📍 {duoPartnerProfile.city}
-                </Text>
-              )}
-
-              {duoPartnerProfile.description && (
-                <Text style={{ marginTop: 12, lineHeight: 24 }}>
-                  {duoPartnerProfile.description}
-                </Text>
-              )}
-
+              <Text variant="headlineMedium">{duoPartnerProfile.name}, {duoPartnerProfile.age}</Text>
+              <Text variant="bodyMedium" style={{ marginTop: 8, fontStyle: "italic", color: theme.colors.primary }}>Your Duo Partner</Text>
+              {duoPartnerProfile.city && <Text variant="bodyMedium" style={{ marginTop: 4 }}>📍 {duoPartnerProfile.city}</Text>}
+              {duoPartnerProfile.description && <Text style={{ marginTop: 12, lineHeight: 24 }}>{duoPartnerProfile.description}</Text>}
               {duoPartnerProfile.tags && duoPartnerProfile.tags.length > 0 && (
                 <View style={{ marginTop: 16 }}>
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
-                    {duoPartnerProfile.tags.map((tag, index) => (
-                      <Chip key={index} style={styles.tagDisplay}>
-                        {tag}
-                      </Chip>
-                    ))}
+                    {duoPartnerProfile.tags.map((tag, index) => (<Chip key={index} style={styles.tagDisplay}>{tag}</Chip>))}
                   </View>
                 </View>
               )}
             </Card.Content>
           </Card>
-
-          <Button
-            mode="outlined"
-            icon="account-remove"
-            onPress={handleRemovePartner}
-            style={{ margin: 16 }}
-            textColor="#ff6b6b"
-          >
-            Remove Duo Partner
-          </Button>
+          <Button mode="outlined" icon="account-remove" onPress={handleRemovePartner} style={{ margin: 16 }} textColor="#ff6b6b">Remove Duo Partner</Button>
         </ScrollView>
       </View>
     );
@@ -1543,365 +954,142 @@ export default function ProfileScreen({
 
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <ScrollView
-          style={[
-            styles.container,
-            { backgroundColor: theme.colors.background },
-          ]}
-          contentContainerStyle={{ paddingBottom: 80 }}
-        >
-          {/* Header with Settings */}
+        <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={{ paddingBottom: 80 }}>
           <Surface style={styles.header} elevation={0}>
             <Text variant="headlineSmall">Profile</Text>
-            <LongPressGestureHandler
-              onHandlerStateChange={handleDevLongPress}
-              minDurationMs={1000}
-            >
-              <IconButton
-                icon="cog"
-                onPress={() => setShowSettingsModal(true)}
-                size={24}
-              />
+            <LongPressGestureHandler onHandlerStateChange={handleDevLongPress} minDurationMs={1000}>
+              <IconButton icon="cog" onPress={() => setShowSettingsModal(true)} size={24} />
             </LongPressGestureHandler>
           </Surface>
 
-          {/* Circular Profile Photo Section */}
+          {/* Subscription Status Banner */}
+          {subscriptionStatus === "active" && (
+            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#e8f5e9" }}>
+              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>✓</Text>
+                <Text variant="titleSmall" style={{ color: "#2e7d32", fontWeight: "bold" }}>Premium Member</Text>
+              </Card.Content>
+            </Card>
+          )}
+          {subscriptionStatus === "past_due" && (
+            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#fff8e1" }}>
+              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>⚠️</Text>
+                <Text variant="titleSmall" style={{ color: "#f57f17", fontWeight: "bold" }}>Payment Past Due — Please update your payment method</Text>
+              </Card.Content>
+            </Card>
+          )}
+          {subscriptionStatus === "canceled" && (
+            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#fff5f5" }}>
+              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>✕</Text>
+                <Text variant="titleSmall" style={{ color: "#c62828", fontWeight: "bold" }}>Subscription Canceled</Text>
+              </Card.Content>
+            </Card>
+          )}
+
           <View style={styles.profilePhotoSection}>
             <TouchableOpacity onPress={() => setIsEditing(true)}>
               <View style={styles.circularPhoto}>
-                <Avatar.Image
-                  size={120}
-                  source={{
-                    uri: mainPhoto || "https://via.placeholder.com/120",
-                  }}
-                />
+                <Avatar.Image size={120} source={{ uri: mainPhoto || "https://via.placeholder.com/120" }} />
               </View>
-              {/* Edit indicator badge */}
               <View style={styles.editBadge}>
-                <IconButton
-                  icon="pencil"
-                  size={16}
-                  iconColor="#fff"
-                  style={{ margin: 0 }}
-                />
+                <IconButton icon="pencil" size={16} iconColor="#fff" style={{ margin: 0 }} />
               </View>
             </TouchableOpacity>
-
-            <Text variant="headlineMedium" style={styles.profileName}>
-              {profile.name || "Add Your Name"}
-            </Text>
-
-            {profile.age && (
-              <Text variant="bodyMedium" style={styles.profileAge}>
-                {profile.age} years old
-              </Text>
-            )}
-
-            {/* Rating Stars */}
+            <Text variant="headlineMedium" style={styles.profileName}>{profile.name || "Add Your Name"}</Text>
+            {profile.age && <Text variant="bodyMedium" style={styles.profileAge}>{profile.age} years old</Text>}
             <View style={styles.ratingContainerHinge}>
-              <View style={styles.starsContainer}>
-                {renderStars(rating.average)}
-              </View>
-              <Text variant="bodySmall" style={{ marginTop: 4 }}>
-                {rating.average} ({rating.count} rating
-                {rating.count !== 1 ? "s" : ""})
-              </Text>
+              <View style={styles.starsContainer}>{renderStars(rating.average)}</View>
+              <Text variant="bodySmall" style={{ marginTop: 4 }}>{rating.average} ({rating.count} rating{rating.count !== 1 ? "s" : ""})</Text>
             </View>
           </View>
 
-          {/* Action Buttons Row */}
           <View style={styles.actionButtons}>
-            <Button
-              mode="contained"
-              icon="pencil"
-              onPress={() => {
-                console.log("Edit Profile button pressed!");
-                setIsEditing(true);
-                console.log("isEditing set to true");
-              }}
-              style={styles.editButton}
-            >
-              Edit Profile
-            </Button>
+            <Button mode="contained" icon="pencil" onPress={() => setIsEditing(true)} style={styles.editButton}>Edit Profile</Button>
           </View>
 
-          {/* Dev Mode: Reset Test Data Button */}
           {devMode && (
             <View style={styles.actionButtons}>
-              <Button
-                mode="outlined"
-                icon="refresh"
-                onPress={handleResetTestData}
-                style={[styles.editButton, { marginTop: 8 }]}
-                buttonColor={theme.colors.errorContainer}
-                textColor={theme.colors.error}
-              >
-                Reset Test Data
-              </Button>
+              <Button mode="outlined" icon="refresh" onPress={handleResetTestData} style={[styles.editButton, { marginTop: 8 }]} buttonColor={theme.colors.errorContainer} textColor={theme.colors.error}>Reset Test Data</Button>
             </View>
           )}
 
-          {/* Warning if user has no photos */}
-          {profileLoaded &&
-            (!profile.photos || profile.photos.length === 0) && (
-              <Card
-                style={[styles.warningCard, { backgroundColor: "#fff5f5" }]}
-              >
-                <Card.Content>
-                  <View style={styles.warningHeader}>
-                    <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
-                    <Text
-                      variant="titleMedium"
-                      style={{ color: "#ff6b6b", fontWeight: "bold" }}
-                    >
-                      Photo Required
-                    </Text>
-                  </View>
-                  <Text style={{ color: "#666", marginTop: 8 }}>
-                    Add at least one photo to appear in the dating feed and
-                    start matching!
-                  </Text>
-                </Card.Content>
-              </Card>
-            )}
+          {profileLoaded && (!profile.photos || profile.photos.length === 0) && (
+            <Card style={[styles.warningCard, { backgroundColor: "#fff5f5" }]}>
+              <Card.Content>
+                <View style={styles.warningHeader}>
+                  <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
+                  <Text variant="titleMedium" style={{ color: "#ff6b6b", fontWeight: "bold" }}>Photo Required</Text>
+                </View>
+                <Text style={{ color: "#666", marginTop: 8 }}>Add at least one photo to appear in the dating feed and start matching!</Text>
+              </Card.Content>
+            </Card>
+          )}
 
-          {/* Duo Partner Section */}
           <Card style={styles.card}>
-            <Card.Title
-              title="Your Duo Partner"
-              left={(props) => (
-                <Avatar.Icon {...props} icon="account-multiple" size={40} />
-              )}
-            />
+            <Card.Title title="Your Duo Partner" left={(props) => <Avatar.Icon {...props} icon="account-multiple" size={40} />} />
             <Card.Content>
               {duoPartnerProfile ? (
                 <>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setCurrentImageIndex(0);
-                      setViewingPartnerProfile(true);
-                    }}
-                    style={styles.partnerContainer}
-                  >
-                    <Avatar.Image
-                      size={80}
-                      source={{
-                        uri:
-                          duoPartnerProfile.photos?.[0] ||
-                          "https://via.placeholder.com/80",
-                      }}
-                    />
+                  <TouchableOpacity onPress={() => { setCurrentImageIndex(0); setViewingPartnerProfile(true); }} style={styles.partnerContainer}>
+                    <Avatar.Image size={80} source={{ uri: duoPartnerProfile.photos?.[0] || "https://via.placeholder.com/80" }} />
                     <View style={styles.partnerInfo}>
                       <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
-                      <Text
-                        variant="bodyMedium"
-                        style={{ color: theme.colors.onSurfaceVariant }}
-                      >
-                        {duoPartnerProfile.age} years old
-                      </Text>
-                      <Text
-                        variant="bodySmall"
-                        style={{ marginTop: 4, color: theme.colors.primary }}
-                      >
-                        Tap to view profile →
-                      </Text>
+                      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{duoPartnerProfile.age} years old</Text>
+                      <Text variant="bodySmall" style={{ marginTop: 4, color: theme.colors.primary }}>Tap to view profile →</Text>
                     </View>
                   </TouchableOpacity>
-
-                  {/* Warning if duo partner has no photos */}
-                  {profileLoaded &&
-                    (!duoPartnerProfile.photos ||
-                      duoPartnerProfile.photos.length === 0) && (
-                      <Card
-                        style={{
-                          marginTop: 12,
-                          borderColor: "#ff9800",
-                          borderWidth: 2,
-                          backgroundColor: "#fff8e1",
-                        }}
-                      >
-                        <Card.Content>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              marginBottom: 8,
-                            }}
-                          >
-                            <Text style={{ fontSize: 24, marginRight: 8 }}>
-                              ⚠️
-                            </Text>
-                            <Text
-                              variant="titleMedium"
-                              style={{ color: "#ff9800", fontWeight: "bold" }}
-                            >
-                              Partner Needs Photos
-                            </Text>
-                          </View>
-                          <Text style={{ color: "#666" }}>
-                            Your duo partner needs to add at least one photo for
-                            your duo to appear in the dating feed.
-                          </Text>
-                        </Card.Content>
-                      </Card>
-                    )}
+                  {profileLoaded && (!duoPartnerProfile.photos || duoPartnerProfile.photos.length === 0) && (
+                    <Card style={{ marginTop: 12, borderColor: "#ff9800", borderWidth: 2, backgroundColor: "#fff8e1" }}>
+                      <Card.Content>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                          <Text style={{ fontSize: 24, marginRight: 8 }}>⚠️</Text>
+                          <Text variant="titleMedium" style={{ color: "#ff9800", fontWeight: "bold" }}>Partner Needs Photos</Text>
+                        </View>
+                        <Text style={{ color: "#666" }}>Your duo partner needs to add at least one photo for your duo to appear in the dating feed.</Text>
+                      </Card.Content>
+                    </Card>
+                  )}
                 </>
               ) : (
                 <View style={styles.noPartnerContainer}>
                   <Avatar.Icon size={64} icon="account-plus" />
-                  <Text
-                    variant="bodyLarge"
-                    style={{ marginTop: 12, marginBottom: 16 }}
-                  >
-                    No duo partner yet
-                  </Text>
-                  <Button
-                    mode="contained"
-                    icon="account-plus"
-                    onPress={() => setShowPartnerSearch(true)}
-                  >
-                    Find a Duo Partner
-                  </Button>
+                  <Text variant="bodyLarge" style={{ marginTop: 12, marginBottom: 16 }}>No duo partner yet</Text>
+                  <Button mode="contained" icon="account-plus" onPress={() => setShowPartnerSearch(true)}>Find a Duo Partner</Button>
                   {pendingRequests.length > 0 && (
-                    <Button
-                      mode="outlined"
-                      icon="bell"
-                      onPress={() => setShowPendingRequests(true)}
-                      style={{ marginTop: 12 }}
-                    >
-                      View Requests ({pendingRequests.length})
-                    </Button>
+                    <Button mode="outlined" icon="bell" onPress={() => setShowPendingRequests(true)} style={{ marginTop: 12 }}>View Requests ({pendingRequests.length})</Button>
                   )}
                 </View>
               )}
             </Card.Content>
           </Card>
 
-          {/* Report Bug Button */}
           <Card style={{ marginHorizontal: 16, marginBottom: 12 }}>
             <Card.Content style={{ padding: 8 }}>
-              <Button
-                mode="contained"
-                icon="bug"
-                onPress={() => setShowBugReportModal(true)}
-                contentStyle={{
-                  paddingVertical: 16,
-                }}
-                labelStyle={{
-                  fontSize: 18,
-                  fontWeight: "bold",
-                }}
-                buttonColor="#8B4A61"
-              >
-                Report a Bug
-              </Button>
+              <Button mode="contained" icon="bug" onPress={() => setShowBugReportModal(true)} contentStyle={{ paddingVertical: 16 }} labelStyle={{ fontSize: 18, fontWeight: "bold" }} buttonColor="#8B4A61">Report a Bug</Button>
             </Card.Content>
           </Card>
 
-          {/* Modals */}
-          <Modal
-            visible={showDevPasswordModal}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setShowDevPasswordModal(false)}
-          >
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: "rgba(0,0,0,0.5)",
-              }}
-            >
-              <View
-                style={{
-                  backgroundColor: "white",
-                  padding: 20,
-                  borderRadius: 10,
-                  width: "80%",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}
-                >
-                  Dev Mode
-                </Text>
-                <Text style={{ fontSize: 14, marginBottom: 15, color: "#666" }}>
-                  Enter password to toggle dev mode
-                </Text>
-
-                <TextInput
-                  placeholder="Password"
-                  secureTextEntry
-                  value={devPasswordInput}
-                  onChangeText={setDevPasswordInput}
-                  placeholderTextColor="#999"
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#ddd",
-                    padding: 10,
-                    marginBottom: 15,
-                    borderRadius: 5,
-                    fontSize: 16,
-                  }}
-                  autoFocus
-                />
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <Pressable
-                    style={{
-                      flex: 1,
-                      padding: 10,
-                      backgroundColor: "#f0f0f0",
-                      borderRadius: 5,
-                    }}
-                    onPress={() => setShowDevPasswordModal(false)}
-                  >
-                    <Text
-                      style={{
-                        textAlign: "center",
-                        color: "#666",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Cancel
-                    </Text>
+          <Modal visible={showDevPasswordModal} transparent animationType="fade" onRequestClose={() => setShowDevPasswordModal(false)}>
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
+              <View style={{ backgroundColor: "white", padding: 20, borderRadius: 10, width: "80%" }}>
+                <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>Dev Mode</Text>
+                <Text style={{ fontSize: 14, marginBottom: 15, color: "#666" }}>Enter password to toggle dev mode</Text>
+                <TextInput placeholder="Password" secureTextEntry value={devPasswordInput} onChangeText={setDevPasswordInput} placeholderTextColor="#999" style={{ borderWidth: 1, borderColor: "#ddd", padding: 10, marginBottom: 15, borderRadius: 5, fontSize: 16 }} autoFocus />
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
+                  <Pressable style={{ flex: 1, padding: 10, backgroundColor: "#f0f0f0", borderRadius: 5 }} onPress={() => setShowDevPasswordModal(false)}>
+                    <Text style={{ textAlign: "center", color: "#666", fontWeight: "600" }}>Cancel</Text>
                   </Pressable>
-                  <Pressable
-                    style={{
-                      flex: 1,
-                      padding: 10,
-                      backgroundColor: "#8B4A61",
-                      borderRadius: 5,
-                    }}
-                    onPress={handleDevModeToggle}
-                  >
-                    <Text
-                      style={{
-                        textAlign: "center",
-                        color: "white",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Unlock
-                    </Text>
+                  <Pressable style={{ flex: 1, padding: 10, backgroundColor: "#8B4A61", borderRadius: 5 }} onPress={handleDevModeToggle}>
+                    <Text style={{ textAlign: "center", color: "white", fontWeight: "600" }}>Unlock</Text>
                   </Pressable>
                 </View>
               </View>
             </View>
           </Modal>
-          <SettingsScreen
-            isDarkMode={isDarkMode}
-            toggleTheme={toggleTheme}
-            visible={showSettingsModal}
-            onClose={() => setShowSettingsModal(false)}
-          />
+
+          <SettingsScreen isDarkMode={isDarkMode} toggleTheme={toggleTheme} visible={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
           {PartnerSearchModal()}
           {PendingRequestsModal()}
           {BugReportModal()}
@@ -1910,227 +1098,48 @@ export default function ProfileScreen({
     );
   }
 
-  // EditProfileModal - rendered outside conditional blocks so it persists
   return (
     <EditProfileModal
       visible={isEditing}
       onClose={() => {
-        console.log("Closing EditProfileModal");
         setIsEditing(false);
-        loadAllData(); // Reload profile after editing
+        loadAllData();
       }}
     />
   );
 }
 
-// ========================
-// STYLES (with Hinge additions)
-// ========================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    paddingTop: 8,
-  },
-  headerButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  // NEW HINGE-STYLE ADDITIONS
-  profilePhotoSection: {
-    alignItems: "center",
-    paddingTop: 20,
-    paddingBottom: 24,
-  },
-  circularPhoto: {
-    width: 128, // Avatar size (120) + border (4 * 2)
-    height: 128,
-    borderRadius: 64, // Half of total size
-    borderWidth: 4,
-    borderColor: "#fff",
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    overflow: "hidden",
-  },
-  editBadge: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#8B4A61",
-    borderRadius: 20,
-    width: 36,
-    height: 36,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-    borderColor: "#fff",
-  },
-  profileName: {
-    marginTop: 16,
-    fontWeight: "bold",
-  },
-  profileAge: {
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  ratingContainerHinge: {
-    alignItems: "center",
-    marginTop: 12,
-  },
-  actionButtons: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  editButton: {
-    borderRadius: 25,
-    paddingVertical: 4,
-  },
-  warningCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: "#ff6b6b",
-  },
-  warningHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  partnerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "rgba(139, 74, 97, 0.05)",
-    borderRadius: 12,
-  },
-  partnerInfo: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  noPartnerContainer: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  // EXISTING STYLES
-  card: {
-    margin: 8,
-    marginHorizontal: 16,
-  },
-  photo: {
-    width: 120,
-    height: 160,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  noPhotos: {
-    height: 160,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  noPhotosText: {
-    marginTop: 8,
-  },
-  ratingContainer: {
-    marginVertical: 12,
-  },
-  starsContainer: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  star: {
-    fontSize: 20,
-    color: "#FFD700",
-  },
-  starEmpty: {
-    fontSize: 20,
-    color: "#ddd",
-  },
-  divider: {
-    marginVertical: 12,
-  },
-  description: {
-    marginTop: 12,
-    lineHeight: 24,
-  },
-  sectionTitle: {
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  tagsDisplay: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-  },
-  tagDisplay: {
-    marginRight: 4,
-    marginBottom: 4,
-  },
-  fullWidthButton: {
-    marginTop: 8,
-  },
-  input: {
-    marginBottom: 12,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    padding: 20,
-    paddingTop: 60,
-  },
-  modalContent: {
-    flex: 1,
-    padding: 15,
-  },
-  modalFooter: {
-    padding: 20,
-  },
-  tagsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  tagChip: {
-    marginRight: 4,
-    marginBottom: 4,
-  },
-  searchInput: {
-    marginBottom: 16,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  searchResultCard: {
-    marginBottom: 8,
-  },
-  requestCard: {
-    marginBottom: 12,
-  },
-  bottomButtons: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-around",
-    padding: 16,
-    borderTopWidth: 1,
-  },
-  bottomButton: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
+  container: { flex: 1 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, paddingTop: 8 },
+  profilePhotoSection: { alignItems: "center", paddingTop: 20, paddingBottom: 24 },
+  circularPhoto: { width: 128, height: 128, borderRadius: 64, borderWidth: 4, borderColor: "#fff", backgroundColor: "#fff", justifyContent: "center", alignItems: "center", elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, overflow: "hidden" },
+  editBadge: { position: "absolute", bottom: 0, right: 0, backgroundColor: "#8B4A61", borderRadius: 20, width: 36, height: 36, justifyContent: "center", alignItems: "center", borderWidth: 3, borderColor: "#fff" },
+  profileName: { marginTop: 16, fontWeight: "bold" },
+  profileAge: { marginTop: 4, opacity: 0.7 },
+  ratingContainerHinge: { alignItems: "center", marginTop: 12 },
+  actionButtons: { paddingHorizontal: 16, marginBottom: 16 },
+  editButton: { borderRadius: 25, paddingVertical: 4 },
+  warningCard: { marginHorizontal: 16, marginBottom: 16, borderWidth: 2, borderColor: "#ff6b6b" },
+  warningHeader: { flexDirection: "row", alignItems: "center" },
+  partnerContainer: { flexDirection: "row", alignItems: "center", padding: 12, backgroundColor: "rgba(139, 74, 97, 0.05)", borderRadius: 12 },
+  partnerInfo: { marginLeft: 16, flex: 1 },
+  noPartnerContainer: { alignItems: "center", paddingVertical: 20 },
+  card: { margin: 8, marginHorizontal: 16 },
+  ratingContainer: { marginVertical: 12 },
+  starsContainer: { flexDirection: "row", marginBottom: 4 },
+  star: { fontSize: 20, color: "#FFD700" },
+  starEmpty: { fontSize: 20, color: "#ddd" },
+  divider: { marginVertical: 12 },
+  description: { marginTop: 12, lineHeight: 24 },
+  sectionTitle: { marginTop: 16, marginBottom: 8 },
+  tagsDisplay: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  tagDisplay: { marginRight: 4, marginBottom: 4 },
+  modalHeader: { padding: 20, paddingTop: 60 },
+  tagsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tagChip: { marginRight: 4, marginBottom: 4 },
+  searchInput: { marginBottom: 16 },
+  emptyState: { padding: 40, alignItems: "center", justifyContent: "center" },
+  searchResultCard: { marginBottom: 8 },
+  requestCard: { marginBottom: 12 },
 });
