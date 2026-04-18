@@ -85,13 +85,13 @@ export default function CheckoutScreen({ navigation }) {
   // Wait for Firebase auth to be ready
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
-      console.log("Auth state changed, user:", firebaseUser?.uid);
+      console.log("Auth state changed, uid:", firebaseUser?.uid);
       setUser(firebaseUser);
     });
     return unsubscribe;
   }, []);
 
-  // Only initialize payment sheet once user is available
+  // Only initialize once user is confirmed
   useEffect(() => {
     if (user) {
       initializePaymentSheet(selected);
@@ -100,12 +100,13 @@ export default function CheckoutScreen({ navigation }) {
 
   const fetchPaymentSheetParams = async (plan) => {
     const uid = user?.uid;
-    console.log("Fetching with uid:", uid, "priceId:", PLANS[plan].priceId);
+    const priceId = PLANS[plan].priceId;
+    console.log("Fetching with uid:", uid, "priceId:", priceId);
 
     const response = await fetch(`${API_URL}/payment-sheet`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ priceId: PLANS[plan].priceId, uid }),
+      body: JSON.stringify({ priceId, uid }),
     });
     const data = await response.json();
     console.log("RAW backend response:", JSON.stringify(data));
@@ -124,7 +125,7 @@ export default function CheckoutScreen({ navigation }) {
         await fetchPaymentSheetParams(plan);
 
       if (!paymentIntent || !customerSessionClientSecret || !customer) {
-        console.error("Missing payment params:", { paymentIntent, customerSessionClientSecret, customer });
+        console.error("Missing params:", { paymentIntent, customerSessionClientSecret, customer });
         Alert.alert("Error", "Failed to load payment info. Please try again.");
         return;
       }
@@ -154,6 +155,7 @@ export default function CheckoutScreen({ navigation }) {
   };
 
   const openPaymentSheet = async () => {
+    console.log("Opening payment sheet...");
     const { error } = await presentPaymentSheet();
     if (error) {
       console.error("presentPaymentSheet error:", JSON.stringify(error));
