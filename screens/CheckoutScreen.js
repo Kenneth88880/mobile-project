@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useStripe } from "@stripe/stripe-react-native";
 import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 48 - 12) / 2;
@@ -76,6 +77,7 @@ export default function CheckoutScreen({ navigation }) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [sheetReady, setSheetReady] = useState(false);
   const [selected, setSelected] = useState("monthly");
   const [user, setUser] = useState(null);
 
@@ -91,9 +93,10 @@ export default function CheckoutScreen({ navigation }) {
     return unsubscribe;
   }, []);
 
-  // Only initialize once user is confirmed
+  // Re-init when plan changes or user becomes available
   useEffect(() => {
     if (user) {
+      setSheetReady(false);
       initializePaymentSheet(selected);
     }
   }, [selected, user]);
@@ -144,6 +147,7 @@ export default function CheckoutScreen({ navigation }) {
         Alert.alert("Error", error.message);
       } else {
         console.log("initPaymentSheet SUCCESS");
+        setSheetReady(true);
         setLoading(true);
       }
     } catch (error) {
@@ -155,13 +159,31 @@ export default function CheckoutScreen({ navigation }) {
   };
 
   const openPaymentSheet = async () => {
+    if (!sheetReady) {
+      Alert.alert("Please wait", "Payment is still loading.");
+      return;
+    }
+
     console.log("Opening payment sheet...");
     const { error } = await presentPaymentSheet();
+
     if (error) {
       console.error("presentPaymentSheet error:", JSON.stringify(error));
-      Alert.alert(`Error code: ${error.code}`, error.message);
+      // Canceled by user — do nothing at all
+      if (error.code !== "Canceled") {
+        Alert.alert(`Error code: ${error.code}`, error.message);
+      }
     } else {
-      Alert.alert("Success", "Your subscription is confirmed!");
+      // Payment confirmed — now safe to update Firestore
+      try {
+        await firestore()
+          .collection("profiles")
+          .doc(user.uid)
+          .update({ subscriptionStatus: "active" });
+        Alert.alert("Success", "Your subscription is confirmed!");
+      } catch (err) {
+        console.error("Failed to update subscription status:", err);
+      }
     }
   };
 
