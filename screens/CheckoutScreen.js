@@ -12,6 +12,7 @@ import {
   useColorScheme,
 } from "react-native";
 import { useStripe } from "@stripe/stripe-react-native";
+import auth from "@react-native-firebase/auth";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = (width - 48 - 12) / 2;
@@ -58,14 +59,14 @@ const PLANS = {
     price: "$9.99",
     sub: "Billed Monthly",
     badge: null,
-    amount: 999,
+    priceId: "price_1TNQySPXfOAXW8GLlLeFfhKz",
   },
   annual: {
     label: "Annual",
     price: "$79.99",
     sub: "Billed Annually",
     badge: "SAVE 33%",
-    amount: 7999,
+    priceId: "price_1TNQyjPXfOAXW8GLFxeMxMVa",
   },
 };
 
@@ -76,17 +77,38 @@ export default function CheckoutScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [selected, setSelected] = useState("monthly");
+  const [user, setUser] = useState(null);
 
   const scheme = useColorScheme();
   const c = scheme === "dark" ? dark : light;
 
+  // Wait for Firebase auth to be ready
+  useEffect(() => {
+    const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
+      console.log("Auth state changed, user:", firebaseUser?.uid);
+      setUser(firebaseUser);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Only initialize payment sheet once user is available
+  useEffect(() => {
+    if (user) {
+      initializePaymentSheet(selected);
+    }
+  }, [selected, user]);
+
   const fetchPaymentSheetParams = async (plan) => {
+    const uid = user?.uid;
+    console.log("Fetching with uid:", uid, "priceId:", PLANS[plan].priceId);
+
     const response = await fetch(`${API_URL}/payment-sheet`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: PLANS[plan].amount }),
+      body: JSON.stringify({ priceId: PLANS[plan].priceId, uid }),
     });
     const data = await response.json();
+    console.log("RAW backend response:", JSON.stringify(data));
     return {
       paymentIntent: data.paymentIntent,
       customerSessionClientSecret: data.customerSessionClientSecret,
@@ -101,6 +123,12 @@ export default function CheckoutScreen({ navigation }) {
       const { paymentIntent, customerSessionClientSecret, customer } =
         await fetchPaymentSheetParams(plan);
 
+      if (!paymentIntent || !customerSessionClientSecret || !customer) {
+        console.error("Missing payment params:", { paymentIntent, customerSessionClientSecret, customer });
+        Alert.alert("Error", "Failed to load payment info. Please try again.");
+        return;
+      }
+
       const { error } = await initPaymentSheet({
         merchantDisplayName: "Example, Inc.",
         customerId: customer,
@@ -110,8 +138,13 @@ export default function CheckoutScreen({ navigation }) {
         defaultBillingDetails: { name: "Jane Doe" },
       });
 
-      if (!error) setLoading(true);
-      else console.error("initPaymentSheet error:", error);
+      if (error) {
+        console.error("initPaymentSheet error:", JSON.stringify(error));
+        Alert.alert("Error", error.message);
+      } else {
+        console.log("initPaymentSheet SUCCESS");
+        setLoading(true);
+      }
     } catch (error) {
       console.error("Error initializing payment sheet:", error);
       Alert.alert("Error", "Failed to initialize payment. Please try again.");
@@ -122,19 +155,18 @@ export default function CheckoutScreen({ navigation }) {
 
   const openPaymentSheet = async () => {
     const { error } = await presentPaymentSheet();
-    if (error) Alert.alert(`Error code: ${error.code}`, error.message);
-    else Alert.alert("Success", "Your order is confirmed!");
+    if (error) {
+      console.error("presentPaymentSheet error:", JSON.stringify(error));
+      Alert.alert(`Error code: ${error.code}`, error.message);
+    } else {
+      Alert.alert("Success", "Your subscription is confirmed!");
+    }
   };
-
-  useEffect(() => {
-    initializePaymentSheet(selected);
-  }, [selected]);
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
       <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />
 
-      {/* Header bar */}
       <View style={[styles.header, { backgroundColor: c.primary }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
           <Text style={[styles.backArrow, { color: c.onPrimary }]}>‹</Text>
@@ -146,7 +178,6 @@ export default function CheckoutScreen({ navigation }) {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Plan cards */}
         <View style={styles.plansRow}>
           {Object.entries(PLANS).map(([key, plan]) => {
             const isSelected = selected === key;
@@ -185,7 +216,6 @@ export default function CheckoutScreen({ navigation }) {
           })}
         </View>
 
-        {/* Feature list */}
         <View style={[styles.featuresCard, { backgroundColor: c.surfaceVariant }]}>
           {FEATURES.map((f, i) => (
             <View key={i} style={styles.featureRow}>
@@ -195,7 +225,6 @@ export default function CheckoutScreen({ navigation }) {
           ))}
         </View>
 
-        {/* CTA */}
         {initializing ? (
           <ActivityIndicator size="large" color={c.primary} style={{ marginVertical: 16 }} />
         ) : (
