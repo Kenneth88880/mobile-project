@@ -35,14 +35,16 @@ import {
   getCurrentDuoPartner,
   invalidateDuoCache,
   invalidateProfileCache,
+  getSubscriptionStatus,
+  subscribeToSubscriptionStatus,
 } from "../services/profileService";
-import firestore from "@react-native-firebase/firestore";
 import auth from "@react-native-firebase/auth";
 import SettingsScreen from "./SettingsScreen";
 import { LongPressGestureHandler, State } from "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import EditProfileModal from "../components/EditProfileModal";
 import { AVAILABLE_TAGS } from "../tags";
+import firestore from "@react-native-firebase/firestore";
 
 export default function ProfileScreen({
   isDarkMode,
@@ -92,26 +94,31 @@ export default function ProfileScreen({
   const [devPasswordInput, setDevPasswordInput] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
 
+  // Initial load + real-time listener for subscription status
   useEffect(() => {
-    const fetchSubscriptionStatus = async () => {
-      const uid = auth().currentUser?.uid;
-      if (!uid) return;
-      const doc = await firestore().collection("profiles").doc(uid).get();
-      setSubscriptionStatus(doc.data()?.subscriptionStatus ?? null);
-    };
-    fetchSubscriptionStatus();
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    // Fetch once immediately via the service (uses profile cache)
+    getSubscriptionStatus(uid).then((status) => {
+      setSubscriptionStatus(status);
+    });
+
+    // Then keep it live — webhook updates will reflect instantly
+    const unsubscribe = subscribeToSubscriptionStatus(uid, (status) => {
+      setSubscriptionStatus(status);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     loadAllData();
-    console.log(subscriptionStatus);
   }, []);
 
   useEffect(() => {
     return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
-      }
+      if (searchTimeout) clearTimeout(searchTimeout);
     };
   }, [searchTimeout]);
 
@@ -183,9 +190,7 @@ export default function ProfileScreen({
           if (partnerProfile) {
             setDuoPartnerProfile({
               ...partnerProfile,
-              tags: Array.isArray(partnerProfile.tags)
-                ? partnerProfile.tags
-                : [],
+              tags: Array.isArray(partnerProfile.tags) ? partnerProfile.tags : [],
             });
             setProfile((prev) => ({ ...prev, duoPartnerId: partnerId }));
           }
@@ -198,18 +203,14 @@ export default function ProfileScreen({
         const requestResults = await Promise.all(
           requestsSnapshot.docs.map(async (docSnap) => {
             const requestData = docSnap.data();
-            const requesterProfile = await getUserProfile(
-              requestData.fromUserId,
-            );
+            const requesterProfile = await getUserProfile(requestData.fromUserId);
             if (!requesterProfile) return null;
             return {
               id: docSnap.id,
               ...requestData,
               requesterProfile: {
                 ...requesterProfile,
-                tags: Array.isArray(requesterProfile.tags)
-                  ? requesterProfile.tags
-                  : [],
+                tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
               },
             };
           }),
@@ -261,9 +262,7 @@ export default function ProfileScreen({
             ...requestData,
             requesterProfile: {
               ...requesterProfile,
-              tags: Array.isArray(requesterProfile.tags)
-                ? requesterProfile.tags
-                : [],
+              tags: Array.isArray(requesterProfile.tags) ? requesterProfile.tags : [],
             },
           };
         }),
@@ -280,18 +279,15 @@ export default function ProfileScreen({
         Alert.alert("Missing Info", "Please enter your name and age");
         return;
       }
-
       if (!profile.gender) {
         Alert.alert("Missing Info", "Please select your gender");
         return;
       }
-
       const profileToSave = {
         ...profile,
         name: originalName || profile.name,
         age: originalAge || profile.age,
       };
-
       await saveUserProfile(CURRENT_USER_ID, profileToSave);
       setIsEditing(false);
     } catch (error) {
@@ -322,13 +318,9 @@ export default function ProfileScreen({
       setSearchResults([]);
       return;
     }
-
     setSearching(true);
     try {
-      const userDoc = await firestore()
-        .collection("profiles")
-        .doc(query.trim())
-        .get();
+      const userDoc = await firestore().collection("profiles").doc(query.trim()).get();
 
       if (userDoc.exists) {
         const userData = userDoc.data();
@@ -336,16 +328,12 @@ export default function ProfileScreen({
         if (userDoc.id === CURRENT_USER_ID) {
           setSearchResults([]);
           Alert.alert("Invalid", "You cannot add yourself as a partner");
-          setSearching(false);
           return;
         }
 
-        const hasDuoPartner = userData?.duoPartnerId != null;
-
-        if (hasDuoPartner) {
+        if (userData?.duoPartnerId != null) {
           setSearchResults([]);
           Alert.alert("Unavailable", "This user already has a duo partner");
-          setSearching(false);
           return;
         }
 
@@ -357,7 +345,6 @@ export default function ProfileScreen({
         if (!duosSnapshot.empty) {
           setSearchResults([]);
           Alert.alert("Unavailable", "This user already has a duo partner");
-          setSearching(false);
           return;
         }
 
@@ -390,7 +377,6 @@ export default function ProfileScreen({
         status: "pending",
         createdAt: new Date().toISOString(),
       });
-
       Alert.alert("Success", "Partner request sent!");
       setShowPartnerSearch(false);
       setSearchQuery("");
@@ -411,10 +397,7 @@ export default function ProfileScreen({
         .get();
 
       if (!myDuoSnapshot.empty) {
-        Alert.alert(
-          "Already Partnered",
-          "You already have a duo partner. Remove your current partner first.",
-        );
+        Alert.alert("Already Partnered", "You already have a duo partner. Remove your current partner first.");
         return;
       }
 
@@ -426,27 +409,20 @@ export default function ProfileScreen({
         .get();
 
       if (!theirDuoSnapshot.empty) {
-        await firestore().collection("duoRequests").doc(requestId).update({
-          status: "declined",
-        });
+        await firestore().collection("duoRequests").doc(requestId).update({ status: "declined" });
         Alert.alert("Unavailable", "This user already has a duo partner.");
         await loadPendingRequests();
         return;
       }
 
       const batch = firestore().batch();
-
       const duoRef = firestore().collection("duos").doc();
       batch.set(duoRef, {
         users: [CURRENT_USER_ID, fromUserId],
         status: "active",
         createdAt: new Date().toISOString(),
       });
-
-      batch.update(firestore().collection("duoRequests").doc(requestId), {
-        status: "accepted",
-      });
-
+      batch.update(firestore().collection("duoRequests").doc(requestId), { status: "accepted" });
       await batch.commit();
 
       invalidateDuoCache(CURRENT_USER_ID);
@@ -463,10 +439,7 @@ export default function ProfileScreen({
 
   const handleDeclineRequest = async (requestId) => {
     try {
-      await firestore().collection("duoRequests").doc(requestId).update({
-        status: "declined",
-      });
-
+      await firestore().collection("duoRequests").doc(requestId).update({ status: "declined" });
       Alert.alert("Request Declined");
       await loadPendingRequests();
     } catch (error) {
@@ -478,9 +451,7 @@ export default function ProfileScreen({
   const handleRemovePartner = async () => {
     Alert.alert(
       "⚠️ Remove Duo Partner?",
-      `This will end your duo partnership with ${
-        duoPartnerProfile?.name || "your partner"
-      }.\n\n` +
+      `This will end your duo partnership with ${duoPartnerProfile?.name || "your partner"}.\n\n` +
         "• All your duo matches and chats will be archived\n" +
         "• You can still view archived chats, but can't send new messages\n" +
         "• You'll need a new partner to start matching again\n\n" +
@@ -519,17 +490,11 @@ export default function ProfileScreen({
                 invalidateProfileCache(CURRENT_USER_ID);
                 setDuoPartnerProfile(null);
                 setProfile({ ...profile, duoPartnerId: null });
-                Alert.alert(
-                  "Duo Partnership Ended",
-                  "Your duo partner has been removed and all chats have been archived.",
-                );
+                Alert.alert("Duo Partnership Ended", "Your duo partner has been removed and all chats have been archived.");
               }
             } catch (error) {
               console.error("Error removing partner:", error);
-              Alert.alert(
-                "Error",
-                "Failed to remove partner. Please try again.",
-              );
+              Alert.alert("Error", "Failed to remove partner. Please try again.");
             }
           },
         },
@@ -539,35 +504,28 @@ export default function ProfileScreen({
 
   const handleSubmitBugReport = async () => {
     if (!bugReport.title.trim() || !bugReport.description.trim()) {
-      Alert.alert(
-        "Missing Information",
-        "Please fill in both title and description",
-      );
+      Alert.alert("Missing Information", "Please fill in both title and description");
       return;
     }
 
     setSendingBugReport(true);
     try {
-      const bugReportRef = await firestore()
-        .collection("bugReports")
-        .add({
-          userId: CURRENT_USER_ID,
-          userName: profile.name || "Unknown",
-          userEmail: auth().currentUser?.email || "No email",
-          title: bugReport.title,
-          description: bugReport.description,
-          deviceInfo: Platform.OS,
-          timestamp: new Date().toISOString(),
-          status: "new",
-        });
+      const bugReportRef = await firestore().collection("bugReports").add({
+        userId: CURRENT_USER_ID,
+        userName: profile.name || "Unknown",
+        userEmail: auth().currentUser?.email || "No email",
+        title: bugReport.title,
+        description: bugReport.description,
+        deviceInfo: Platform.OS,
+        timestamp: new Date().toISOString(),
+        status: "new",
+      });
 
-      await firestore()
-        .collection("mail")
-        .add({
-          to: "doubly202@gmail.com",
-          message: {
-            subject: `New Bug Report: ${bugReport.title}`,
-            html: `
+      await firestore().collection("mail").add({
+        to: "doubly202@gmail.com",
+        message: {
+          subject: `New Bug Report: ${bugReport.title}`,
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <div style="background-color: #8B4A61; color: white; padding: 20px; border-radius: 10px 10px 0 0;">
                 <h2 style="margin: 0;">New Bug Report</h2>
@@ -591,22 +549,18 @@ export default function ProfileScreen({
               </div>
             </div>
           `,
-          },
-        });
+        },
+      });
 
-      Alert.alert(
-        "Thank You!",
-        "Your bug report has been submitted. We'll look into it soon!",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setShowBugReportModal(false);
-              setBugReport({ title: "", description: "" });
-            },
+      Alert.alert("Thank You!", "Your bug report has been submitted. We'll look into it soon!", [
+        {
+          text: "OK",
+          onPress: () => {
+            setShowBugReportModal(false);
+            setBugReport({ title: "", description: "" });
           },
-        ],
-      );
+        },
+      ]);
     } catch (error) {
       console.error("Error submitting bug report:", error);
       Alert.alert("Error", "Failed to submit bug report. Please try again.");
@@ -637,12 +591,7 @@ export default function ProfileScreen({
       setDevMode(newDevMode);
       setShowDevPasswordModal(false);
       setDevPasswordInput("");
-      Alert.alert(
-        "Dev Mode",
-        newDevMode
-          ? "Dev mode enabled - only test accounts visible"
-          : "Dev mode disabled",
-      );
+      Alert.alert("Dev Mode", newDevMode ? "Dev mode enabled - only test accounts visible" : "Dev mode disabled");
     } else {
       Alert.alert("Wrong password", "Dev mode password is incorrect");
       setDevPasswordInput("");
@@ -666,16 +615,10 @@ export default function ProfileScreen({
                 return;
               }
               await resetTestData(duo.duoId);
-              Alert.alert(
-                "Success",
-                "Test data has been reset! You can now match with test accounts again.",
-              );
+              Alert.alert("Success", "Test data has been reset! You can now match with test accounts again.");
             } catch (error) {
               console.error("Error resetting test data:", error);
-              Alert.alert(
-                "Error",
-                "Failed to reset test data: " + error.message,
-              );
+              Alert.alert("Error", "Failed to reset test data: " + error.message);
             }
           },
         },
@@ -688,20 +631,57 @@ export default function ProfileScreen({
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       stars.push(
-        <Text key={i} style={i <= rating ? styles.star : styles.starEmpty}>
-          ★
-        </Text>,
+        <Text key={i} style={i <= rating ? styles.star : styles.starEmpty}>★</Text>
       );
     }
     return stars;
   };
 
+  // ─── Subscription Status Banner ───────────────────────────────────────────
+
+  const SubscriptionBanner = () => {
+    if (!subscriptionStatus) return null;
+
+    const banners = {
+      active: {
+        bg: "#e8f5e9",
+        icon: "✓",
+        color: "#2e7d32",
+        label: "Premium Member",
+      },
+      past_due: {
+        bg: "#fff8e1",
+        icon: "⚠️",
+        color: "#f57f17",
+        label: "Payment Past Due — Please update your payment method",
+      },
+      canceled: {
+        bg: "#fff5f5",
+        icon: "✕",
+        color: "#c62828",
+        label: "Subscription Canceled",
+      },
+    };
+
+    const banner = banners[subscriptionStatus];
+    if (!banner) return null;
+
+    return (
+      <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: banner.bg }}>
+        <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
+          <Text style={{ fontSize: 18, marginRight: 8 }}>{banner.icon}</Text>
+          <Text variant="titleSmall" style={{ color: banner.color, fontWeight: "bold" }}>
+            {banner.label}
+          </Text>
+        </Card.Content>
+      </Card>
+    );
+  };
+
+  // ─── Modals ───────────────────────────────────────────────────────────────
+
   const TagPickerModal = () => (
-    <Modal
-      visible={showTagPicker}
-      animationType="slide"
-      onRequestClose={() => setShowTagPicker(false)}
-    >
+    <Modal visible={showTagPicker} animationType="slide" onRequestClose={() => setShowTagPicker(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>
           <Text variant="headlineMedium">Select Tags (Max 5)</Text>
@@ -710,9 +690,7 @@ export default function ProfileScreen({
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
           <View style={styles.tagsGrid}>
             {AVAILABLE_TAGS.map((tag, index) => (
-              <Chip key={index} selected={profile.tags.includes(tag)} onPress={() => toggleTag(tag)} style={styles.tagChip}>
-                {tag}
-              </Chip>
+              <Chip key={index} selected={profile.tags.includes(tag)} onPress={() => toggleTag(tag)} style={styles.tagChip}>{tag}</Chip>
             ))}
           </View>
         </ScrollView>
@@ -748,7 +726,22 @@ export default function ProfileScreen({
                 <Text variant="bodySmall" style={{ marginTop: 8, fontStyle: "italic", opacity: 0.7 }}>Tap to copy</Text>
               </Card.Content>
             </Card>
-            <TextInput label="Enter Partner's User ID" value={searchQuery} onChangeText={handleSearchChange} mode="outlined" style={styles.searchInput} left={<TextInput.Icon icon="account-search" />} right={searching ? <TextInput.Icon icon={() => <ActivityIndicator />} /> : null} placeholder="Paste your friend's User ID here" autoCapitalize="none" autoCorrect={false} autoComplete="off" keyboardType="default" textContentType="none" selectTextOnFocus={true} />
+            <TextInput
+              label="Enter Partner's User ID"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              mode="outlined"
+              style={styles.searchInput}
+              left={<TextInput.Icon icon="account-search" />}
+              right={searching ? <TextInput.Icon icon={() => <ActivityIndicator />} /> : null}
+              placeholder="Paste your friend's User ID here"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              keyboardType="default"
+              textContentType="none"
+              selectTextOnFocus={true}
+            />
             {searchResults.length === 0 && searchQuery.length >= 10 ? (
               <View style={styles.emptyState}><Text>No user found with this ID</Text></View>
             ) : (
@@ -764,7 +757,7 @@ export default function ProfileScreen({
                     </View>
                     {item.tags && item.tags.length > 0 && (
                       <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-                        {item.tags.slice(0, 3).map((tag, index) => (<Chip key={index} compact>{tag}</Chip>))}
+                        {item.tags.slice(0, 3).map((tag, index) => <Chip key={index} compact>{tag}</Chip>)}
                         {item.tags.length > 3 && <Chip compact>+{item.tags.length - 3} more</Chip>}
                       </View>
                     )}
@@ -839,6 +832,8 @@ export default function ProfileScreen({
     </Modal>
   );
 
+  // ─── Viewing requester profile ────────────────────────────────────────────
+
   if (viewingRequesterProfile) {
     const hasPhotos = viewingRequesterProfile.photos && viewingRequesterProfile.photos.length > 0;
     const currentPhoto = hasPhotos ? viewingRequesterProfile.photos[requesterImageIndex] : null;
@@ -865,7 +860,7 @@ export default function ProfileScreen({
                   <IconButton icon="chevron-left" iconColor="white" onPress={() => setRequesterImageIndex((prev) => prev === 0 ? viewingRequesterProfile.photos.length - 1 : prev - 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {viewingRequesterProfile.photos.map((_, index) => (
-                      <View key={index} style={{ width: index === requesterImageIndex ? 10 : 8, height: index === requesterImageIndex ? 10 : 8, borderRadius: index === requesterImageIndex ? 5 : 4, backgroundColor: index === requesterImageIndex ? "white" : "rgba(255, 255, 255, 0.5)" }} />
+                      <View key={index} style={{ width: index === requesterImageIndex ? 10 : 8, height: index === requesterImageIndex ? 10 : 8, borderRadius: index === requesterImageIndex ? 5 : 4, backgroundColor: index === requesterImageIndex ? "white" : "rgba(255,255,255,0.5)" }} />
                     ))}
                   </View>
                   <IconButton icon="chevron-right" iconColor="white" onPress={() => setRequesterImageIndex((prev) => prev === viewingRequesterProfile.photos.length - 1 ? 0 : prev + 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
@@ -882,7 +877,7 @@ export default function ProfileScreen({
                     <Divider style={styles.divider} />
                     <Text variant="titleMedium" style={styles.sectionTitle}>Interests</Text>
                     <View style={styles.tagsDisplay}>
-                      {viewingRequesterProfile.tags.map((tag, index) => (<Chip key={index} style={styles.tagDisplay}>{tag}</Chip>))}
+                      {viewingRequesterProfile.tags.map((tag, index) => <Chip key={index} style={styles.tagDisplay}>{tag}</Chip>)}
                     </View>
                   </>
                 )}
@@ -893,6 +888,8 @@ export default function ProfileScreen({
       </Modal>
     );
   }
+
+  // ─── Viewing partner profile ──────────────────────────────────────────────
 
   if (viewingPartnerProfile && duoPartnerProfile) {
     const hasPhotos = duoPartnerProfile.photos && duoPartnerProfile.photos.length > 0;
@@ -919,7 +916,7 @@ export default function ProfileScreen({
                 <IconButton icon="chevron-left" iconColor="white" onPress={() => setCurrentImageIndex((prev) => prev === 0 ? duoPartnerProfile.photos.length - 1 : prev - 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {duoPartnerProfile.photos.map((_, index) => (
-                    <View key={index} style={{ width: index === currentImageIndex ? 10 : 8, height: index === currentImageIndex ? 10 : 8, borderRadius: index === currentImageIndex ? 5 : 4, backgroundColor: index === currentImageIndex ? "white" : "rgba(255, 255, 255, 0.5)" }} />
+                    <View key={index} style={{ width: index === currentImageIndex ? 10 : 8, height: index === currentImageIndex ? 10 : 8, borderRadius: index === currentImageIndex ? 5 : 4, backgroundColor: index === currentImageIndex ? "white" : "rgba(255,255,255,0.5)" }} />
                   ))}
                 </View>
                 <IconButton icon="chevron-right" iconColor="white" onPress={() => setCurrentImageIndex((prev) => prev === duoPartnerProfile.photos.length - 1 ? 0 : prev + 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
@@ -936,7 +933,7 @@ export default function ProfileScreen({
                 <View style={{ marginTop: 16 }}>
                   <Text variant="titleSmall">Interests:</Text>
                   <View style={styles.tagsDisplay}>
-                    {duoPartnerProfile.tags.map((tag, index) => (<Chip key={index} style={styles.tagDisplay}>{tag}</Chip>))}
+                    {duoPartnerProfile.tags.map((tag, index) => <Chip key={index} style={styles.tagDisplay}>{tag}</Chip>)}
                   </View>
                 </View>
               )}
@@ -947,6 +944,8 @@ export default function ProfileScreen({
       </View>
     );
   }
+
+  // ─── Main profile view ────────────────────────────────────────────────────
 
   if (!isEditing) {
     const hasPhotos = profile.photos && profile.photos.length > 0;
@@ -962,31 +961,7 @@ export default function ProfileScreen({
             </LongPressGestureHandler>
           </Surface>
 
-          {/* Subscription Status Banner */}
-          {subscriptionStatus === "active" && (
-            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#e8f5e9" }}>
-              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
-                <Text style={{ fontSize: 18, marginRight: 8 }}>✓</Text>
-                <Text variant="titleSmall" style={{ color: "#2e7d32", fontWeight: "bold" }}>Premium Member</Text>
-              </Card.Content>
-            </Card>
-          )}
-          {subscriptionStatus === "past_due" && (
-            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#fff8e1" }}>
-              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
-                <Text style={{ fontSize: 18, marginRight: 8 }}>⚠️</Text>
-                <Text variant="titleSmall" style={{ color: "#f57f17", fontWeight: "bold" }}>Payment Past Due — Please update your payment method</Text>
-              </Card.Content>
-            </Card>
-          )}
-          {subscriptionStatus === "canceled" && (
-            <Card style={{ marginHorizontal: 16, marginBottom: 12, backgroundColor: "#fff5f5" }}>
-              <Card.Content style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8 }}>
-                <Text style={{ fontSize: 18, marginRight: 8 }}>✕</Text>
-                <Text variant="titleSmall" style={{ color: "#c62828", fontWeight: "bold" }}>Subscription Canceled</Text>
-              </Card.Content>
-            </Card>
-          )}
+          <SubscriptionBanner />
 
           <View style={styles.profilePhotoSection}>
             <TouchableOpacity onPress={() => setIsEditing(true)}>
