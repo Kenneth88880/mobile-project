@@ -3,6 +3,7 @@ const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const express = require("express");
 const app = express();
+app.use("/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
 admin.initializeApp();
@@ -152,7 +153,7 @@ exports.verifyEmailCode = onCall(async (request) => {
 exports.api = onRequest(
   { 
     region: "us-central1",
-    secrets: ["STRIPE_SECRET_KEY"],
+    secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
   },
   app
 );
@@ -160,8 +161,14 @@ exports.api = onRequest(
 app.post("/payment-sheet", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   try {
-    // console.log("Received request for payment sheet" + JSON.stringify(req.body));
+    const { priceId, uid } = req.body;
+
+    if (!priceId || !uid) {
+      return res.status(400).json({ error: "priceId and uid are required" });
+    }
+
     const customer = await stripe.customers.create();
+
     const customerSession = await stripe.customerSessions.create({
       customer: customer.id,
       components: {
@@ -175,21 +182,105 @@ app.post("/payment-sheet", async (req, res) => {
         },
       },
     });
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: req.body.amount || 999, // default to $9.99 if amount not provided
-      currency: "cad",
+
+    const subscription = await stripe.subscriptions.create({
       customer: customer.id,
-      automatic_payment_methods: { enabled: true },
+      items: [{ price: priceId }],
+      payment_behavior: "default_incomplete",
+      collection_method: "charge_automatically",
+      payment_settings: {
+        save_default_payment_method: "on_subscription",
+        payment_method_types: ["card"],
+      },
+      expand: ["latest_invoice.payment_intent"],
     });
 
+    const invoice = await stripe.invoices.retrieve(
+      subscription.latest_invoice.id,
+      { expand: ["payment_intent"] }
+    );
+
+    let clientSecret;
+    if (invoice.payment_intent?.client_secret) {
+      clientSecret = invoice.payment_intent.client_secret;
+    } else {
+      const paymentIntents = await stripe.paymentIntents.list({
+        customer: customer.id,
+        limit: 1,
+      });
+      const pi = paymentIntents.data[0];
+      if (!pi) return res.status(500).json({ error: "No payment intent found" });
+      clientSecret = pi.client_secret;
+    }
+
+    // Save to Firestore linked to Firebase user
+    await admin.firestore().collection("profiles").doc(uid).set({
+      stripeCustomerId: customer.id,
+      subscriptionId: subscription.id,
+      subscriptionStatus: subscription.status,
+      priceId: priceId,
+      updatedAt: Date.now(),
+    }, { merge: true });
+
     res.json({
-      paymentIntent: paymentIntent.client_secret,
+      paymentIntent: clientSecret,
       customerSessionClientSecret: customerSession.client_secret,
       customer: customer.id,
-      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      subscriptionId: subscription.id,
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+});
+
+app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  const sig = req.headers["stripe-signature"];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object;
+    const customerId = invoice.customer;
+
+    // Find the user in Firestore by stripeCustomerId
+    const snapshot = await admin.firestore()
+      .collection("profiles")
+      .where("stripeCustomerId", "==", customerId)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      await snapshot.docs[0].ref.set({
+        subscriptionStatus: "active",
+        updatedAt: Date.now(),
+      }, { merge: true });
+    }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object;
+    const customerId = subscription.customer;
+
+    const snapshot = await admin.firestore()
+      .collection("profiles")
+      .where("stripeCustomerId", "==", customerId)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      await snapshot.docs[0].ref.set({
+        subscriptionStatus: "canceled",
+        updatedAt: Date.now(),
+      }, { merge: true });
+    }
+  }
+
+  res.json({ received: true });
 });

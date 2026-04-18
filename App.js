@@ -95,6 +95,16 @@ export default function App() {
       unfocusedIcon: "message-outline",
     },
     {
+      key: "payment",
+      focusedIcon: "card",
+      unfocusedIcon: "card-outline",
+    },
+    // {
+    //   key: "premium",
+    //   focusedIcon: "dollar",
+    //   unfocusedIcon: "dollar-outline",
+    // },
+    {
       key: "profile",
       focusedIcon: "account",
       unfocusedIcon: "account-outline",
@@ -365,6 +375,8 @@ export default function App() {
       />
     ),
     messages: () => <ChatScreen />,
+    payment: () => <CheckoutScreen />,
+    // premium: () => <PremiumScreen />,
     profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
