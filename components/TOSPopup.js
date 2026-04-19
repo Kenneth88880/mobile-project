@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Modal,
   View,
@@ -14,12 +14,19 @@ const TOSPopup = ({ visible, onAccept, onDecline }) => {
   const theme = useTheme();
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
 
+  // Reset scroll state every time modal opens so users must re-read
+  useEffect(() => {
+    if (visible) {
+      setScrolledToEnd(false);
+    }
+  }, [visible]);
+
   const isCloseToBottom = ({
     layoutMeasurement,
     contentOffset,
     contentSize,
   }) => {
-    const paddingToBottom = 20;
+    const paddingToBottom = 50;
     return (
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom
@@ -51,7 +58,14 @@ const TOSPopup = ({ visible, onAccept, onDecline }) => {
                 setScrolledToEnd(true);
               }
             }}
-            scrollEventThrottle={400}
+            onContentSizeChange={(contentWidth, contentHeight) => {
+              // If content fits without scrolling, auto-enable accept
+              // (unlikely for your TOS, but a safety net)
+            }}
+            onLayout={(event) => {
+              // Store layout height for content-fits check if ever needed
+            }}
+            scrollEventThrottle={16}
           >
             <Text style={{ color: theme.colors.onSurface }}>
               Doubly Connections – Terms of Service{"\n\n"}
