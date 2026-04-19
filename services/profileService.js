@@ -783,6 +783,7 @@ export const resetTestData = async (currentDuoId) => {
 export const getSubscriptionStatus = async (userId) => {
   try {
     const profile = await getUserProfile(userId);
+    console.log("sub status", profile?.subscriptionStatus);
     return profile?.subscriptionStatus ?? null;
   } catch (error) {
     console.error("Error getting subscription status:", error);

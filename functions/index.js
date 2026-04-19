@@ -130,22 +130,12 @@ exports.verifyEmailCode = onCall(async (request) => {
   }
 });
 
-exports.api = onRequest(
-  {
-    region: "us-central1",
-    secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
-    rawBody: true,
-  },
-  app
-);
-
 // ─── Payment Sheet ────────────────────────────────────────────────────────────
 
 app.post("/payment-sheet", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   try {
     const { priceId, uid } = req.body;
-
     if (!priceId || !uid) {
       return res.status(400).json({ error: "priceId and uid are required" });
     }
@@ -159,10 +149,11 @@ app.post("/payment-sheet", async (req, res) => {
       customerId = profileData.stripeCustomerId;
       console.log("Reusing existing Stripe customer:", customerId);
     } else {
-      const customer = await stripe.customers.create({
-        metadata: { firebaseUid: uid },
-      });
+      const customer = await stripe.customers.create({ metadata: { firebaseUid: uid } });
       customerId = customer.id;
+      await admin.firestore().collection("profiles").doc(uid).set({
+        stripeCustomerId: customerId,
+      }, { merge: true });
       console.log("Created new Stripe customer:", customerId);
     }
 
@@ -180,55 +171,141 @@ app.post("/payment-sheet", async (req, res) => {
       },
     });
 
-    const subscription = await stripe.subscriptions.create({
+    // SetupIntent — captures payment method WITHOUT creating a subscription or charge.
+    // Nothing appears in Stripe logs as a transaction until /create-subscription is called.
+    const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
-      items: [{ price: priceId }],
-      payment_behavior: "default_incomplete",
-      collection_method: "charge_automatically",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-        payment_method_types: ["card"],
-      },
-      metadata: { firebaseUid: uid },
-      expand: ["latest_invoice.payment_intent"],
+      usage: "off_session",
+      metadata: { firebaseUid: uid, priceId },
     });
-
-    console.log("Created subscription:", subscription.id, "with metadata:", JSON.stringify(subscription.metadata));
-
-    const invoice = await stripe.invoices.retrieve(subscription.latest_invoice.id, {
-      expand: ["payment_intent"],
-    });
-
-    let clientSecret;
-    if (invoice.payment_intent?.client_secret) {
-      clientSecret = invoice.payment_intent.client_secret;
-    } else {
-      const paymentIntents = await stripe.paymentIntents.list({
-        customer: customerId,
-        limit: 1,
-      });
-      const pi = paymentIntents.data[0];
-      if (!pi) return res.status(500).json({ error: "No payment intent found" });
-      clientSecret = pi.client_secret;
-    }
-
-    // Save Stripe IDs only — subscriptionStatus is never written here.
-    // The webhook owns all status updates.
-    await admin.firestore().collection("profiles").doc(uid).set({
-      stripeCustomerId: customerId,
-      subscriptionId: subscription.id,
-      priceId,
-      updatedAt: Date.now(),
-    }, { merge: true });
 
     res.json({
-      paymentIntent: clientSecret,
+      setupIntent: setupIntent.client_secret,
       customerSessionClientSecret: customerSession.client_secret,
       customer: customerId,
-      subscriptionId: subscription.id,
     });
   } catch (err) {
     console.error("payment-sheet error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Create Subscription ──────────────────────────────────────────────────────
+// Called only after the user confirms payment — this is what actually charges them.
+
+app.post("/create-subscription", async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  try {
+    const { uid, priceId } = req.body;
+    if (!uid || !priceId) {
+      return res.status(400).json({ error: "uid and priceId are required" });
+    }
+
+    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
+    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    const { stripeCustomerId } = profileDoc.data();
+    if (!stripeCustomerId) return res.status(404).json({ error: "No Stripe customer found" });
+
+    // Get the default payment method just saved by the SetupIntent
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: stripeCustomerId,
+      type: "card",
+      limit: 1,
+    });
+
+    if (!paymentMethods.data.length) {
+      return res.status(400).json({ error: "No payment method found" });
+    }
+
+    const paymentMethodId = paymentMethods.data[0].id;
+
+    const subscription = await stripe.subscriptions.create({
+      customer: stripeCustomerId,
+      items: [{ price: priceId }],
+      default_payment_method: paymentMethodId,
+      metadata: { firebaseUid: uid },
+    });
+
+    await admin.firestore().collection("profiles").doc(uid).set({
+      subscriptionId: subscription.id,
+      priceId,
+      autoRenew: true,
+      updatedAt: Date.now(),
+    }, { merge: true });
+
+    console.log("Subscription created:", subscription.id, "status:", subscription.status);
+    res.json({ success: true, subscriptionId: subscription.id });
+  } catch (err) {
+    console.error("create-subscription error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Reactivate Subscription ──────────────────────────────────────────────────
+// Called when user is still active but had canceled (cancel_at_period_end: true).
+// Flips auto-renew back on without charging them again — no new subscription needed.
+
+app.post("/reactivate-subscription", async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  try {
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: "uid is required" });
+
+    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
+    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    const { subscriptionId } = profileDoc.data();
+    if (!subscriptionId) return res.status(404).json({ error: "No subscription found" });
+
+    // Remove the cancel_at_period_end flag — resumes auto-renew at period end, no charge
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false,
+    });
+
+    await admin.firestore().collection("profiles").doc(uid).set({
+      autoRenew: true,
+      updatedAt: Date.now(),
+    }, { merge: true });
+
+    console.log("Subscription reactivated:", subscriptionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("reactivate-subscription error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Cancel Subscription ──────────────────────────────────────────────────────
+
+app.post("/cancel-subscription", async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  try {
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: "uid is required" });
+
+    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
+    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    const { subscriptionId } = profileDoc.data();
+    if (!subscriptionId) return res.status(404).json({ error: "No subscription found" });
+
+    // cancel_at_period_end keeps access until end of billing period,
+    // then Stripe fires customer.subscription.deleted which the webhook handles.
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    // Mark auto-renew off — status stays "active" until period ends
+    await admin.firestore().collection("profiles").doc(uid).set({
+      autoRenew: false,
+      updatedAt: Date.now(),
+    }, { merge: true });
+
+    console.log("Subscription set to cancel at period end:", subscriptionId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("cancel-subscription error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -261,14 +338,13 @@ app.post("/webhook", async (req, res) => {
     return subscription.metadata?.firebaseUid || null;
   };
 
-  // Helper: update subscriptionStatus on the profile
-  const updateStatus = async (uid, status) => {
-    console.log(`Updating subscriptionStatus to "${status}" for uid: ${uid}`);
+  // Helper: update fields on the profile
+  const updateProfile = async (uid, fields) => {
     await admin.firestore().collection("profiles").doc(uid).set({
-      subscriptionStatus: status,
+      ...fields,
       updatedAt: Date.now(),
     }, { merge: true });
-    console.log(`Successfully updated subscriptionStatus to "${status}" for uid: ${uid}`);
+    console.log(`Profile updated for uid: ${uid}`, fields);
   };
 
   try {
@@ -278,8 +354,7 @@ app.post("/webhook", async (req, res) => {
         const invoice = event.data.object;
         console.log("invoice.payment_succeeded — subscription:", invoice.subscription);
         const uid = await getUidFromSubscriptionId(invoice.subscription);
-        console.log("Resolved uid:", uid);
-        if (uid) await updateStatus(uid, "active");
+        if (uid) await updateProfile(uid, { subscriptionStatus: "active", autoRenew: true });
         else console.warn("No firebaseUid found for subscription:", invoice.subscription);
         break;
       }
@@ -288,8 +363,7 @@ app.post("/webhook", async (req, res) => {
         const invoice = event.data.object;
         console.log("invoice.payment_failed — subscription:", invoice.subscription);
         const uid = await getUidFromSubscriptionId(invoice.subscription);
-        console.log("Resolved uid:", uid);
-        if (uid) await updateStatus(uid, "past_due");
+        if (uid) await updateProfile(uid, { subscriptionStatus: "past_due" });
         else console.warn("No firebaseUid found for subscription:", invoice.subscription);
         break;
       }
@@ -299,12 +373,11 @@ app.post("/webhook", async (req, res) => {
         console.log("customer.subscription.deleted — id:", subscription.id);
         console.log("Full metadata:", JSON.stringify(subscription.metadata));
         const uid = subscription.metadata?.firebaseUid;
-        console.log("Extracted uid:", uid);
         if (uid) {
-          await updateStatus(uid, "canceled");
+          await updateProfile(uid, { subscriptionStatus: "canceled", autoRenew: false });
         } else {
           // Metadata missing — fall back to querying Firestore by subscriptionId
-          console.warn("No firebaseUid in metadata, falling back to Firestore query by subscriptionId");
+          console.warn("No firebaseUid in metadata, falling back to Firestore query");
           const snapshot = await admin.firestore()
             .collection("profiles")
             .where("subscriptionId", "==", subscription.id)
@@ -313,6 +386,7 @@ app.post("/webhook", async (req, res) => {
           if (!snapshot.empty) {
             await snapshot.docs[0].ref.set({
               subscriptionStatus: "canceled",
+              autoRenew: false,
               updatedAt: Date.now(),
             }, { merge: true });
             console.log("Fallback succeeded: canceled via subscriptionId:", subscription.id);
@@ -332,3 +406,14 @@ app.post("/webhook", async (req, res) => {
 
   res.json({ received: true });
 });
+
+// ─── exports.api MUST be last — after all routes are registered ───────────────
+
+exports.api = onRequest(
+  {
+    region: "us-central1",
+    secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+    rawBody: true,
+  },
+  app
+);
