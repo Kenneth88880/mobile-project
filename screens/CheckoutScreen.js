@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -80,31 +80,65 @@ export default function CheckoutScreen({ navigation }) {
   const [sheetReady, setSheetReady] = useState(false);
   const [selected, setSelected] = useState("monthly");
   const [user, setUser] = useState(null);
+  const [subStatus, setSubStatus] = useState(null);
+  const [autoRenew, setAutoRenew] = useState(true);
+  const [subscribing, setSubscribing] = useState(false);
 
   const scheme = useColorScheme();
   const c = scheme === "dark" ? dark : light;
 
-  // Wait for Firebase auth to be ready
+  const isPremium = subStatus === "active";
+  const isCanceledButActive = isPremium && !autoRenew;
+  const showCancelBtn = isPremium && autoRenew;
+  const showSubscribeBtn = !isPremium || !autoRenew;
+
+  const fetchSubscriptionStatus = useCallback(async () => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    const doc = await firestore().collection("profiles").doc(uid).get();
+    const data = doc.data();
+    const status = data?.subscriptionStatus ?? null;
+    const renew = data?.autoRenew ?? true;
+
+    console.log("Fetched — status:", status, "autoRenew:", renew);
+    setSubStatus(status);
+    setAutoRenew(renew);
+
+    if (status !== "active") {
+      setSheetReady(false);
+      setLoading(false);
+    }
+  }, []);
+
+  // Get auth user once
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged((firebaseUser) => {
-      // console.log("Auth state changed, uid:", firebaseUser?.uid);
       setUser(firebaseUser);
+      if (firebaseUser) fetchSubscriptionStatus();
     });
     return unsubscribe;
   }, []);
 
-  // Re-init when plan changes or user becomes available
+  // Re-fetch every time screen comes into focus
   useEffect(() => {
-    if (user) {
+    const unsubscribeFocus = navigation?.addListener("focus", () => {
+      fetchSubscriptionStatus();
+    });
+    return unsubscribeFocus;
+  }, [navigation, fetchSubscriptionStatus]);
+
+  // Re-init payment sheet when plan or user changes
+  useEffect(() => {
+    if (user && !isCanceledButActive) {
       setSheetReady(false);
       initializePaymentSheet(selected);
     }
-  }, [selected, user]);
+  }, [selected, user, isCanceledButActive]);
 
   const fetchPaymentSheetParams = async (plan) => {
     const uid = user?.uid;
     const priceId = PLANS[plan].priceId;
-    // console.log("Fetching with uid:", uid, "priceId:", priceId);
 
     const response = await fetch(`${API_URL}/payment-sheet`, {
       method: "POST",
@@ -112,23 +146,24 @@ export default function CheckoutScreen({ navigation }) {
       body: JSON.stringify({ priceId, uid }),
     });
     const data = await response.json();
-    // console.log("RAW backend response:", JSON.stringify(data));
+    console.log("RAW backend response:", JSON.stringify(data));
     return {
-      paymentIntent: data.paymentIntent,
+      setupIntent: data.setupIntent,
       customerSessionClientSecret: data.customerSessionClientSecret,
       customer: data.customer,
     };
   };
 
   const initializePaymentSheet = async (plan) => {
+    if (sheetReady) return;
     setLoading(false);
     setInitializing(true);
     try {
-      const { paymentIntent, customerSessionClientSecret, customer } =
+      const { setupIntent, customerSessionClientSecret, customer } =
         await fetchPaymentSheetParams(plan);
 
-      if (!paymentIntent || !customerSessionClientSecret || !customer) {
-        console.error("Missing params:", { paymentIntent, customerSessionClientSecret, customer });
+      if (!setupIntent || !customerSessionClientSecret || !customer) {
+        console.error("Missing params:", { setupIntent, customerSessionClientSecret, customer });
         Alert.alert("Error", "Failed to load payment info. Please try again.");
         return;
       }
@@ -137,9 +172,8 @@ export default function CheckoutScreen({ navigation }) {
         merchantDisplayName: "Doubly Connections Inc.",
         customerId: customer,
         customerSessionClientSecret,
-        paymentIntentClientSecret: paymentIntent,
+        setupIntentClientSecret: setupIntent,
         allowsDelayedPaymentMethods: true,
-        defaultBillingDetails: { name: "Jane Doe" },
       });
 
       if (error) {
@@ -158,34 +192,130 @@ export default function CheckoutScreen({ navigation }) {
     }
   };
 
-  const openPaymentSheet = async () => {
+  const reactivateSubscription = async () => {
+    try {
+      const response = await fetch(`${API_URL}/reactivate-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      await firestore().collection("profiles").doc(user.uid).set({
+        subscriptionStatus: "active",
+        autoRenew: true,
+        updatedAt: Date.now(),
+      }, { merge: true });
+
+      setAutoRenew(true);
+      setSubStatus("active");
+      Alert.alert("Welcome back!", "Your subscription has been reactivated. You'll continue to be billed at the end of your current period.");
+    } catch (err) {
+      console.error("Failed to reactivate subscription:", err);
+      Alert.alert("Error", "Failed to reactivate. Please try again.");
+    }
+  };
+
+  const subscribeWithPaymentSheet = async () => {
     if (!sheetReady) {
       Alert.alert("Please wait", "Payment is still loading.");
       return;
     }
 
-    console.log("Opening payment sheet...");
     const { error } = await presentPaymentSheet();
 
     if (error) {
-      // console.error("presentPaymentSheet error:", JSON.stringify(error));
-      // Canceled by user — do nothing at all
       if (error.code !== "Canceled") {
         Alert.alert(`Error code: ${error.code}`, error.message);
       }
-    } else {
-      // Payment confirmed — now safe to update Firestore
-      try {
-        await firestore()
-          .collection("profiles")
-          .doc(user.uid)
-          .update({ subscriptionStatus: "active" });
-        Alert.alert("Success", "Your subscription is confirmed!");
-      } catch (err) {
-        console.error("Failed to update subscription status:", err);
-      }
+      return;
+    }
+
+    // Show loading spinner while creating subscription
+    setSubscribing(true);
+    try {
+      const response = await fetch(`${API_URL}/create-subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid, priceId: PLANS[selected].priceId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+
+      await firestore().collection("profiles").doc(user.uid).set({
+        subscriptionStatus: "active",
+        autoRenew: true,
+        updatedAt: Date.now(),
+      }, { merge: true });
+
+      setSubStatus("active");
+      setAutoRenew(true);
+      Alert.alert("Success", "Your subscription is confirmed!");
+    } catch (err) {
+      console.error("Failed to create subscription:", err);
+      Alert.alert("Error", "Payment saved but subscription failed. Please contact support.");
+    } finally {
+      setSubscribing(false);
     }
   };
+
+  const handleSubscribePress = () => {
+    if (isCanceledButActive) {
+      reactivateSubscription();
+    } else {
+      subscribeWithPaymentSheet();
+    }
+  };
+
+  const cancelSubscription = async () => {
+    Alert.alert(
+      "Cancel Subscription",
+      "Are you sure you want to cancel? You'll keep access until the end of your current billing period.",
+      [
+        { text: "Keep Subscription", style: "cancel" },
+        {
+          text: "Cancel Subscription",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/cancel-subscription`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ uid: user.uid }),
+              });
+              const data = await response.json();
+              if (!response.ok) {
+                Alert.alert("Error", data.error || "Failed to cancel subscription.");
+                return;
+              }
+
+              await firestore().collection("profiles").doc(user.uid).set({
+                autoRenew: false,
+                updatedAt: Date.now(),
+              }, { merge: true });
+
+              setAutoRenew(false);
+              Alert.alert(
+                "Subscription Canceled",
+                "Your subscription has been canceled. You'll retain access until the end of your current billing period."
+              );
+            } catch (err) {
+              console.error("Error canceling subscription:", err);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const ctaLabel = () => {
+    if (isCanceledButActive) return "Reactivate Subscription";
+    return `Get ${PLANS[selected].label} — ${PLANS[selected].price}`;
+  };
+
+  const ctaDisabled = !isCanceledButActive && !loading;
 
   return (
     <View style={[styles.root, { backgroundColor: c.background }]}>
@@ -195,13 +325,21 @@ export default function CheckoutScreen({ navigation }) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
           <Text style={[styles.backArrow, { color: c.onPrimary }]}>‹</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: c.onPrimary }]}>Subscribe to Premium</Text>
+        <Text style={[styles.title, { color: c.onPrimary }]}>
+          {isPremium && autoRenew ? "Welcome to Premium" : "Subscribe to Premium"}
+        </Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {isCanceledButActive && (
+          <View style={[styles.infoBanner, { backgroundColor: c.primaryContainer }]}>
+            <Text style={[styles.infoBannerText, { color: c.onPrimaryContainer }]}>
+              Your subscription is canceled but you still have access until the end of your billing period. Tap below to reactivate — you won't be charged again until your next renewal date.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.plansRow}>
           {Object.entries(PLANS).map(([key, plan]) => {
             const isSelected = selected === key;
@@ -249,21 +387,40 @@ export default function CheckoutScreen({ navigation }) {
           ))}
         </View>
 
-        {initializing ? (
-          <ActivityIndicator size="large" color={c.primary} style={{ marginVertical: 16 }} />
-        ) : (
+        {showSubscribeBtn && (
+          initializing && !isCanceledButActive ? (
+            <ActivityIndicator size="large" color={c.primary} style={{ marginVertical: 16 }} />
+          ) : subscribing ? (
+            <View style={{ marginVertical: 16, alignItems: "center", gap: 12 }}>
+              <ActivityIndicator size="large" color={c.primary} />
+              <Text style={{ color: c.outline, fontSize: 14 }}>Setting up your subscription...</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.ctaBtn,
+                { backgroundColor: c.primary },
+                ctaDisabled && styles.ctaBtnDisabled,
+              ]}
+              disabled={ctaDisabled}
+              onPress={handleSubscribePress}
+              activeOpacity={0.9}
+            >
+              <Text style={[styles.ctaText, { color: c.onPrimary }]}>
+                {ctaLabel()}
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
+
+        {showCancelBtn && (
           <TouchableOpacity
-            style={[
-              styles.ctaBtn,
-              { backgroundColor: c.primary },
-              !loading && styles.ctaBtnDisabled,
-            ]}
-            disabled={!loading}
-            onPress={openPaymentSheet}
-            activeOpacity={0.9}
+            style={[styles.cancelBtn, { borderColor: c.outline }]}
+            onPress={cancelSubscription}
+            activeOpacity={0.7}
           >
-            <Text style={[styles.ctaText, { color: c.onPrimary }]}>
-              Get {PLANS[selected].label} — {PLANS[selected].price}
+            <Text style={[styles.cancelText, { color: c.outline }]}>
+              Cancel Subscription
             </Text>
           </TouchableOpacity>
         )}
@@ -307,6 +464,18 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     paddingHorizontal: 24,
     alignItems: "center",
+  },
+  infoBanner: {
+    width: "100%",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  infoBannerText: {
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 20,
+    textAlign: "center",
   },
   plansRow: {
     flexDirection: "row",
@@ -375,6 +544,16 @@ const styles = StyleSheet.create({
   },
   ctaBtnDisabled: { opacity: 0.5 },
   ctaText: { fontSize: 16, fontWeight: "800", letterSpacing: 0.3 },
+  cancelBtn: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cancelText: { fontSize: 14, fontWeight: "600" },
   legal: {
     fontSize: 11,
     textAlign: "center",
