@@ -59,11 +59,11 @@ const SignInScreen = ({ onNavigateToRegister }) => {
         auth().settings.appVerificationDisabledForTesting = true;
       }
       const confirmationResult =
-        await auth().signInWithPhoneNumber(phoneNumber);
+        await auth().signInWithPhoneNumber("+16505551234");
       setConfirmation(confirmationResult);
       setShowPhoneVerification(true);
     } catch (error) {
-      console.log("Phone sign in error:", error.code, error.message);
+      console.log("Phone sign in error:", error.code, error.message, phoneNumber);
       alert(getAuthErrorMessage(error.code));
     } finally {
       setIsSending(false);
