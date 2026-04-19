@@ -340,43 +340,46 @@ export default function CheckoutScreen({ navigation }) {
           </View>
         )}
 
-        <View style={styles.plansRow}>
-          {Object.entries(PLANS).map(([key, plan]) => {
-            const isSelected = selected === key;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[
-                  styles.planCard,
-                  { backgroundColor: c.surface, borderColor: c.outlineVariant },
-                  isSelected && { borderColor: c.primary, borderWidth: 2.5 },
-                ]}
-                onPress={() => setSelected(key)}
-                activeOpacity={0.85}
-              >
-                {isSelected && (
-                  <View style={[styles.checkCircle, { backgroundColor: c.primary }]}>
-                    <Text style={[styles.checkMark, { color: c.onPrimary }]}>✓</Text>
-                  </View>
-                )}
-                <Text style={[styles.planLabel, { color: c.onSurfaceVariant }]}>
-                  {plan.label}
-                </Text>
-                <Text style={[styles.planPrice, { color: isSelected ? c.primary : c.onSurface }]}>
-                  {plan.price}
-                </Text>
-                {plan.badge && (
-                  <View style={[styles.badge, { backgroundColor: c.primaryContainer }]}>
-                    <Text style={[styles.badgeText, { color: c.onPrimaryContainer }]}>
-                      {plan.badge}
-                    </Text>
-                  </View>
-                )}
-                <Text style={[styles.planSub, { color: c.outline }]}>{plan.sub}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {!autoRenew && (
+          <View style={styles.plansRow}>
+            {Object.entries(PLANS).map(([key, plan]) => {
+              const isSelected = selected === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.planCard,
+                    { backgroundColor: c.surface, borderColor: c.outlineVariant },
+                    isSelected && { borderColor: c.primary, borderWidth: 2.5 },
+                  ]}
+                  onPress={() => setSelected(key)}
+                  activeOpacity={0.85}
+                >
+                  {isSelected && (
+                    <View style={[styles.checkCircle, { backgroundColor: c.primary }]}>
+                      <Text style={[styles.checkMark, { color: c.onPrimary }]}>✓</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.planLabel, { color: c.onSurfaceVariant }]}>
+                    {plan.label}
+                  </Text>
+                  <Text style={[styles.planPrice, { color: isSelected ? c.primary : c.onSurface }]}>
+                    {plan.price}
+                  </Text>
+                  {plan.badge && (
+                    <View style={[styles.badge, { backgroundColor: c.primaryContainer }]}>
+                      <Text style={[styles.badgeText, { color: c.onPrimaryContainer }]}>
+                        {plan.badge}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={[styles.planSub, { color: c.outline }]}>{plan.sub}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
 
         <View style={[styles.featuresCard, { backgroundColor: c.surfaceVariant }]}>
           {FEATURES.map((f, i) => (
