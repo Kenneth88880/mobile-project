@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-import { Text, TextInput, Button, useTheme, Card, IconButton } from "react-native-paper";
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Card,
+  IconButton,
+} from "react-native-paper";
 
 const BirthdayScreen = ({ onNext, onBack, initialBirthday = {} }) => {
   const theme = useTheme();
@@ -104,8 +117,10 @@ const BirthdayScreen = ({ onNext, onBack, initialBirthday = {} }) => {
         </View>
       )}
       <View style={styles.progressCounter}>
-        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
-          2/6
+        <Text
+          style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}
+        >
+          2/7
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>

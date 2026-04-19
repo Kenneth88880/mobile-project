@@ -84,11 +84,11 @@ export default {
       ],
     ],
     extra: {
-      eas: {
-        projectId: "5d554221-bb9c-4245-884a-1b887d6673aa",
-      },
+      eas: { projectId: "5d554221-bb9c-4245-884a-1b887d6673aa" },
       googlePlacesApiKeyIOS: process.env.GOOGLE_PLACES_API_KEY_IOS,
       googlePlacesApiKeyAndroid: process.env.GOOGLE_PLACES_API_KEY_ANDROID,
+      recaptchaIosSiteKey: process.env.RECAPTCHA_IOS_SITE_KEY,
+      recaptchaAndroidSiteKey: process.env.RECAPTCHA_ANDROID_SITE_KEY,
     },
   },
 };

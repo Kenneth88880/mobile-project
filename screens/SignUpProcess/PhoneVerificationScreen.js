@@ -2,16 +2,54 @@ import { StyleSheet, View, KeyboardAvoidingView, Text } from "react-native";
 import React from "react";
 import { TextInput, Button, useTheme } from "react-native-paper";
 
-const PhoneVerificationScreen = ({ onVerify, onBack, phoneNumber }) => {
+const PhoneVerificationScreen = ({
+  onVerify,
+  onBack,
+  onResend,
+  phoneNumber,
+}) => {
   const theme = useTheme();
   const [code, setCode] = React.useState("");
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [isResending, setIsResending] = React.useState(false);
+  const [resendCooldown, setResendCooldown] = React.useState(60);
 
-  const handleVerify = () => {
+  // Countdown timer for resend button
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const handleVerify = async () => {
     if (!code || code.length < 6) {
       alert("Please enter the 6-digit verification code");
       return;
     }
-    onVerify(code);
+    setIsVerifying(true);
+    try {
+      await onVerify(code);
+    } catch (error) {
+      // Parent handles error display; we just clear loading state
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !onResend) return;
+    setIsResending(true);
+    try {
+      await onResend();
+      setResendCooldown(60);
+      setCode("");
+    } catch (error) {
+      // Parent handles error display
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -31,18 +69,40 @@ const PhoneVerificationScreen = ({ onVerify, onBack, phoneNumber }) => {
         <TextInput
           label="Verification Code"
           value={code}
-          onChangeText={(text) => setCode(text)}
+          onChangeText={(text) => setCode(text.replace(/\D/g, ""))}
           mode="outlined"
           keyboardType="number-pad"
           maxLength={6}
           style={styles.input}
+          autoFocus
         />
       </View>
 
       <View style={styles.buttonContainer}>
-        <Button mode="contained" onPress={handleVerify} style={styles.button}>
+        <Button
+          mode="contained"
+          onPress={handleVerify}
+          style={styles.button}
+          loading={isVerifying}
+          disabled={isVerifying || code.length < 6}
+        >
           Verify
         </Button>
+
+        {onResend && (
+          <Button
+            mode="text"
+            onPress={handleResend}
+            disabled={resendCooldown > 0 || isResending}
+            loading={isResending}
+            style={styles.button}
+          >
+            {resendCooldown > 0
+              ? `Resend code in ${resendCooldown}s`
+              : "Resend code"}
+          </Button>
+        )}
+
         {onBack && (
           <Button mode="outlined" onPress={onBack} style={styles.button}>
             Back
