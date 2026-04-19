@@ -156,6 +156,7 @@ export default function App() {
     let profileUnsubscribe = null;
     const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
       console.log("Auth state changed:", user ? user.uid : "null");
+      console.log("the key we got was: ", publishableKey)
       setUser(user);
       if (user) {
         const { creationTime, lastSignInTime } = user.metadata;
@@ -217,8 +218,13 @@ export default function App() {
   }, [displayTab]);
 
   const fetchPublishableKey = async () => {
-    const key = await fetchKey(`${API_URL}/payment-sheet`);
-    setPublishableKey(key);
+    try {
+      const response = await fetch(`${API_URL}/config`);
+      const data = await response.json();
+      setPublishableKey(data.publishableKey);
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
   };
 
   const loadThemePreference = async () => {
