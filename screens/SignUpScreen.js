@@ -105,7 +105,7 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
       setConfirmation(confirmationResult);
       setCurrentStep("phoneVerification");
     } catch (error) {
-      console.log("Phone sign up error:", error.code, error.message);
+      console.log("Phone sign up error:", error.code, error.message, phoneNumber);
       alert(getAuthErrorMessage(error.code));
     } finally {
       setIsSending(false);
@@ -328,11 +328,16 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
       const profileData = {
         name: signupData.firstName,
         age: signupData.birthday.age.toString(),
+        autoRenew: false,
         birthday: signupData.birthday,
         tags: signupData.tags,
         gender: signupData.gender,
         genderPreference: signupData.genderPreference,
         photos: signupData.photos,
+        priceId: "",
+        stripeCustomerId: "",
+        subscriptionId: "",
+        subscriptionStatus: "inactive",
         description: "",
         city: "",
         latitude: null,
@@ -342,6 +347,7 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
         showOnlineStatus: true,
         createdAt: new Date().toISOString(),
         setUp: true,
+        updatedAt: new Date().now(),
       };
 
       // Save profile to Firestore
