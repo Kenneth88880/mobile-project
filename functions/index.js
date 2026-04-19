@@ -183,6 +183,7 @@ app.post("/payment-sheet", async (req, res) => {
       setupIntent: setupIntent.client_secret,
       customerSessionClientSecret: customerSession.client_secret,
       customer: customerId,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     });
   } catch (err) {
     console.error("payment-sheet error:", err);
@@ -417,3 +418,7 @@ exports.api = onRequest(
   },
   app
 );
+
+app.get("/config", (req, res) => {
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
+});
