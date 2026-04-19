@@ -6,6 +6,8 @@
 
 ## Things in progress
 
+- Recaptcha system
+- SMS verification 
 - framework for premium users
 - framework for handeling user payments and user refunds
 - Explore system, calander, maps, planning
