@@ -40,24 +40,6 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { Recaptcha } from "@google-cloud/recaptcha-enterprise-react-native";
 
-// Inside your App component:
-useEffect(() => {
-  const extra = Constants.expoConfig?.extra ?? {};
-  const siteKey =
-    Platform.OS === "ios"
-      ? extra.recaptchaIosSiteKey
-      : extra.recaptchaAndroidSiteKey;
-
-  if (!siteKey) {
-    console.warn("⚠️ reCAPTCHA site key not configured");
-    return;
-  }
-
-  Recaptcha.fetchClient(siteKey)
-    .then(() => console.log("✅ reCAPTCHA client initialized"))
-    .catch((err) => console.warn("⚠️ reCAPTCHA init failed:", err));
-}, []);
-
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const AnimatedView = ({ offset, translateX, children }) => {
@@ -69,7 +51,7 @@ const AnimatedView = ({ offset, translateX, children }) => {
       style={[
         { position: "absolute", width: SCREEN_WIDTH, height: "100%" },
         animatedStyle,
-      ]}
+      ]}  
     >
       {children}
     </Animated.View>
@@ -92,6 +74,23 @@ export default function App() {
   // const [fontsLoaded] = useFonts({      FOR FONTS LATER
   //   FredokaBubble: require("./assets/fonts/Fredoka_SemiExpanded-Light.ttf"),
   // });
+  // ✅ All your existing useEffects are here — add the reCAPTCHA one here too
+  useEffect(() => {
+    const extra = Constants.expoConfig?.extra ?? {};
+    const siteKey =
+      Platform.OS === "ios"
+        ? extra.recaptchaIosSiteKey
+        : extra.recaptchaAndroidSiteKey;
+
+    if (!siteKey) {
+      console.warn("⚠️ reCAPTCHA site key not configured");
+      return;
+    }
+
+    Recaptcha.fetchClient(siteKey)
+      .then(() => console.log("✅ reCAPTCHA client initialized"))
+      .catch((err) => console.warn("⚠️ reCAPTCHA init failed:", err));
+  }, []);
 
   const API_URL =
     "https://us-central1-doubly-messenging.cloudfunctions.net/api";
