@@ -6,12 +6,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import React from "react";
-import {
-  TextInput,
-  Button,
-  useTheme,
-  SegmentedButtons,
-} from "react-native-paper";
+import { TextInput, Button, useTheme } from "react-native-paper";
 import TOSPopup from "../components/TOSPopup";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -23,35 +18,24 @@ import PhotoSelectionScreen from "./SignUpProcess/PhotoSelectionScreen";
 import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
 import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
-import EmailVerificationScreen from "./SignUpProcess/EmailVerificationScreen";
-import VerificationCompleteScreen from "./SignUpProcess/VerificationCompleteScreen";
-import { CURRENT_USER_ID } from "../services/UserConfig";
+import ContactEmailScreen from "./SignUpProcess/ContactEmailScreen";
 
-const SignUpScreen = ({
-  onNavigateToSignIn,
-  isInSignupFlow = false,
-  needsEmailVerification = false,
-  userEmail = "",
-}) => {
+const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   const theme = useTheme();
-  // TODO: Re-enable phone auth later - currently disabled
-  // const [authMethod, setAuthMethod] = React.useState("phone"); // "email" or "phone"
-  const [authMethod, setAuthMethod] = React.useState("email"); // Phone auth disabled temporarily
-  const [email, setEmail] = React.useState(userEmail);
-  const [password, setPassword] = React.useState("");
   const [phoneNumber, setPhoneNumber] = React.useState("+1");
   const [confirmation, setConfirmation] = React.useState(null);
   const [isTOSVisible, setTOSVisible] = React.useState(false);
+  const [isSending, setIsSending] = React.useState(false);
 
-  // Determine initial step based on signup flow state
+  // If already in signup flow (resuming), start at firstName
   const getInitialStep = () => {
-    if (needsEmailVerification) return "emailVerification";
     if (isInSignupFlow) return "firstName";
-    return "credentials";
+    return "phone";
   };
 
   const [currentStep, setCurrentStep] = React.useState(getInitialStep());
-  // credentials, emailVerification, phoneVerification, firstName, birthday, gender, genderPreference, photos, tags, duo
+  // Steps: phone, phoneVerification, firstName, birthday, gender,
+  //        genderPreference, photos, tags, duo, contactEmail
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -60,186 +44,150 @@ const SignUpScreen = ({
     photos: [],
     tags: [],
     friendCode: "",
+    contactEmail: "",
     setUp: false,
   });
 
-  // If user needs email verification and we have their email, send email on mount
-  React.useEffect(() => {
-    if (
-      needsEmailVerification &&
-      userEmail &&
-      currentStep === "emailVerification"
-    ) {
-      sendVerificationEmail();
+  // Maintain +1 prefix and limit to 10 digits
+  const handlePhoneNumberChange = (text) => {
+    if (!text.startsWith("+1")) {
+      setPhoneNumber("+1");
+      return;
     }
-  }, []);
+    const digitsOnly = text.slice(2).replace(/\D/g, "");
+    const limitedDigits = digitsOnly.slice(0, 10);
+    setPhoneNumber("+1" + limitedDigits);
+  };
+
+  const getAuthErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case "auth/invalid-phone-number":
+        return "That's not a valid phone number. Please check and try again.";
+      case "auth/too-many-requests":
+        return "Too many attempts. Please wait a few minutes and try again.";
+      case "auth/quota-exceeded":
+        return "Our SMS service is temporarily unavailable. Please try again later.";
+      case "auth/network-request-failed":
+        return "No internet connection. Please check your network.";
+      case "auth/missing-client-identifier":
+        return "App verification failed. Please update the app and try again.";
+      default:
+        return "Failed to send verification code. Please try again.";
+    }
+  };
 
   const handleRegisterPress = () => {
+    if (phoneNumber.length < 12) {
+      alert("Please enter a valid 10-digit phone number");
+      return;
+    }
     setTOSVisible(true);
   };
 
   const handleAcceptTOS = () => {
-    if (authMethod === "email") {
-      handleEmailRegister();
-    } else {
-      handlePhoneRegister();
-    }
     setTOSVisible(false);
+    handlePhoneRegister();
   };
 
   const handleDeclineTOS = () => {
     setTOSVisible(false);
   };
 
-  // handles phone number input to maintain +1 prefix and limit to 10 digits
-  const handlePhoneNumberChange = (text) => {
-    // Always ensure the number starts with +1
-    if (!text.startsWith("+1")) {
-      setPhoneNumber("+1");
-      return;
-    }
-
-    // Extract only the digits after +1
-    const digitsOnly = text.slice(2).replace(/\D/g, "");
-
-    // Limit to 10 digits
-    const limitedDigits = digitsOnly.slice(0, 10);
-
-    setPhoneNumber("+1" + limitedDigits);
-  };
-
-  // handles email sign up
-  const handleEmailRegister = async () => {
-    try {
-      const userCredential = await auth().createUserWithEmailAndPassword(
-        email,
-        password,
-      );
-      const user = userCredential.user;
-      console.log("Registered with:", user.email);
-
-      // Send verification email using Firebase's built-in method
-      try {
-        await sendVerificationEmail();
-      } catch (emailError) {
-        // Email sending failed, but user account was created
-        // Error already shown in sendVerificationEmail, just proceed to verification screen
-        console.log(
-          "Continuing to verification screen despite email send error",
-        );
-      }
-
-      // Move to email verification step even if email failed to send
-      // User can try resending from the verification screen
-      setCurrentStep("emailVerification");
-    } catch (error) {
-      const errorCode = error.code;
-      const errorMessage = error.message;
-      console.log(errorCode + errorMessage);
-
-      let userMessage = "Sign up failed: " + errorMessage;
-      if (error.code === "auth/email-already-in-use") {
-        userMessage =
-          "This email is already registered. Please try signing in instead.";
-      } else if (error.code === "auth/invalid-email") {
-        userMessage = "Invalid email address. Please check and try again.";
-      } else if (error.code === "auth/weak-password") {
-        userMessage = "Password is too weak. Please use at least 6 characters.";
-      }
-
-      alert(userMessage);
-    }
-  };
-
-  // Send email verification link
-  const sendVerificationEmail = async () => {
-    try {
-      const user = auth().currentUser;
-      if (user && !user.emailVerified) {
-        // Configure action code settings for email verification
-        const actionCodeSettings = {
-          url: "https://doubly-messenging.firebaseapp.com", // Your Firebase hosting domain
-          handleCodeInApp: false, // Opens in browser, not app
-          iOS: {
-            bundleId: "com.doublyconnections.doubly",
-          },
-        };
-
-        await user.sendEmailVerification(actionCodeSettings);
-        console.log("Verification email sent to", user.email);
-      }
-    } catch (error) {
-      console.log("Error sending verification email:", error);
-
-      let errorMessage = "Error sending verification email: " + error.message;
-
-      if (error.code === "auth/too-many-requests") {
-        errorMessage =
-          "Too many requests. Please wait a few minutes before trying again, or check your email - a verification link may have already been sent.";
-      } else if (error.code === "auth/network-request-failed") {
-        errorMessage =
-          "Network error. Please check your internet connection and try again.";
-      }
-
-      alert(errorMessage);
-      throw error;
-    }
-  };
-
-  // handles phone sign up (sends verification code)
+  // Send SMS verification code
   const handlePhoneRegister = async () => {
+    setIsSending(true);
     try {
-      // Disable app verification for development to avoid SMS limits and blocking
       if (__DEV__) {
         auth().settings.appVerificationDisabledForTesting = true;
       }
-
       const confirmationResult =
         await auth().signInWithPhoneNumber(phoneNumber);
       setConfirmation(confirmationResult);
       setCurrentStep("phoneVerification");
     } catch (error) {
-      console.log("Phone sign up error:", error);
-      alert("Failed to send verification code: " + error.message);
+      console.log("Phone sign up error:", error.code, error.message);
+      alert(getAuthErrorMessage(error.code));
+    } finally {
+      setIsSending(false);
     }
   };
 
+  // Handles code verification. If phone already has an account,
+  // either welcome them back (complete profile) or resume setup (incomplete profile).
   const handlePhoneVerification = async (code) => {
     try {
-      await confirmation.confirm(code);
-      console.log("Phone verified successfully");
-      // Move to first name step
+      const userCredential = await confirmation.confirm(code);
+      const isNewUser = userCredential.additionalUserInfo?.isNewUser ?? true;
+      const uid = userCredential.user.uid;
+
+      if (isNewUser) {
+        // Fresh account - proceed to profile setup
+        setCurrentStep("firstName");
+        return;
+      }
+
+      // Existing phone number - check if profile is complete
+      const profileDoc = await firestore()
+        .collection("profiles")
+        .doc(uid)
+        .get();
+
+      if (profileDoc.exists && profileDoc.data()?.setUp === true) {
+        // Complete profile - they're already a user. App-level auth listener
+        // will navigate to main screen since they're signed in.
+        alert(
+          "Welcome back! You already have an account with this phone number.",
+        );
+        return;
+      }
+
+      // Profile is incomplete - resume signup with existing data pre-filled
+      if (profileDoc.exists) {
+        const data = profileDoc.data();
+        setSignupData({
+          firstName: data.name || "",
+          birthday: data.birthday || {},
+          gender: data.gender || null,
+          genderPreference: data.genderPreference || [],
+          photos: data.photos || [],
+          tags: data.tags || [],
+          friendCode: "",
+          contactEmail: data.contactEmail || "",
+          setUp: false,
+        });
+      }
       setCurrentStep("firstName");
     } catch (error) {
-      console.log("Invalid verification code:", error);
-      alert("Invalid verification code. Please try again.");
+      console.log("Verification error:", error.code);
+      let message = "Invalid verification code. Please try again.";
+      if (error.code === "auth/code-expired") {
+        message = "Code expired. Please request a new one.";
+      } else if (error.code === "auth/invalid-verification-code") {
+        message = "Incorrect code. Please check and try again.";
+      }
+      alert(message);
+      throw error;
+    }
+  };
+
+  const handleResendCode = async () => {
+    try {
+      if (__DEV__) {
+        auth().settings.appVerificationDisabledForTesting = true;
+      }
+      const confirmationResult =
+        await auth().signInWithPhoneNumber(phoneNumber);
+      setConfirmation(confirmationResult);
+    } catch (error) {
+      console.log("Resend code error:", error.code);
+      alert(getAuthErrorMessage(error.code));
+      throw error;
     }
   };
 
   const handlePhoneVerificationBack = () => {
-    setCurrentStep("credentials");
+    setCurrentStep("phone");
     setConfirmation(null);
-  };
-
-  const handleEmailVerified = () => {
-    console.log("Email verified, showing verification complete screen");
-    setCurrentStep("verificationComplete");
-  };
-
-  const handleVerificationCompleteContinue = () => {
-    console.log("Proceeding to profile setup");
-    setCurrentStep("firstName");
-  };
-
-  const handleEmailVerificationBack = async () => {
-    // Sign out the user since they already created an account
-    try {
-      await auth().signOut();
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
-    // Go back to credentials screen
-    setCurrentStep("credentials");
   };
 
   const handleFirstNameNext = (firstName) => {
@@ -248,16 +196,15 @@ const SignUpScreen = ({
   };
 
   const handleFirstNameBack = async () => {
-    // Sign out the user since they already created an account
+    // User is signed in via phone but hasn't completed profile.
+    // Sign them out so they start fresh if they come back.
     try {
       await auth().signOut();
     } catch (error) {
       console.error("Error signing out:", error);
     }
-    // Reset verification state
     setConfirmation(null);
-    // Always go back to credentials screen
-    setCurrentStep("credentials");
+    setCurrentStep("phone");
   };
 
   const handleBirthdayNext = (birthday) => {
@@ -309,78 +256,79 @@ const SignUpScreen = ({
     setCurrentStep("tags");
   };
 
-  const handleDuoNext = async (friendCode) => {
-    // Save profile with all collected data
-    await saveProfile(friendCode);
+  const handleDuoNext = (friendCode) => {
+    // Store friend code in state and proceed to email step
+    setSignupData({ ...signupData, friendCode });
+    setCurrentStep("contactEmail");
   };
 
-  const handleDuoSkip = async () => {
-    // Save profile without friend code
-    await saveProfile("");
+  const handleDuoSkip = () => {
+    setSignupData({ ...signupData, friendCode: "" });
+    setCurrentStep("contactEmail");
   };
 
-  const saveProfile = async (friendCode) => {
+  const handleContactEmailBack = () => {
+    setCurrentStep("duo");
+  };
+
+  const handleContactEmailNext = async (contactEmail) => {
+    await saveProfile(signupData.friendCode, contactEmail);
+  };
+
+  const handleContactEmailSkip = async () => {
+    await saveProfile(signupData.friendCode, "");
+  };
+
+  const saveProfile = async (friendCode, contactEmail) => {
     try {
-      // Validate that all required data is present
-      if (!signupData.firstName && signupData.setUp === false) {
+      // Validate required data
+      if (!signupData.firstName) {
         alert("Please enter your first name");
         setCurrentStep("firstName");
         return;
       }
-
-      if (
-        (!signupData.birthday || !signupData.birthday.age) &&
-        signupData.setUp === false
-      ) {
+      if (!signupData.birthday || !signupData.birthday.age) {
         alert("Please enter your birthday");
         setCurrentStep("birthday");
         return;
       }
-
-      if (
-        (!signupData.tags || signupData.tags.length < 3) &&
-        signupData.setUp === false
-      ) {
-        alert("Please select at least 3 tags");
-        setCurrentStep("tags");
-        return;
-      }
-
-      if (!signupData.gender && signupData.setUp === false) {
+      if (!signupData.gender) {
         alert("Please select your gender");
         setCurrentStep("gender");
         return;
       }
-
       if (
-        (!signupData.genderPreference ||
-          signupData.genderPreference.length === 0) &&
-        signupData.setUp === false
+        !signupData.genderPreference ||
+        signupData.genderPreference.length === 0
       ) {
         alert("Please select at least one gender preference");
         setCurrentStep("genderPreference");
         return;
       }
-
-      if (
-        (!signupData.photos || signupData.photos.length === 0) &&
-        signupData.setUp === false
-      ) {
+      if (!signupData.photos || signupData.photos.length === 0) {
         alert("Please add at least one photo");
         setCurrentStep("photos");
         return;
       }
-
-      const userId = CURRENT_USER_ID;
-
-      if (!userId) {
-        alert("User ID not found. Please try signing in again.");
+      if (!signupData.tags || signupData.tags.length < 3) {
+        alert("Please select at least 3 tags");
+        setCurrentStep("tags");
         return;
       }
+
+      // Use live auth state - this is set by signInWithPhoneNumber/confirm
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        alert("Session expired. Please sign up again.");
+        setCurrentStep("phone");
+        return;
+      }
+      const userId = currentUser.uid;
 
       const profileData = {
         name: signupData.firstName,
         age: signupData.birthday.age.toString(),
+        birthday: signupData.birthday,
         tags: signupData.tags,
         gender: signupData.gender,
         genderPreference: signupData.genderPreference,
@@ -389,6 +337,8 @@ const SignUpScreen = ({
         city: "",
         latitude: null,
         longitude: null,
+        phoneNumber: currentUser.phoneNumber || phoneNumber,
+        contactEmail: contactEmail || "",
         showOnlineStatus: true,
         createdAt: new Date().toISOString(),
         setUp: true,
@@ -413,7 +363,7 @@ const SignUpScreen = ({
       }
 
       console.log("Profile created successfully!");
-      // The app will automatically navigate to main screen since user is now authenticated
+      // App-level auth listener will navigate to main screen
     } catch (error) {
       console.error("Error saving profile:", error);
       alert("Failed to save profile. Please try again.");
@@ -426,31 +376,13 @@ const SignUpScreen = ({
       <PhoneVerificationScreen
         onVerify={handlePhoneVerification}
         onBack={handlePhoneVerificationBack}
+        onResend={handleResendCode}
         phoneNumber={phoneNumber}
       />
     );
   }
 
-  if (currentStep === "emailVerification") {
-    return (
-      <EmailVerificationScreen
-        onVerified={handleEmailVerified}
-        onBack={handleEmailVerificationBack}
-        email={email}
-        onResendEmail={sendVerificationEmail}
-      />
-    );
-  }
-
-  if (currentStep === "verificationComplete") {
-    return (
-      <VerificationCompleteScreen
-        onContinue={handleVerificationCompleteContinue}
-      />
-    );
-  }
-
-  if (currentStep === "firstName" && signupData.setUp === false) {
+  if (currentStep === "firstName") {
     return (
       <FirstNameScreen
         onNext={handleFirstNameNext}
@@ -460,7 +392,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "birthday" && signupData.setUp === false) {
+  if (currentStep === "birthday") {
     return (
       <BirthdayScreen
         onNext={handleBirthdayNext}
@@ -470,7 +402,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "gender" && signupData.setUp === false) {
+  if (currentStep === "gender") {
     return (
       <GenderScreen
         onNext={handleGenderNext}
@@ -480,7 +412,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "genderPreference" && signupData.setUp === false) {
+  if (currentStep === "genderPreference") {
     return (
       <GenderPreferenceScreen
         onNext={handleGenderPreferenceNext}
@@ -490,7 +422,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "photos" && signupData.setUp === false) {
+  if (currentStep === "photos") {
     return (
       <PhotoSelectionScreen
         onNext={handlePhotosNext}
@@ -500,7 +432,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "tags" && signupData.setUp === false) {
+  if (currentStep === "tags") {
     return (
       <TagSelectionScreen
         onNext={handleTagsNext}
@@ -510,7 +442,7 @@ const SignUpScreen = ({
     );
   }
 
-  if (currentStep === "duo" && signupData.setUp === false) {
+  if (currentStep === "duo") {
     return (
       <DuoSetupScreen
         onNext={handleDuoNext}
@@ -520,7 +452,18 @@ const SignUpScreen = ({
     );
   }
 
-  // Default: credentials screen
+  if (currentStep === "contactEmail") {
+    return (
+      <ContactEmailScreen
+        onNext={handleContactEmailNext}
+        onSkip={handleContactEmailSkip}
+        onBack={handleContactEmailBack}
+        initialEmail={signupData.contactEmail}
+      />
+    );
+  }
+
+  // Default: phone entry screen
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -536,50 +479,20 @@ const SignUpScreen = ({
         Sign Up
       </Text>
 
-      <View style={styles.inputContainer}>
-        {/* TODO: Re-enable phone auth toggle later
-        <SegmentedButtons
-          value={authMethod}
-          onValueChange={setAuthMethod}
-          buttons={[
-            { value: "email", label: "Email" },
-            { value: "phone", label: "Phone" },
-          ]}
-          style={styles.segmentedButtons}
-        />
-*/}
+      <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+        Enter your phone number to get started
+      </Text>
 
-        {authMethod === "email" ? (
-          <>
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={(text) => setEmail(text)}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-            />
-            <TextInput
-              label="Password"
-              value={password}
-              onChangeText={(text) => setPassword(text)}
-              mode="outlined"
-              secureTextEntry
-              style={styles.input}
-            />
-          </>
-        ) : (
-          <TextInput
-            label="Phone Number"
-            value={phoneNumber}
-            onChangeText={handlePhoneNumberChange}
-            mode="outlined"
-            keyboardType="phone-pad"
-            placeholder="+1 (123) 456-7890"
-            style={styles.input}
-          />
-        )}
+      <View style={styles.inputContainer}>
+        <TextInput
+          label="Phone Number"
+          value={phoneNumber}
+          onChangeText={handlePhoneNumberChange}
+          mode="outlined"
+          keyboardType="phone-pad"
+          placeholder="+1 (123) 456-7890"
+          style={styles.input}
+        />
       </View>
 
       <View style={styles.buttonContainer}>
@@ -587,8 +500,10 @@ const SignUpScreen = ({
           mode="contained"
           onPress={handleRegisterPress}
           style={styles.button}
+          loading={isSending}
+          disabled={isSending || phoneNumber.length < 12}
         >
-          Register
+          Continue
         </Button>
       </View>
 
@@ -617,13 +532,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
     marginBottom: 30,
+    textAlign: "center",
+    paddingHorizontal: 40,
   },
   inputContainer: {
     width: "80%",
-  },
-  segmentedButtons: {
-    marginBottom: 20,
   },
   input: {
     marginBottom: 10,

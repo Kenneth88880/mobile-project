@@ -54,7 +54,7 @@ const TagSelectionScreen = ({ onNext, onBack, initialTags = [] }) => {
         <Text
           style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}
         >
-          6/6
+          6/7
         </Text>
       </View>
       <View style={styles.header}>

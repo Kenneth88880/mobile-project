@@ -36,7 +36,7 @@ const PhotoSelectionScreen = ({ onNext, onBack, initialPhotos = [] }) => {
       )}
       <View style={styles.progressCounter}>
         <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
-          5/6
+          5/7
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
