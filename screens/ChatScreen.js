@@ -903,6 +903,15 @@ function ChatListScreen({ onChatSelect }) {
             <Icon source="message" size={28} color={theme.colors.primary} />
             <Text variant="headlineMedium">Messages</Text>
           </View>
+          {__DEV__ && (
+            <IconButton
+              icon="bug"
+              size={22}
+              onPress={handleCreateTestChat}
+              iconColor={theme.colors.error}
+              tooltip="Create Test Chat"
+            />
+          )}
         </Surface>
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" />
@@ -910,6 +919,32 @@ function ChatListScreen({ onChatSelect }) {
       </View>
     );
   }
+
+  const handleCreateTestChat = async () => {
+    try {
+      const chatData = {
+        participants: [currentUserId],
+        curUserName: "Test Chat",
+        otherUserName: "Test Chat",
+        curPhoto: null,
+        otherPhoto: null,
+        isGroupChat: false,
+        isPrivate: true,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        lastMessage: "",
+        lastMessageText: "",
+        creatorID: currentUserId,
+        lastMessageTime: firestore.FieldValue.serverTimestamp(),
+        type: "private",
+        isTestChat: true,
+      };
+      const chatRef = await firestore().collection("chats").add(chatData);
+      onChatSelect({ id: chatRef.id, ...chatData });
+    } catch (error) {
+      console.error("Error creating test chat:", error);
+      Alert.alert("Error", "Failed to create test chat");
+    }
+  };
 
   return (
     <View
@@ -920,6 +955,15 @@ function ChatListScreen({ onChatSelect }) {
           <Icon source="message" size={28} color={theme.colors.primary} />
           <Text variant="headlineMedium">Messages</Text>
         </View>
+        {__DEV__ && (
+          <IconButton
+            icon="bug"
+            size={22}
+            onPress={handleCreateTestChat}
+            iconColor={theme.colors.error}
+            tooltip="Create Test Chat"
+          />
+        )}
       </Surface>
 
       {chats.length === 0 && archivedChats.length === 0 ? (
