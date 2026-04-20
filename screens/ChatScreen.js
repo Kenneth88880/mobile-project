@@ -51,6 +51,7 @@ import {
   SwipeableMessageRight,
   SwipeableMessageLeft,
 } from "./ChatScreen/SwipeableMessage.js";
+import { getSubscriptionStatus } from "../services/profileService";
 
 const PLACEHOLDER_IMAGE = "https://via.placeholder.com/400x300?text=No+Image";
 const getUserID = () => CURRENT_USER_ID;
@@ -1078,6 +1079,17 @@ function IndividualChatScreen({
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentChat, setCurrentChat] = useState(chat);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [subStatus, setSubStatus] = useState(null);
+  const [subStatusTick, setSubStatusTick] = useState(0);
+
+  const refetchSubStatus = () => {
+    subStatusCahce = "empty"; // clear cache so it re-fetches from Firestore
+    setSubStatusTick(t => t + 1);
+  };
+
+  useEffect(() => {
+    getSubscriptionStatus(CURRENT_USER_ID).then(setSubStatus);
+  }, [subStatusTick]);
 
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
   const flatListRef = useRef(null);
@@ -1512,6 +1524,10 @@ function IndividualChatScreen({
       setUploadingImage(false);
     }
   };
+
+  const chatActivities = async () => {
+    console.log("recognzied button press for chat activities");
+  }
 
   const onSend = useCallback(async () => {
     if (!chat?.id || !inputText.trim()) return;
@@ -2159,6 +2175,20 @@ function IndividualChatScreen({
                     activeUnderlineColor="transparent"
                     cursorColor="#000000"
                   />
+                  {/* {console.log(subStatus)} */}
+                  {subStatus === "active" && (
+                    <IconButton
+                    style={{
+                      position: "absolute",
+                      right: 69,
+                      backgroundColor: "transparent",
+                    }}
+                    icon="gamepad-variant"
+                    size={24}
+                    onPress={chatActivities}
+                  />
+                  )
+                  }
                   <IconButton
                     style={{
                       position: "absolute",

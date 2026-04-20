@@ -7,7 +7,7 @@ import { generateGeohash } from "../utils/locationUtils";
 // caching vars for later use 
 const profileCache = {};
 const duoPartnerCache = {};
-let subStatusCahce = "empty";
+let subStatusCachce = "empty";
 
 /**
  * Get a user's profile by userId
@@ -783,19 +783,20 @@ export const resetTestData = async (currentDuoId) => {
  */
 export const getSubscriptionStatus = async (userId) => {
   try {
-    if (subStatusCahce == "empty") {
+    if (subStatusCachce === "empty") {
       const profile = await getUserProfile(userId);
-      console.log("sub status", profile?.subscriptionStatus);
-      subStatusCahce = profile?.subscribeToSubscriptionStatus;
-      return profile?.subscriptionStatus ?? null;
+      const raw = profile?.subscriptionStatus?._j ?? profile?.subscriptionStatus;
+      console.log(subStatusCachce);
+      subStatusCachce = raw === "active" ? "active" : "cancelled";
+      console.log("its ", subStatusCachce)
+      return subStatusCachce;
     } else {
-      console.log("cache being used for sub status");
-      return subStatusCahce;
-
+      console.log("its ", subStatusCachce)
+      return subStatusCachce;
     }
   } catch (error) {
     console.error("Error getting subscription status:", error);
-    return null;
+    return "cancelled";
   }
 };
 
