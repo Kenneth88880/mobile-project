@@ -146,7 +146,7 @@ export default function CheckoutScreen({ navigation }) {
       body: JSON.stringify({ priceId, uid }),
     });
     const data = await response.json();
-    console.log("RAW backend response:", JSON.stringify(data));
+    // console.log("RAW backend response:", JSON.stringify(data));
     return {
       setupIntent: data.setupIntent,
       customerSessionClientSecret: data.customerSessionClientSecret,

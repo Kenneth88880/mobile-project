@@ -116,8 +116,8 @@ export default function App() {
     },
     {
       key: "payment",
-      focusedIcon: "card",
-      unfocusedIcon: "card-outline",
+      focusedIcon: "credit-card",
+      unfocusedIcon: "credit-card-outline",
     },
     // {
     //   key: "premium",
