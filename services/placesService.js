@@ -1,6 +1,8 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getSubscriptionStatus } from "./profileService";
+import { CURRENT_USER_ID } from "./UserConfig";
 
 // ─── API Key ──────────────────────────────────────────────────────────────
 const API_KEY =
@@ -34,13 +36,15 @@ const memoryCache = new Map();
 // Dev-only request counter
 let requestCount = 0;
 
+const UID = CURRENT_USER_ID;
+
 // ─── Session Guard ────────────────────────────────────────────────────────
 // Caps API calls per app session to protect against bots and runaway bugs.
 // Cached results do NOT count toward these limits — only real API calls.
 // Limits reset when the user closes and reopens the app.
 const SESSION_LIMITS = {
-  nearbySearch: 25, // max 30 real Nearby Search calls per session
-  placeDetails: 15, // max 20 real Place Details calls per session
+  nearbySearch: getSubscriptionStatus(UID) === "active" ? 50 : 25, 
+  placeDetails: getSubscriptionStatus(UID) === "active" ? 30 : 15, 
 };
 
 const sessionCounts = {
