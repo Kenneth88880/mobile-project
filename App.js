@@ -155,8 +155,8 @@ export default function App() {
   useEffect(() => {
     let profileUnsubscribe = null;
     const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
-      console.log("Auth state changed:", user ? user.uid : "null");
-      console.log("the key we got was: ", publishableKey)
+      // console.log("Auth state changed:", user ? user.uid : "null");
+      // console.log("the key we got was: ", publishableKey)
       setUser(user);
       if (user) {
         const { creationTime, lastSignInTime } = user.metadata;

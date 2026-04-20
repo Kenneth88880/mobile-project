@@ -7,6 +7,7 @@ import { generateGeohash } from "../utils/locationUtils";
 // caching vars for later use 
 const profileCache = {};
 const duoPartnerCache = {};
+let subStatusCahce = "empty";
 
 /**
  * Get a user's profile by userId
@@ -782,9 +783,16 @@ export const resetTestData = async (currentDuoId) => {
  */
 export const getSubscriptionStatus = async (userId) => {
   try {
-    const profile = await getUserProfile(userId);
-    console.log("sub status", profile?.subscriptionStatus);
-    return profile?.subscriptionStatus ?? null;
+    if (subStatusCahce == "empty") {
+      const profile = await getUserProfile(userId);
+      console.log("sub status", profile?.subscriptionStatus);
+      subStatusCahce = profile?.subscribeToSubscriptionStatus;
+      return profile?.subscriptionStatus ?? null;
+    } else {
+      console.log("cache being used for sub status");
+      return subStatusCahce;
+
+    }
   } catch (error) {
     console.error("Error getting subscription status:", error);
     return null;
