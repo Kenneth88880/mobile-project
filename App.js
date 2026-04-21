@@ -5,6 +5,8 @@ import {
   MD3LightTheme,
   MD3DarkTheme,
   BottomNavigation,
+  ActivityIndicator,
+  Text,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -39,6 +41,7 @@ import CheckoutScreen from "./screens/CheckoutScreen";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { Recaptcha } from "@google-cloud/recaptcha-enterprise-react-native";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -51,7 +54,7 @@ const AnimatedView = ({ offset, translateX, children }) => {
       style={[
         { position: "absolute", width: SCREEN_WIDTH, height: "100%" },
         animatedStyle,
-      ]}  
+      ]}
     >
       {children}
     </Animated.View>
@@ -74,22 +77,49 @@ export default function App() {
   // const [fontsLoaded] = useFonts({      FOR FONTS LATER
   //   FredokaBubble: require("./assets/fonts/Fredoka_SemiExpanded-Light.ttf"),
   // });
-  // ✅ All your existing useEffects are here — add the reCAPTCHA one here too
+
+  // ── FIX 4: Defensive reCAPTCHA init ──
+  // Triple protection: null check, try/catch, and promise .catch()
   useEffect(() => {
-    const extra = Constants.expoConfig?.extra ?? {};
-    const siteKey =
-      Platform.OS === "ios"
-        ? extra.recaptchaIosSiteKey
-        : extra.recaptchaAndroidSiteKey;
+    try {
+      const extra = Constants.expoConfig?.extra ?? {};
+      const siteKey =
+        Platform.OS === "ios"
+          ? extra.recaptchaIosSiteKey
+          : extra.recaptchaAndroidSiteKey;
 
-    if (!siteKey) {
-      console.warn("⚠️ reCAPTCHA site key not configured");
-      return;
+      if (!siteKey) {
+        console.warn("⚠️ reCAPTCHA site key not configured");
+        return;
+      }
+
+      if (!Recaptcha || typeof Recaptcha.fetchClient !== "function") {
+        console.warn("⚠️ reCAPTCHA native module not linked");
+        return;
+      }
+
+      Recaptcha.fetchClient(siteKey)
+        .then(() => console.log("✅ reCAPTCHA client initialized"))
+        .catch((err) => console.warn("⚠️ reCAPTCHA init failed:", err));
+    } catch (err) {
+      console.warn("⚠️ reCAPTCHA init threw synchronously:", err);
     }
+  }, []);
 
-    Recaptcha.fetchClient(siteKey)
-      .then(() => console.log("✅ reCAPTCHA client initialized"))
-      .catch((err) => console.warn("⚠️ reCAPTCHA init failed:", err));
+  // ── FIX 2: Safety net timeout ──
+  // If the auth listener never resolves within 8 seconds,
+  // force-continue past the loading screen so the user is never permanently stuck.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setCheckingProfile((prev) => {
+        if (prev) {
+          console.warn("⚠️ Auth listener timeout — forcing past loading state");
+          return false;
+        }
+        return prev;
+      });
+    }, 8000);
+    return () => clearTimeout(timeout);
   }, []);
 
   const API_URL =
@@ -223,7 +253,7 @@ export default function App() {
       const data = await response.json();
       setPublishableKey(data.publishableKey);
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.error("Fetch error:", err);
     }
   };
 
@@ -422,129 +452,154 @@ export default function App() {
     );
   }, [displayTab, activeTab]);
 
+  // ── FIX 1: Visible loading state instead of blank white view ──
   if (checkingProfile) {
     return (
-      <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-        >
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            />
-          </GestureHandlerRootView>
-        </StripeProvider>
-      </PaperProvider>
+      <ErrorBoundary>
+        <PaperProvider theme={theme}>
+          <StripeProvider
+            publishableKey={publishableKey}
+            urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+          >
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: theme.colors.background,
+                }}
+              >
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text
+                  style={{
+                    marginTop: 16,
+                    color: theme.colors.onBackground,
+                  }}
+                >
+                  Loading Doubly...
+                </Text>
+              </View>
+            </GestureHandlerRootView>
+          </StripeProvider>
+        </PaperProvider>
+      </ErrorBoundary>
     );
   }
 
   if (user && !profileComplete) {
     return (
-      <PaperProvider theme={theme}>
-        <StripeProvider
-          publishableKey={publishableKey}
-          urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-        >
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <SignUpScreen isInSignupFlow={true} onNavigateToSignIn={() => {}} />
-          </GestureHandlerRootView>
-        </StripeProvider>
-      </PaperProvider>
+      <ErrorBoundary>
+        <PaperProvider theme={theme}>
+          <StripeProvider
+            publishableKey={publishableKey}
+            urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+          >
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <SignUpScreen
+                isInSignupFlow={true}
+                onNavigateToSignIn={() => {}}
+              />
+            </GestureHandlerRootView>
+          </StripeProvider>
+        </PaperProvider>
+      </ErrorBoundary>
     );
   }
 
   if (user && profileComplete) {
     return (
+      <ErrorBoundary>
+        <PaperProvider theme={theme}>
+          <StripeProvider
+            publishableKey={publishableKey}
+            urlScheme="doubly-yrvn0tmogrdrliugnun4w"
+          >
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <SafeAreaView
+                style={[
+                  styles.safeArea,
+                  { backgroundColor: theme.colors.elevation.level2 },
+                ]}
+                edges={["top", "left", "right"]}
+              >
+                <StatusBar style={isDarkMode ? "light" : "dark"} />
+
+                <GestureDetector gesture={swipeGesture}>
+                  <View style={{ flex: 1 }}>
+                    {visibleRoutes.map((route) => {
+                      const displayIndex = routes.findIndex(
+                        (r) => r.key === displayTab,
+                      );
+                      const routeIndex = routes.findIndex(
+                        (r) => r.key === route.key,
+                      );
+                      const offset = (routeIndex - displayIndex) * SCREEN_WIDTH;
+                      return (
+                        <AnimatedView
+                          key={route.key}
+                          offset={offset}
+                          translateX={translateX}
+                        >
+                          {sceneMap[route.key]()}
+                        </AnimatedView>
+                      );
+                    })}
+                  </View>
+                </GestureDetector>
+
+                <View
+                  style={{
+                    backgroundColor: theme.colors.elevation.level2,
+                    height: 70,
+                  }}
+                >
+                  <BottomNavigation
+                    navigationState={{
+                      index: routes.findIndex((r) => r.key === activeTab),
+                      routes,
+                    }}
+                    onIndexChange={(index) => {
+                      setActiveTab(routes[index].key);
+                      setDisplayTab(routes[index].key);
+                    }}
+                    renderScene={() => null}
+                    barStyle={{
+                      backgroundColor: theme.colors.elevation.level2,
+                      height: 70,
+                    }}
+                    activeColor={theme.colors.primary}
+                    inactiveColor={theme.colors.onSurfaceVariant}
+                    safeAreaInsets={{ bottom: 0 }}
+                  />
+                </View>
+              </SafeAreaView>
+            </GestureHandlerRootView>
+          </StripeProvider>
+        </PaperProvider>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
       <PaperProvider theme={theme}>
         <StripeProvider
           publishableKey={publishableKey}
           urlScheme="doubly-yrvn0tmogrdrliugnun4w"
         >
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaView
-              style={[
-                styles.safeArea,
-                { backgroundColor: theme.colors.elevation.level2 },
-              ]}
-              edges={["top", "left", "right"]}
-            >
-              <StatusBar style={isDarkMode ? "light" : "dark"} />
-
-              <GestureDetector gesture={swipeGesture}>
-                <View style={{ flex: 1 }}>
-                  {visibleRoutes.map((route) => {
-                    const displayIndex = routes.findIndex(
-                      (r) => r.key === displayTab,
-                    );
-                    const routeIndex = routes.findIndex(
-                      (r) => r.key === route.key,
-                    );
-                    const offset = (routeIndex - displayIndex) * SCREEN_WIDTH;
-                    return (
-                      <AnimatedView
-                        key={route.key}
-                        offset={offset}
-                        translateX={translateX}
-                      >
-                        {sceneMap[route.key]()}
-                      </AnimatedView>
-                    );
-                  })}
-                </View>
-              </GestureDetector>
-
-              <View
-                style={{
-                  backgroundColor: theme.colors.elevation.level2,
-                  height: 70,
-                }}
-              >
-                <BottomNavigation
-                  navigationState={{
-                    index: routes.findIndex((r) => r.key === activeTab),
-                    routes,
-                  }}
-                  onIndexChange={(index) => {
-                    setActiveTab(routes[index].key);
-                    setDisplayTab(routes[index].key);
-                  }}
-                  renderScene={() => null}
-                  barStyle={{
-                    backgroundColor: theme.colors.elevation.level2,
-                    height: 70,
-                  }}
-                  activeColor={theme.colors.primary}
-                  inactiveColor={theme.colors.onSurfaceVariant}
-                  safeAreaInsets={{ bottom: 0 }}
-                />
-              </View>
-            </SafeAreaView>
+            {showRegister ? (
+              <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
+            ) : (
+              <SignInScreen
+                onNavigateToRegister={() => setShowRegister(true)}
+              />
+            )}
           </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
-    );
-  }
-
-  return (
-    <PaperProvider theme={theme}>
-      <StripeProvider
-        publishableKey={publishableKey}
-        urlScheme="doubly-yrvn0tmogrdrliugnun4w"
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          {showRegister ? (
-            <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-          ) : (
-            <SignInScreen onNavigateToRegister={() => setShowRegister(true)} />
-          )}
-        </GestureHandlerRootView>
-      </StripeProvider>
-    </PaperProvider>
+    </ErrorBoundary>
   );
 }
 
