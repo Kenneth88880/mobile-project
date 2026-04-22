@@ -45,6 +45,13 @@ export default function SettingsScreen({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
+  // Email states
+  const [email, setEmail] = useState(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
+
   const sliderRef = useRef(null);
   const distanceRef = useRef(50);
   const minVal = 5;
@@ -68,6 +75,7 @@ export default function SettingsScreen({
             ? userProfile.genderPreference
             : [],
         );
+        setEmail(userProfile.contactEmail || null);
       }
     } catch (error) {
       console.error("Error loading settings:", error);
@@ -78,7 +86,6 @@ export default function SettingsScreen({
 
   const handleDistanceSave = async () => {
     const value = distanceRef.current;
-    console.log("Saving distance:", value);
     setMaxDistance(value);
     try {
       await updateMaxDistance(CURRENT_USER_ID, value);
@@ -103,7 +110,6 @@ export default function SettingsScreen({
             );
             distanceRef.current = newDistance;
             setMaxDistance(newDistance);
-            console.log("Dragging to:", newDistance);
           });
         }
       },
@@ -116,11 +122,7 @@ export default function SettingsScreen({
   const handleOnlineStatusChange = async (value) => {
     try {
       if (!profile) return;
-
-      const updatedProfile = {
-        ...profile,
-        showOnlineStatus: value,
-      };
+      const updatedProfile = { ...profile, showOnlineStatus: value };
       await saveUserProfile(CURRENT_USER_ID, updatedProfile);
       setProfile(updatedProfile);
       setShowOnlineStatus(value);
@@ -133,12 +135,10 @@ export default function SettingsScreen({
   const toggleGenderPreference = async (gender) => {
     try {
       if (!profile) return;
-
       const currentPreferences = genderPreference || [];
       let newPreferences;
 
       if (currentPreferences.includes(gender)) {
-        // PREVENT REMOVING THE LAST PREFERENCE
         if (currentPreferences.length === 1) {
           Alert.alert(
             "Gender Preference Required",
@@ -151,11 +151,7 @@ export default function SettingsScreen({
         newPreferences = [...currentPreferences, gender];
       }
 
-      const updatedProfile = {
-        ...profile,
-        genderPreference: newPreferences,
-      };
-
+      const updatedProfile = { ...profile, genderPreference: newPreferences };
       await saveUserProfile(CURRENT_USER_ID, updatedProfile);
       setProfile(updatedProfile);
       setGenderPreference(newPreferences);
@@ -165,25 +161,48 @@ export default function SettingsScreen({
     }
   };
 
+  const validateEmail = (text) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(text.trim());
+  };
+
+  const handleSaveEmail = async () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!validateEmail(trimmed)) {
+      setEmailError("Please enter a valid email address");
+      return;
+    }
+    setEmailError("");
+    setEmailLoading(true);
+    try {
+      await firestore()
+        .collection("profiles")
+        .doc(CURRENT_USER_ID)
+        .update({ contactEmail: trimmed });
+
+      invalidateProfileCache(CURRENT_USER_ID);
+      setEmail(trimmed);
+      setShowEmailModal(false);
+      setNewEmail("");
+    } catch (error) {
+      console.error("Error saving email:", error);
+      setEmailError("Failed to save email. Please try again.");
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (deleteConfirmText.toLowerCase() !== "delete") return;
-
     try {
-      // SOFT DELETE: preserve data as evidence, just mark as deleted
       await firestore().collection("profiles").doc(CURRENT_USER_ID).update({
         deleted: true,
         deletedAt: firestore.FieldValue.serverTimestamp(),
         deletedBy: "user",
-        // Keep all other data intact for evidence/moderation purposes
       });
-
-      // Delete the Firebase Auth account so they can't log back in
       await auth().currentUser.delete();
-
-      // Auth state change will automatically redirect to sign in screen
     } catch (error) {
       console.error("Error deleting account:", error);
-      // If the user's auth token is stale, they need to re-authenticate
       if (error.code === "auth/requires-recent-login") {
         Alert.alert(
           "Re-authentication Required",
@@ -221,7 +240,6 @@ export default function SettingsScreen({
         <Text>Loading settings...</Text>
       </SafeAreaView>
     );
-
     return onClose ? (
       <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
         {loadingContent}
@@ -267,8 +285,6 @@ export default function SettingsScreen({
               <Text variant="bodyMedium" style={styles.sliderDescription}>
                 Show profiles within {maxDistance}km of your location
               </Text>
-
-              {/* Slider Track */}
               <View
                 style={styles.sliderWrapper}
                 {...panResponder.panHandlers}
@@ -278,24 +294,17 @@ export default function SettingsScreen({
                   <View
                     style={[
                       styles.fill,
-                      {
-                        width: `${percentage}%`,
-                        backgroundColor: "#8B4A61",
-                      },
+                      { width: `${percentage}%`, backgroundColor: "#8B4A61" },
                     ]}
                   />
                 </View>
                 <View
                   style={[
                     styles.thumb,
-                    {
-                      left: `${percentage}%`,
-                      marginLeft: -12,
-                    },
+                    { left: `${percentage}%`, marginLeft: -12 },
                   ]}
                 />
               </View>
-
               <View style={styles.sliderLabels}>
                 <Text variant="bodySmall" style={styles.sliderLabel}>
                   {minVal}km
@@ -320,7 +329,6 @@ export default function SettingsScreen({
             <Text variant="bodyMedium" style={styles.preferenceDescription}>
               Select which genders you're interested in matching with:
             </Text>
-
             <View style={styles.preferenceOptions}>
               <List.Item
                 title="Male"
@@ -351,7 +359,6 @@ export default function SettingsScreen({
                 )}
               />
             </View>
-
             {genderPreference.length === 0 && (
               <Text
                 variant="bodySmall"
@@ -370,6 +377,41 @@ export default function SettingsScreen({
               Distance preferences help you find matches nearby. Your location
               is updated automatically while using the app.
             </Text>
+          </Card.Content>
+        </Card>
+
+        {/* Email Settings */}
+        <Card style={styles.card}>
+          <Card.Title
+            title="Email"
+            left={(props) => <IconButton icon="email-outline" {...props} />}
+          />
+          <Card.Content>
+            <List.Item
+              title={email ? email : "No email linked"}
+              description={
+                email
+                  ? "Tap to change"
+                  : "Add an email for updates and support"
+              }
+              left={(props) => (
+                <IconButton
+                  icon={email ? "email-outline" : "email-plus-outline"}
+                  {...props}
+                />
+              )}
+              right={(props) => (
+                <IconButton
+                  icon={email ? "pencil-outline" : "plus"}
+                  onPress={() => {
+                    setNewEmail(email || "");
+                    setEmailError("");
+                    setShowEmailModal(true);
+                  }}
+                  {...props}
+                />
+              )}
+            />
           </Card.Content>
         </Card>
 
@@ -442,7 +484,85 @@ export default function SettingsScreen({
         </Button>
       </ScrollView>
 
-      {/* Delete Account Confirmation Modal */}
+      {/* ── Email Modal ── */}
+      <Modal
+        visible={showEmailModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEmailModal(false)}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View
+            style={[
+              styles.deleteModalCard,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <Text
+              variant="headlineSmall"
+              style={[styles.deleteModalTitle, { color: theme.colors.onSurface }]}
+            >
+              {email ? "Change Email" : "Add Email"}
+            </Text>
+            <Text variant="bodyMedium" style={styles.deleteModalBody}>
+              {email
+                ? "Enter a new email address."
+                : "Add an email address for updates and support."}
+            </Text>
+            <RNTextInput
+              value={newEmail}
+              onChangeText={(text) => {
+                setNewEmail(text);
+                if (emailError) setEmailError("");
+              }}
+              placeholder="Enter email address"
+              placeholderTextColor="#999"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              style={[
+                styles.deleteInput,
+                {
+                  borderColor: emailError ? "#ff4444" : theme.colors.outline,
+                  color: theme.colors.onSurface,
+                },
+              ]}
+            />
+            {emailError ? (
+              <Text
+                variant="bodySmall"
+                style={{ color: "#ff4444", marginTop: -12, marginBottom: 12 }}
+              >
+                {emailError}
+              </Text>
+            ) : null}
+            <View style={styles.deleteModalButtons}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  setShowEmailModal(false);
+                  setNewEmail("");
+                  setEmailError("");
+                }}
+                style={styles.deleteCancelButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleSaveEmail}
+                loading={emailLoading}
+                disabled={emailLoading || !newEmail.trim()}
+                style={styles.deleteConfirmButton}
+              >
+                Save
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Delete Account Confirmation Modal ── */}
       <Modal
         visible={showDeleteModal}
         transparent={true}
