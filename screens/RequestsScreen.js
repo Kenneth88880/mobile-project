@@ -157,8 +157,16 @@ export default function RequestsScreen({ isActive = true }) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      const duo = await getCurrentDuoPartner(currentUserId);
+      currentDuoRef.current = duo;
+      setCurrentDuo(duo);
+    } catch (error) {
+      console.error("Error refreshing:", error);
+    } finally {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setRefreshing(false);
+    }
   };
 
   const handleAccept = async (likeId, fromDuoId) => {
