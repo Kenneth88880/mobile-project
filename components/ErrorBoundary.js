@@ -23,7 +23,7 @@ export default class ErrorBoundary extends React.Component {
           <ScrollView contentContainerStyle={styles.content}>
             <Text style={styles.title}>Something went wrong</Text>
             <Text style={styles.subtitle}>
-              Take a screenshot and send to Ken/Irfan
+              Take a screenshot and send to the doubly team
             </Text>
             <Text style={styles.label}>Error:</Text>
             <Text style={styles.error}>
