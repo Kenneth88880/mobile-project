@@ -5,10 +5,16 @@ export default {
     name: "Doubly",
     slug: "doubly-yrvn0tmogrdrliugnun4w",
     owner: "doubly-connections-inc",
-    version: "1.0.10",
+    version: "1.0.11",
     orientation: "portrait",
     icon: "./assets/doubly-icon.png",
     userInterfaceStyle: "light",
+    updates: {
+      url: "https://u.expo.dev/5d554221-bb9c-4245-884a-1b887d6673aa",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
+    },
     splash: {
       image: "./assets/doubly-text-black.png",
       resizeMode: "contain",
