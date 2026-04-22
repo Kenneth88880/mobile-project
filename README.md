@@ -6,20 +6,14 @@
 
 ## Things in progress
 
+- Verify Emails (both on signup and login)
 - Recaptcha system
 - SMS verification 
 - framework for premium users
 - framework for handeling user payments and user refunds
 - Explore system, calander, maps, planning
-- change chat text box to be smaller
-- change chat bubble text more soft/round
 - app efficiency
-- swipe to get out of chats
 - Create a welcome experience for users to add their info
-- bug fixes in chat appearance
-- way to change group chat name
-- way to see group chat members
-- Report bug system (can't send images through)
 - connect chat with explore screen to send and plan
 
 ## Things that are done mostly
@@ -33,3 +27,7 @@
 - Premium notifications
 - User interface
 - Onboarding system
+- swipe to get out of chats
+- Report bug system
+- change chat text box to be smaller
+- change chat bubble text more soft/round
