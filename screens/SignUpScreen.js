@@ -1,13 +1,5 @@
-import {
-  StyleSheet,
-  View,
-  KeyboardAvoidingView,
-  Text,
-  TouchableOpacity,
-} from "react-native";
+import { StyleSheet } from "react-native";
 import React from "react";
-import { TextInput, Button, useTheme } from "react-native-paper";
-import TOSPopup from "../components/TOSPopup";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import FirstNameScreen from "./SignUpProcess/FirstNameScreen";
@@ -17,25 +9,21 @@ import GenderPreferenceScreen from "./SignUpProcess/GenderPreferenceScreen";
 import PhotoSelectionScreen from "./SignUpProcess/PhotoSelectionScreen";
 import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
-import PhoneVerificationScreen from "./SignUpProcess/PhoneVerificationScreen";
 import ContactEmailScreen from "./SignUpProcess/ContactEmailScreen";
 
-const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
-  const theme = useTheme();
-  const [phoneNumber, setPhoneNumber] = React.useState("+1");
-  const [confirmation, setConfirmation] = React.useState(null);
-  const [isTOSVisible, setTOSVisible] = React.useState(false);
-  const [isSending, setIsSending] = React.useState(false);
-
-  // If already in signup flow (resuming), start at firstName
-  const getInitialStep = () => {
-    if (isInSignupFlow) return "firstName";
-    return "phone";
-  };
-
-  const [currentStep, setCurrentStep] = React.useState(getInitialStep());
-  // Steps: phone, phoneVerification, firstName, birthday, gender,
-  //        genderPreference, photos, tags, duo, contactEmail
+/**
+ * Profile setup flow. Runs only for users who have already:
+ *   - Completed phone verification (via SignInScreen)
+ *   - Accepted the TOS (via SignInScreen)
+ *
+ * This is entered exclusively from App.js when `user && !profileComplete`.
+ * The old `phone`, `phoneVerification`, and `credentials` entry points have been
+ * removed - phone + TOS are now handled entirely in SignInScreen.
+ */
+const SignUpScreen = () => {
+  const [currentStep, setCurrentStep] = React.useState("firstName");
+  // Steps: firstName -> birthday -> gender -> genderPreference ->
+  //        photos -> tags -> duo -> contactEmail
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -45,150 +33,38 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     tags: [],
     friendCode: "",
     contactEmail: "",
-    setUp: false,
   });
 
-  // Maintain +1 prefix and limit to 10 digits
-  const handlePhoneNumberChange = (text) => {
-    if (!text.startsWith("+1")) {
-      setPhoneNumber("+1");
-      return;
-    }
-    const digitsOnly = text.slice(2).replace(/\D/g, "");
-    const limitedDigits = digitsOnly.slice(0, 10);
-    setPhoneNumber("+1" + limitedDigits);
-  };
-
-  const getAuthErrorMessage = (errorCode) => {
-    switch (errorCode) {
-      case "auth/invalid-phone-number":
-        return "That's not a valid phone number. Please check and try again.";
-      case "auth/too-many-requests":
-        return "Too many attempts. Please wait a few minutes and try again.";
-      case "auth/quota-exceeded":
-        return "Our SMS service is temporarily unavailable. Please try again later.";
-      case "auth/network-request-failed":
-        return "No internet connection. Please check your network.";
-      case "auth/missing-client-identifier":
-        return "App verification failed. Please update the app and try again.";
-      default:
-        return "Failed to send verification code. Please try again.";
-    }
-  };
-
-  const handleRegisterPress = () => {
-    if (phoneNumber.length < 12) {
-      alert("Please enter a valid 10-digit phone number");
-      return;
-    }
-    setTOSVisible(true);
-  };
-
-  const handleAcceptTOS = () => {
-    setTOSVisible(false);
-    handlePhoneRegister();
-  };
-
-  const handleDeclineTOS = () => {
-    setTOSVisible(false);
-  };
-
-  // Send SMS verification code
-  const handlePhoneRegister = async () => {
-    setIsSending(true);
-    try {
-      if (__DEV__) {
-        auth().settings.appVerificationDisabledForTesting = true;
+  // Pre-fill from existing partial profile on mount (if user previously started
+  // signup but didn't finish)
+  React.useEffect(() => {
+    const loadPartialProfile = async () => {
+      try {
+        const user = auth().currentUser;
+        if (!user) return;
+        const profileDoc = await firestore()
+          .collection("profiles")
+          .doc(user.uid)
+          .get();
+        if (profileDoc.exists) {
+          const data = profileDoc.data();
+          setSignupData((prev) => ({
+            ...prev,
+            firstName: data.name || prev.firstName,
+            birthday: data.birthday || prev.birthday,
+            gender: data.gender || prev.gender,
+            genderPreference: data.genderPreference || prev.genderPreference,
+            photos: data.photos || prev.photos,
+            tags: data.tags || prev.tags,
+            contactEmail: data.contactEmail || prev.contactEmail,
+          }));
+        }
+      } catch (error) {
+        console.log("No existing partial profile to resume:", error.message);
       }
-      const confirmationResult =
-        await auth().signInWithPhoneNumber(phoneNumber);
-      setConfirmation(confirmationResult);
-      setCurrentStep("phoneVerification");
-    } catch (error) {
-      console.log("Phone sign up error:", error.code, error.message, phoneNumber);
-      alert(getAuthErrorMessage(error.code));
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  // Handles code verification. If phone already has an account,
-  // either welcome them back (complete profile) or resume setup (incomplete profile).
-  const handlePhoneVerification = async (code) => {
-    try {
-      const userCredential = await confirmation.confirm(code);
-      const isNewUser = userCredential.additionalUserInfo?.isNewUser ?? true;
-      const uid = userCredential.user.uid;
-
-      if (isNewUser) {
-        // Fresh account - proceed to profile setup
-        setCurrentStep("firstName");
-        return;
-      }
-
-      // Existing phone number - check if profile is complete
-      const profileDoc = await firestore()
-        .collection("profiles")
-        .doc(uid)
-        .get();
-
-      if (profileDoc.exists && profileDoc.data()?.setUp === true) {
-        // Complete profile - they're already a user. App-level auth listener
-        // will navigate to main screen since they're signed in.
-        alert(
-          "Welcome back! You already have an account with this phone number.",
-        );
-        return;
-      }
-
-      // Profile is incomplete - resume signup with existing data pre-filled
-      if (profileDoc.exists) {
-        const data = profileDoc.data();
-        setSignupData({
-          firstName: data.name || "",
-          birthday: data.birthday || {},
-          gender: data.gender || null,
-          genderPreference: data.genderPreference || [],
-          photos: data.photos || [],
-          tags: data.tags || [],
-          friendCode: "",
-          contactEmail: data.contactEmail || "",
-          setUp: false,
-        });
-      }
-      setCurrentStep("firstName");
-    } catch (error) {
-      console.log("Verification error:", error.code);
-      let message = "Invalid verification code. Please try again.";
-      if (error.code === "auth/code-expired") {
-        message = "Code expired. Please request a new one.";
-      } else if (error.code === "auth/invalid-verification-code") {
-        message = "Incorrect code. Please check and try again.";
-      }
-      alert(message);
-      throw error;
-    }
-  };
-
-  const handleResendCode = async () => {
-    try {
-      if (__DEV__) {
-        auth().settings.appVerificationDisabledForTesting = true;
-      }
-      const confirmationResult =
-        await auth().signInWithPhoneNumber(phoneNumber);
-      setConfirmation(confirmationResult);
-    } catch (error) {
-      console.log("Resend code error:", error.code);
-      alert(getAuthErrorMessage(error.code));
-      throw error;
-    }
-  };
-
-  const handlePhoneVerificationBack = () => {
-    setCurrentStep("phone");
-    setConfirmation(null);
-  };
+    };
+    loadPartialProfile();
+  }, []);
 
   const handleFirstNameNext = (firstName) => {
     setSignupData({ ...signupData, firstName });
@@ -196,15 +72,13 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
   };
 
   const handleFirstNameBack = async () => {
-    // User is signed in via phone but hasn't completed profile.
-    // Sign them out so they start fresh if they come back.
+    // User is backing out of profile setup entirely. Sign them out so they
+    // start fresh if they come back later.
     try {
       await auth().signOut();
     } catch (error) {
       console.error("Error signing out:", error);
     }
-    setConfirmation(null);
-    setCurrentStep("phone");
   };
 
   const handleBirthdayNext = (birthday) => {
@@ -212,52 +86,39 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     setCurrentStep("gender");
   };
 
-  const handleBirthdayBack = () => {
-    setCurrentStep("firstName");
-  };
+  const handleBirthdayBack = () => setCurrentStep("firstName");
 
   const handleGenderNext = (gender) => {
     setSignupData({ ...signupData, gender });
     setCurrentStep("genderPreference");
   };
 
-  const handleGenderBack = () => {
-    setCurrentStep("birthday");
-  };
+  const handleGenderBack = () => setCurrentStep("birthday");
 
   const handleGenderPreferenceNext = (genderPreference) => {
     setSignupData({ ...signupData, genderPreference });
     setCurrentStep("photos");
   };
 
-  const handleGenderPreferenceBack = () => {
-    setCurrentStep("gender");
-  };
+  const handleGenderPreferenceBack = () => setCurrentStep("gender");
 
   const handlePhotosNext = (photos) => {
     setSignupData({ ...signupData, photos });
     setCurrentStep("tags");
   };
 
-  const handlePhotosBack = () => {
-    setCurrentStep("genderPreference");
-  };
+  const handlePhotosBack = () => setCurrentStep("genderPreference");
 
   const handleTagsNext = (tags) => {
     setSignupData({ ...signupData, tags });
     setCurrentStep("duo");
   };
 
-  const handleTagsBack = () => {
-    setCurrentStep("photos");
-  };
+  const handleTagsBack = () => setCurrentStep("photos");
 
-  const handleDuoBack = () => {
-    setCurrentStep("tags");
-  };
+  const handleDuoBack = () => setCurrentStep("tags");
 
   const handleDuoNext = (friendCode) => {
-    // Store friend code in state and proceed to email step
     setSignupData({ ...signupData, friendCode });
     setCurrentStep("contactEmail");
   };
@@ -267,9 +128,7 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     setCurrentStep("contactEmail");
   };
 
-  const handleContactEmailBack = () => {
-    setCurrentStep("duo");
-  };
+  const handleContactEmailBack = () => setCurrentStep("duo");
 
   const handleContactEmailNext = async (contactEmail) => {
     await saveProfile(signupData.friendCode, contactEmail);
@@ -316,11 +175,9 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
         return;
       }
 
-      // Use live auth state - this is set by signInWithPhoneNumber/confirm
       const currentUser = auth().currentUser;
       if (!currentUser) {
-        alert("Session expired. Please sign up again.");
-        setCurrentStep("phone");
+        alert("Session expired. Please sign in again.");
         return;
       }
       const userId = currentUser.uid;
@@ -342,18 +199,16 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
         city: "",
         latitude: null,
         longitude: null,
-        phoneNumber: currentUser.phoneNumber || phoneNumber,
+        phoneNumber: currentUser.phoneNumber || "",
         contactEmail: contactEmail || "",
         showOnlineStatus: true,
         createdAt: new Date().toISOString(),
         setUp: true,
-        updatedAt: new Date().now(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
-      // Save profile to Firestore
       await firestore().collection("profiles").doc(userId).set(profileData);
 
-      // If friend code provided, send duo request
       if (friendCode && friendCode.trim()) {
         try {
           await firestore().collection("duoRequests").add({
@@ -364,30 +219,21 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
           });
         } catch (error) {
           console.error("Error sending duo request:", error);
-          // Don't fail the whole signup if duo request fails
         }
       }
 
       console.log("Profile created successfully!");
-      // App-level auth listener will navigate to main screen
     } catch (error) {
       console.error("Error saving profile:", error);
-      alert("Failed to save profile. Please try again.");
+      alert(
+        "Failed to save profile: " +
+          (error?.message || error?.code || "Unknown error") +
+          ". Please try again.",
+      );
     }
   };
 
-  // Render appropriate screen based on current step
-  if (currentStep === "phoneVerification") {
-    return (
-      <PhoneVerificationScreen
-        onVerify={handlePhoneVerification}
-        onBack={handlePhoneVerificationBack}
-        onResend={handleResendCode}
-        phoneNumber={phoneNumber}
-      />
-    );
-  }
-
+  // Render current step
   if (currentStep === "firstName") {
     return (
       <FirstNameScreen
@@ -469,102 +315,7 @@ const SignUpScreen = ({ onNavigateToSignIn, isInSignupFlow = false }) => {
     );
   }
 
-  // Default: phone entry screen
-  return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      behavior="padding"
-    >
-      <TOSPopup
-        visible={isTOSVisible}
-        onAccept={handleAcceptTOS}
-        onDecline={handleDeclineTOS}
-      />
-
-      <Text style={[styles.title, { color: theme.colors.primary }]}>
-        Sign Up
-      </Text>
-
-      <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-        Enter your phone number to get started
-      </Text>
-
-      <View style={styles.inputContainer}>
-        <TextInput
-          label="Phone Number"
-          value={phoneNumber}
-          onChangeText={handlePhoneNumberChange}
-          mode="outlined"
-          keyboardType="phone-pad"
-          placeholder="+1 (123) 456-7890"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button
-          mode="contained"
-          onPress={handleRegisterPress}
-          style={styles.button}
-          loading={isSending}
-          disabled={isSending || phoneNumber.length < 12}
-        >
-          Continue
-        </Button>
-      </View>
-
-      {!isInSignupFlow && (
-        <TouchableOpacity
-          onPress={onNavigateToSignIn}
-          style={styles.linkContainer}
-        >
-          <Text style={[styles.linkText, { color: theme.colors.primary }]}>
-            Already have an account? Back to login
-          </Text>
-        </TouchableOpacity>
-      )}
-    </KeyboardAvoidingView>
-  );
+  return null;
 };
 
 export default SignUpScreen;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 30,
-    textAlign: "center",
-    paddingHorizontal: 40,
-  },
-  inputContainer: {
-    width: "80%",
-  },
-  input: {
-    marginBottom: 10,
-  },
-  buttonContainer: {
-    width: "80%",
-    marginTop: 20,
-  },
-  button: {
-    marginVertical: 5,
-  },
-  linkContainer: {
-    marginTop: 20,
-    padding: 10,
-  },
-  linkText: {
-    fontSize: 14,
-    textDecorationLine: "underline",
-  },
-});
