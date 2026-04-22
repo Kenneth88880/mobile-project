@@ -136,11 +136,11 @@ export default function App() {
       focusedIcon: "message",
       unfocusedIcon: "message-outline",
     },
-    {
-      key: "payment",
-      focusedIcon: "credit-card",
-      unfocusedIcon: "credit-card-outline",
-    },
+    // { comment out for current version
+    //   key: "payment",
+    //   focusedIcon: "credit-card",
+    //   unfocusedIcon: "credit-card-outline",
+    // },
     {
       key: "profile",
       focusedIcon: "account",
@@ -416,7 +416,7 @@ export default function App() {
       />
     ),
     messages: () => <ChatScreen />,
-    payment: () => <CheckoutScreen />,
+    //payment: () => <CheckoutScreen />, for next version
     profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
