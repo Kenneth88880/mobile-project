@@ -37,7 +37,7 @@ import RequestsScreen from "./screens/RequestsScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
 // import PremiumScreen from "./screens/PremiumScreen";
-// import CheckoutScreen from "./screens/CheckoutScreen"; both for later versions
+// import CheckoutScreen from "./screens/CheckoutScreen";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { Recaptcha } from "@google-cloud/recaptcha-enterprise-react-native";
