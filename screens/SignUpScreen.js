@@ -1,4 +1,3 @@
-import { StyleSheet } from "react-native";
 import React from "react";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -11,19 +10,8 @@ import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
 import ContactEmailScreen from "./SignUpProcess/ContactEmailScreen";
 
-/**
- * Profile setup flow. Runs only for users who have already:
- *   - Completed phone verification (via SignInScreen)
- *   - Accepted the TOS (via SignInScreen)
- *
- * This is entered exclusively from App.js when `user && !profileComplete`.
- * The old `phone`, `phoneVerification`, and `credentials` entry points have been
- * removed - phone + TOS are now handled entirely in SignInScreen.
- */
 const SignUpScreen = () => {
   const [currentStep, setCurrentStep] = React.useState("firstName");
-  // Steps: firstName -> birthday -> gender -> genderPreference ->
-  //        photos -> tags -> duo -> contactEmail
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -35,32 +23,59 @@ const SignUpScreen = () => {
     contactEmail: "",
   });
 
-  // Pre-fill from existing partial profile on mount (if user previously started
-  // signup but didn't finish)
+  // Pre-fill from existing partial profile. Heavily defensive: any weirdness
+  // is caught and logged, never propagated to the React tree.
   React.useEffect(() => {
     const loadPartialProfile = async () => {
       try {
         const user = auth().currentUser;
-        if (!user) return;
+        if (!user || !user.uid) {
+          console.log("No current user, skipping profile prefill");
+          return;
+        }
+
         const profileDoc = await firestore()
           .collection("profiles")
           .doc(user.uid)
           .get();
-        if (profileDoc.exists) {
-          const data = profileDoc.data();
-          setSignupData((prev) => ({
-            ...prev,
-            firstName: data.name || prev.firstName,
-            birthday: data.birthday || prev.birthday,
-            gender: data.gender || prev.gender,
-            genderPreference: data.genderPreference || prev.genderPreference,
-            photos: data.photos || prev.photos,
-            tags: data.tags || prev.tags,
-            contactEmail: data.contactEmail || prev.contactEmail,
-          }));
+
+        if (!profileDoc || !profileDoc.exists) {
+          console.log("No existing profile doc to resume from");
+          return;
         }
+
+        const data = profileDoc.data();
+        if (!data || typeof data !== "object") {
+          console.log("Profile doc exists but data is empty/invalid");
+          return;
+        }
+
+        setSignupData((prev) => ({
+          ...prev,
+          firstName:
+            typeof data.name === "string" && data.name
+              ? data.name
+              : prev.firstName,
+          birthday:
+            data.birthday && typeof data.birthday === "object"
+              ? data.birthday
+              : prev.birthday,
+          gender: data.gender || prev.gender,
+          genderPreference: Array.isArray(data.genderPreference)
+            ? data.genderPreference
+            : prev.genderPreference,
+          photos: Array.isArray(data.photos) ? data.photos : prev.photos,
+          tags: Array.isArray(data.tags) ? data.tags : prev.tags,
+          contactEmail:
+            typeof data.contactEmail === "string"
+              ? data.contactEmail
+              : prev.contactEmail,
+        }));
       } catch (error) {
-        console.log("No existing partial profile to resume:", error.message);
+        console.error(
+          "Error loading partial profile:",
+          error?.message || error,
+        );
       }
     };
     loadPartialProfile();
@@ -72,8 +87,6 @@ const SignUpScreen = () => {
   };
 
   const handleFirstNameBack = async () => {
-    // User is backing out of profile setup entirely. Sign them out so they
-    // start fresh if they come back later.
     try {
       await auth().signOut();
     } catch (error) {
@@ -85,62 +98,52 @@ const SignUpScreen = () => {
     setSignupData({ ...signupData, birthday });
     setCurrentStep("gender");
   };
-
   const handleBirthdayBack = () => setCurrentStep("firstName");
 
   const handleGenderNext = (gender) => {
     setSignupData({ ...signupData, gender });
     setCurrentStep("genderPreference");
   };
-
   const handleGenderBack = () => setCurrentStep("birthday");
 
   const handleGenderPreferenceNext = (genderPreference) => {
     setSignupData({ ...signupData, genderPreference });
     setCurrentStep("photos");
   };
-
   const handleGenderPreferenceBack = () => setCurrentStep("gender");
 
   const handlePhotosNext = (photos) => {
     setSignupData({ ...signupData, photos });
     setCurrentStep("tags");
   };
-
   const handlePhotosBack = () => setCurrentStep("genderPreference");
 
   const handleTagsNext = (tags) => {
     setSignupData({ ...signupData, tags });
     setCurrentStep("duo");
   };
-
   const handleTagsBack = () => setCurrentStep("photos");
 
   const handleDuoBack = () => setCurrentStep("tags");
-
   const handleDuoNext = (friendCode) => {
     setSignupData({ ...signupData, friendCode });
     setCurrentStep("contactEmail");
   };
-
   const handleDuoSkip = () => {
     setSignupData({ ...signupData, friendCode: "" });
     setCurrentStep("contactEmail");
   };
 
   const handleContactEmailBack = () => setCurrentStep("duo");
-
   const handleContactEmailNext = async (contactEmail) => {
     await saveProfile(signupData.friendCode, contactEmail);
   };
-
   const handleContactEmailSkip = async () => {
     await saveProfile(signupData.friendCode, "");
   };
 
   const saveProfile = async (friendCode, contactEmail) => {
     try {
-      // Validate required data
       if (!signupData.firstName) {
         alert("Please enter your first name");
         setCurrentStep("firstName");
@@ -233,7 +236,6 @@ const SignUpScreen = () => {
     }
   };
 
-  // Render current step
   if (currentStep === "firstName") {
     return (
       <FirstNameScreen
@@ -243,7 +245,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "birthday") {
     return (
       <BirthdayScreen
@@ -253,7 +254,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "gender") {
     return (
       <GenderScreen
@@ -263,7 +263,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "genderPreference") {
     return (
       <GenderPreferenceScreen
@@ -273,7 +272,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "photos") {
     return (
       <PhotoSelectionScreen
@@ -283,7 +281,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "tags") {
     return (
       <TagSelectionScreen
@@ -293,7 +290,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "duo") {
     return (
       <DuoSetupScreen
@@ -303,7 +299,6 @@ const SignUpScreen = () => {
       />
     );
   }
-
   if (currentStep === "contactEmail") {
     return (
       <ContactEmailScreen
