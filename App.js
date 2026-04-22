@@ -36,8 +36,8 @@ import ChatScreen from "./screens/ChatScreen";
 import RequestsScreen from "./screens/RequestsScreen";
 import SignInScreen from "./screens/SignInScreen";
 import SignUpScreen from "./screens/SignUpScreen";
-import PremiumScreen from "./screens/PremiumScreen";
-import CheckoutScreen from "./screens/CheckoutScreen";
+// import PremiumScreen from "./screens/PremiumScreen";
+// import CheckoutScreen from "./screens/CheckoutScreen"; both for later versions
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { Recaptcha } from "@google-cloud/recaptcha-enterprise-react-native";
@@ -67,19 +67,14 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [user, setUser] = useState(null);
   const [isNewUser, setIsNewUser] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
   const [devMode, setDevMode] = useState(false);
   const [publishableKey, setPublishableKey] = useState("");
   const cardSwipingRef = useRef(false);
   const chatGestures = useRef(false);
-  // const [fontsLoaded] = useFonts({      FOR FONTS LATER
-  //   FredokaBubble: require("./assets/fonts/Fredoka_SemiExpanded-Light.ttf"),
-  // });
 
-  // ── FIX 4: Defensive reCAPTCHA init ──
-  // Triple protection: null check, try/catch, and promise .catch()
+  // Defensive reCAPTCHA init with triple-layer protection
   useEffect(() => {
     try {
       const extra = Constants.expoConfig?.extra ?? {};
@@ -106,9 +101,7 @@ export default function App() {
     }
   }, []);
 
-  // ── FIX 2: Safety net timeout ──
-  // If the auth listener never resolves within 8 seconds,
-  // force-continue past the loading screen so the user is never permanently stuck.
+  // Safety net: force-continue past loading if auth listener stalls
   useEffect(() => {
     const timeout = setTimeout(() => {
       setCheckingProfile((prev) => {
@@ -128,7 +121,6 @@ export default function App() {
   const translateX = useSharedValue(0);
   const isAnimating = useSharedValue(false);
 
-  // Tracks when the user is dragging the category bar in ExploreScreenNew
   const categoryScrollingRef = useRef(false);
 
   const routes = [
@@ -149,11 +141,6 @@ export default function App() {
       focusedIcon: "credit-card",
       unfocusedIcon: "credit-card-outline",
     },
-    // {
-    //   key: "premium",
-    //   focusedIcon: "dollar",
-    //   unfocusedIcon: "dollar-outline",
-    // },
     {
       key: "profile",
       focusedIcon: "account",
@@ -185,8 +172,6 @@ export default function App() {
   useEffect(() => {
     let profileUnsubscribe = null;
     const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
-      // console.log("Auth state changed:", user ? user.uid : "null");
-      // console.log("the key we got was: ", publishableKey)
       setUser(user);
       if (user) {
         const { creationTime, lastSignInTime } = user.metadata;
@@ -432,7 +417,6 @@ export default function App() {
     ),
     messages: () => <ChatScreen />,
     payment: () => <CheckoutScreen />,
-    // premium: () => <PremiumScreen />,
     profile: () => (
       <ProfileScreen
         isDarkMode={isDarkMode}
@@ -452,7 +436,6 @@ export default function App() {
     );
   }, [displayTab, activeTab]);
 
-  // ── FIX 1: Visible loading state instead of blank white view ──
   if (checkingProfile) {
     return (
       <ErrorBoundary>
@@ -487,6 +470,7 @@ export default function App() {
     );
   }
 
+  // Signed-in user with incomplete profile -> profile setup flow
   if (user && !profileComplete) {
     return (
       <ErrorBoundary>
@@ -496,10 +480,7 @@ export default function App() {
             urlScheme="doubly-yrvn0tmogrdrliugnun4w"
           >
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <SignUpScreen
-                isInSignupFlow={true}
-                onNavigateToSignIn={() => {}}
-              />
+              <SignUpScreen />
             </GestureHandlerRootView>
           </StripeProvider>
         </PaperProvider>
@@ -507,6 +488,7 @@ export default function App() {
     );
   }
 
+  // Signed-in user with complete profile -> main app
   if (user && profileComplete) {
     return (
       <ErrorBoundary>
@@ -581,6 +563,7 @@ export default function App() {
     );
   }
 
+  // Not signed in -> unified phone auth entry point
   return (
     <ErrorBoundary>
       <PaperProvider theme={theme}>
@@ -589,13 +572,7 @@ export default function App() {
           urlScheme="doubly-yrvn0tmogrdrliugnun4w"
         >
           <GestureHandlerRootView style={{ flex: 1 }}>
-            {showRegister ? (
-              <SignUpScreen onNavigateToSignIn={() => setShowRegister(false)} />
-            ) : (
-              <SignInScreen
-                onNavigateToRegister={() => setShowRegister(true)}
-              />
-            )}
+            <SignInScreen />
           </GestureHandlerRootView>
         </StripeProvider>
       </PaperProvider>
