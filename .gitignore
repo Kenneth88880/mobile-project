@@ -71,3 +71,5 @@ serviceAccountKey.json
 
 #metro config (irf: using react native cli to build, rather than using expo)
 metro.config.cjs
+
+GEMINI.md

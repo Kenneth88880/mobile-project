@@ -768,4 +768,4 @@ const styles = StyleSheet.create({
   deleteConfirmButton: {
     flex: 1,
   },
-});
+}); 
