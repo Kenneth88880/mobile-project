@@ -1,6 +1,7 @@
 import React from "react";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
+import TOSPopup from "../components/TOSPopup";
 import FirstNameScreen from "./SignUpProcess/FirstNameScreen";
 import BirthdayScreen from "./SignUpProcess/BirthdayScreen";
 import GenderScreen from "./SignUpProcess/GenderScreen";
@@ -10,8 +11,23 @@ import TagSelectionScreen from "./SignUpProcess/TagSelectionScreen";
 import DuoSetupScreen from "./SignUpProcess/DuoSetupScreen";
 import ContactEmailScreen from "./SignUpProcess/ContactEmailScreen";
 
+/**
+ * Profile setup flow. Runs only for users who have completed phone verification
+ * but don't yet have a complete profile.
+ *
+ * First step: TOS acceptance. New users (no profile doc) MUST accept before
+ * proceeding. If they decline, their account is deleted.
+ *
+ * If a partial profile already exists, we know they previously accepted TOS
+ * (since they got past it before), and we resume profile setup directly.
+ */
 const SignUpScreen = () => {
-  const [currentStep, setCurrentStep] = React.useState("firstName");
+  // Steps: tos -> firstName -> birthday -> gender -> genderPreference ->
+  //        photos -> tags -> duo -> contactEmail
+  // Default to "tos" - we'll switch to "firstName" in the prefill effect
+  // if a partial profile exists (meaning TOS was already accepted previously)
+  const [currentStep, setCurrentStep] = React.useState("tos");
+  const [profileChecked, setProfileChecked] = React.useState(false);
   const [signupData, setSignupData] = React.useState({
     firstName: "",
     birthday: {},
@@ -23,14 +39,15 @@ const SignUpScreen = () => {
     contactEmail: "",
   });
 
-  // Pre-fill from existing partial profile. Heavily defensive: any weirdness
-  // is caught and logged, never propagated to the React tree.
+  // Pre-fill from existing partial profile. If a profile doc already exists,
+  // skip TOS (already accepted) and resume profile setup.
   React.useEffect(() => {
     const loadPartialProfile = async () => {
       try {
         const user = auth().currentUser;
         if (!user || !user.uid) {
-          console.log("No current user, skipping profile prefill");
+          console.log("No current user, showing TOS for new user");
+          setProfileChecked(true);
           return;
         }
 
@@ -40,16 +57,21 @@ const SignUpScreen = () => {
           .get();
 
         if (!profileDoc || !profileDoc.exists) {
-          console.log("No existing profile doc to resume from");
+          console.log("New user - showing TOS first");
+          setProfileChecked(true);
           return;
         }
 
         const data = profileDoc.data();
         if (!data || typeof data !== "object") {
-          console.log("Profile doc exists but data is empty/invalid");
+          console.log("Profile doc empty - showing TOS first");
+          setProfileChecked(true);
           return;
         }
 
+        // Profile exists -> user already accepted TOS previously,
+        // resume profile setup at firstName step
+        console.log("Resuming partial profile, skipping TOS");
         setSignupData((prev) => ({
           ...prev,
           firstName:
@@ -71,15 +93,60 @@ const SignUpScreen = () => {
               ? data.contactEmail
               : prev.contactEmail,
         }));
+        setCurrentStep("firstName");
+        setProfileChecked(true);
       } catch (error) {
         console.error(
           "Error loading partial profile:",
           error?.message || error,
         );
+        setProfileChecked(true);
       }
     };
     loadPartialProfile();
   }, []);
+
+  const handleAcceptTOS = async () => {
+    // Mark TOS as accepted on a placeholder profile doc so if they drop off
+    // mid-signup, we know they accepted and can skip TOS next time
+    try {
+      const user = auth().currentUser;
+      if (user) {
+        await firestore()
+          .collection("profiles")
+          .doc(user.uid)
+          .set(
+            {
+              tosAcceptedAt: firestore.FieldValue.serverTimestamp(),
+              phoneNumber: user.phoneNumber || "",
+              setUp: false,
+            },
+            { merge: true },
+          );
+      }
+    } catch (error) {
+      console.error("Error recording TOS acceptance:", error);
+      // Non-fatal - continue with signup
+    }
+    setCurrentStep("firstName");
+  };
+
+  const handleDeclineTOS = async () => {
+    // User declined - delete their auth account so they can start fresh later
+    try {
+      const user = auth().currentUser;
+      if (user) {
+        await user.delete();
+      }
+    } catch (error) {
+      console.error("Error deleting declined account:", error);
+      try {
+        await auth().signOut();
+      } catch (signOutError) {
+        console.error("Error signing out:", signOutError);
+      }
+    }
+  };
 
   const handleFirstNameNext = (firstName) => {
     setSignupData({ ...signupData, firstName });
@@ -210,7 +277,11 @@ const SignUpScreen = () => {
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
-      await firestore().collection("profiles").doc(userId).set(profileData);
+      // Use merge so we preserve tosAcceptedAt from the placeholder doc
+      await firestore()
+        .collection("profiles")
+        .doc(userId)
+        .set(profileData, { merge: true });
 
       if (friendCode && friendCode.trim()) {
         try {
@@ -235,6 +306,22 @@ const SignUpScreen = () => {
       );
     }
   };
+
+  // Wait until we've checked for an existing profile before rendering anything.
+  // Without this, we'd flash the TOS for a frame even for returning partial users.
+  if (!profileChecked) {
+    return null;
+  }
+
+  if (currentStep === "tos") {
+    return (
+      <TOSPopup
+        visible={true}
+        onAccept={handleAcceptTOS}
+        onDecline={handleDeclineTOS}
+      />
+    );
+  }
 
   if (currentStep === "firstName") {
     return (

@@ -3,8 +3,9 @@
 
 import firestore from "@react-native-firebase/firestore";
 import { generateGeohash } from "../utils/locationUtils";
+import auth from "@react-native-firebase/auth";
 
-// caching vars for later use 
+// caching vars for later use
 const profileCache = {};
 const duoPartnerCache = {};
 let subStatusCachce = "empty";
@@ -13,6 +14,7 @@ let subStatusCachce = "empty";
  * Get a user's profile by userId
  */
 export const getUserProfile = async (userId) => {
+  if (!userId) return null;
   if (profileCache[userId]) return profileCache[userId];
   try {
     const doc = await firestore().collection("profiles").doc(userId).get();
@@ -41,9 +43,15 @@ export const saveUserProfile = async (userId, data) => {
   try {
     const profileData = { ...data };
     if (profileData.latitude && profileData.longitude) {
-      profileData.geohash = generateGeohash(profileData.latitude, profileData.longitude);
+      profileData.geohash = generateGeohash(
+        profileData.latitude,
+        profileData.longitude,
+      );
     }
-    await firestore().collection("profiles").doc(userId).set(profileData, { merge: true });
+    await firestore()
+      .collection("profiles")
+      .doc(userId)
+      .set(profileData, { merge: true });
     delete profileCache[userId]; // ← invalidate so next read is fresh
     return true;
   } catch (error) {
@@ -166,25 +174,26 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
     console.log("Current duo ID:", currentDuoId);
 
     // Fire all 4 independent reads simultaneously
-    const [swipesSnapshot, sentLikesSnapshot, receivedLikesSnapshot, duosSnapshot] =
-      await Promise.all([
-        firestore()
-          .collection("duoSwipes")
-          .where("fromDuoId", "==", currentDuoId)
-          .get(),
-        firestore()
-          .collection("duoLikes")
-          .where("fromDuoId", "==", currentDuoId)
-          .get(),
-        firestore()
-          .collection("duoLikes")
-          .where("toDuoId", "==", currentDuoId)
-          .get(),
-        firestore()
-          .collection("duos")
-          .where("status", "==", "active")
-          .get(),
-      ]);
+    const [
+      swipesSnapshot,
+      sentLikesSnapshot,
+      receivedLikesSnapshot,
+      duosSnapshot,
+    ] = await Promise.all([
+      firestore()
+        .collection("duoSwipes")
+        .where("fromDuoId", "==", currentDuoId)
+        .get(),
+      firestore()
+        .collection("duoLikes")
+        .where("fromDuoId", "==", currentDuoId)
+        .get(),
+      firestore()
+        .collection("duoLikes")
+        .where("toDuoId", "==", currentDuoId)
+        .get(),
+      firestore().collection("duos").where("status", "==", "active").get(),
+    ]);
 
     const excludedDuoIds = new Set([
       currentDuoId,
@@ -215,11 +224,11 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
     // Fetch all profiles in one parallel batch
     const profileResults = await Promise.all(
       [...allUserIds].map((id) =>
-        getUserProfile(id).then((profile) => [id, profile])
-      )
+        getUserProfile(id).then((profile) => [id, profile]),
+      ),
     );
     const profileMap = Object.fromEntries(
-      profileResults.filter(([, profile]) => profile != null)
+      profileResults.filter(([, profile]) => profile != null),
     );
 
     // Assemble pairs — zero additional network calls
@@ -236,7 +245,9 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
         continue;
       }
 
-      console.log(`✅ Including duo ${doc.id}: ${user1Profile.name} + ${user2Profile.name}`);
+      console.log(
+        `✅ Including duo ${doc.id}: ${user1Profile.name} + ${user2Profile.name}`,
+      );
       pairs.push({
         id: doc.id,
         user1Profile,
@@ -459,29 +470,37 @@ export const checkDuoPreferenceMatch = (
   const duo1User1InterestedInDuo2 =
     duo1Pref1.length === 0
       ? true
-      : duo1Pref1.includes(duo2User1.gender) && duo1Pref1.includes(duo2User2.gender);
+      : duo1Pref1.includes(duo2User1.gender) &&
+        duo1Pref1.includes(duo2User2.gender);
 
   const duo1User2InterestedInDuo2 =
     duo1Pref2.length === 0
       ? true
-      : duo1Pref2.includes(duo2User1.gender) && duo1Pref2.includes(duo2User2.gender);
+      : duo1Pref2.includes(duo2User1.gender) &&
+        duo1Pref2.includes(duo2User2.gender);
 
-  const duo1InterestedInDuo2 = duo1User1InterestedInDuo2 && duo1User2InterestedInDuo2;
+  const duo1InterestedInDuo2 =
+    duo1User1InterestedInDuo2 && duo1User2InterestedInDuo2;
 
   const duo2User1InterestedInDuo1 =
     duo2Pref1.length === 0
       ? true
-      : duo2Pref1.includes(duo1User1.gender) && duo2Pref1.includes(duo1User2.gender);
+      : duo2Pref1.includes(duo1User1.gender) &&
+        duo2Pref1.includes(duo1User2.gender);
 
   const duo2User2InterestedInDuo1 =
     duo2Pref2.length === 0
       ? true
-      : duo2Pref2.includes(duo1User1.gender) && duo2Pref2.includes(duo1User2.gender);
+      : duo2Pref2.includes(duo1User1.gender) &&
+        duo2Pref2.includes(duo1User2.gender);
 
-  const duo2InterestedInDuo1 = duo2User1InterestedInDuo1 && duo2User2InterestedInDuo1;
+  const duo2InterestedInDuo1 =
+    duo2User1InterestedInDuo1 && duo2User2InterestedInDuo1;
 
   const finalMatch = duo1InterestedInDuo2 && duo2InterestedInDuo1;
-  console.log(`FINAL RESULT: ${finalMatch ? "✅✅ MUTUAL MATCH" : "❌ NO MATCH"}`);
+  console.log(
+    `FINAL RESULT: ${finalMatch ? "✅✅ MUTUAL MATCH" : "❌ NO MATCH"}`,
+  );
   return finalMatch;
 };
 
@@ -668,7 +687,12 @@ export const acceptDuoLike = async (
   fromDuoId,
 ) => {
   try {
-    console.log("Accepting duo like:", { likeId, currentUserId, currentDuoId, fromDuoId });
+    console.log("Accepting duo like:", {
+      likeId,
+      currentUserId,
+      currentDuoId,
+      fromDuoId,
+    });
 
     const likeDoc = await firestore().collection("duoLikes").doc(likeId).get();
     if (!likeDoc.exists) throw new Error("Duo like not found");
@@ -680,10 +704,17 @@ export const acceptDuoLike = async (
 
     await firestore().collection("duoLikes").doc(likeId).update({ acceptedBy });
 
-    const fromDuoDoc = await firestore().collection("duos").doc(fromDuoId).get();
-    const toDuoDoc = await firestore().collection("duos").doc(currentDuoId).get();
+    const fromDuoDoc = await firestore()
+      .collection("duos")
+      .doc(fromDuoId)
+      .get();
+    const toDuoDoc = await firestore()
+      .collection("duos")
+      .doc(currentDuoId)
+      .get();
 
-    if (!fromDuoDoc.exists || !toDuoDoc.exists) throw new Error("One or both duos not found");
+    if (!fromDuoDoc.exists || !toDuoDoc.exists)
+      throw new Error("One or both duos not found");
 
     const fromDuoUsers = fromDuoDoc.data().users || [];
     const toDuoUsers = toDuoDoc.data().users || [];
@@ -721,7 +752,11 @@ export const acceptDuoLike = async (
       return { success: true, matched: true, chatId: chatRef.id };
     } else {
       console.log(`Waiting for more acceptances (${acceptedBy.length}/4)`);
-      return { success: true, matched: false, acceptedCount: acceptedBy.length };
+      return {
+        success: true,
+        matched: false,
+        acceptedCount: acceptedBy.length,
+      };
     }
   } catch (error) {
     console.error("Error accepting duo like:", error);
@@ -755,10 +790,22 @@ export const resetTestData = async (currentDuoId) => {
     console.log("Resetting test data for duo:", currentDuoId);
 
     const [likesFrom, likesTo, swipesFrom, swipesTo] = await Promise.all([
-      firestore().collection("duoLikes").where("fromDuoId", "==", currentDuoId).get(),
-      firestore().collection("duoLikes").where("toDuoId", "==", currentDuoId).get(),
-      firestore().collection("duoSwipes").where("fromDuoId", "==", currentDuoId).get(),
-      firestore().collection("duoSwipes").where("toDuoId", "==", currentDuoId).get(),
+      firestore()
+        .collection("duoLikes")
+        .where("fromDuoId", "==", currentDuoId)
+        .get(),
+      firestore()
+        .collection("duoLikes")
+        .where("toDuoId", "==", currentDuoId)
+        .get(),
+      firestore()
+        .collection("duoSwipes")
+        .where("fromDuoId", "==", currentDuoId)
+        .get(),
+      firestore()
+        .collection("duoSwipes")
+        .where("toDuoId", "==", currentDuoId)
+        .get(),
     ]);
 
     await Promise.all([
@@ -782,16 +829,20 @@ export const resetTestData = async (currentDuoId) => {
  * Returns "active" | "past_due" | "canceled" | null
  */
 export const getSubscriptionStatus = async (userId) => {
+  if (!userId) {
+    return "cancelled";
+  }
   try {
     if (subStatusCachce === "empty") {
       const profile = await getUserProfile(userId);
-      const raw = profile?.subscriptionStatus?._j ?? profile?.subscriptionStatus;
+      const raw =
+        profile?.subscriptionStatus?._j ?? profile?.subscriptionStatus;
       console.log(subStatusCachce);
       subStatusCachce = raw === "active" ? "active" : "cancelled";
-      console.log("its ", subStatusCachce)
+      console.log("its ", subStatusCachce);
       return subStatusCachce;
     } else {
-      console.log("its ", subStatusCachce)
+      console.log("its ", subStatusCachce);
       return subStatusCachce;
     }
   } catch (error) {
@@ -816,11 +867,13 @@ export const subscribeToSubscriptionStatus = (userId, onChange) => {
     .doc(userId)
     .onSnapshot(
       (doc) => {
-        const status = doc.exists ? (doc.data()?.subscriptionStatus ?? null) : null;
+        const status = doc.exists
+          ? (doc.data()?.subscriptionStatus ?? null)
+          : null;
         onChange(status);
       },
       (error) => {
         console.error("Error listening to subscription status:", error);
-      }
+      },
     );
 };

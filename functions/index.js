@@ -1,4 +1,9 @@
-const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
+const {
+  onCall,
+  HttpsError,
+  onRequest,
+} = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const express = require("express");
@@ -46,13 +51,17 @@ exports.sendEmailVerificationCode = onCall(async (request) => {
     const code = generateVerificationCode();
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    await admin.firestore().collection("emailVerificationCodes").doc(userId).set({
-      code,
-      email,
-      expiresAt,
-      verified: false,
-      createdAt: Date.now(),
-    });
+    await admin
+      .firestore()
+      .collection("emailVerificationCodes")
+      .doc(userId)
+      .set({
+        code,
+        email,
+        expiresAt,
+        verified: false,
+        createdAt: Date.now(),
+      });
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -91,7 +100,11 @@ exports.verifyEmailCode = onCall(async (request) => {
   }
 
   try {
-    const doc = await admin.firestore().collection("emailVerificationCodes").doc(userId).get();
+    const doc = await admin
+      .firestore()
+      .collection("emailVerificationCodes")
+      .doc(userId)
+      .get();
 
     if (!doc.exists) {
       throw new HttpsError("not-found", "No verification code found");
@@ -100,7 +113,10 @@ exports.verifyEmailCode = onCall(async (request) => {
     const data = doc.data();
 
     if (Date.now() > data.expiresAt) {
-      throw new HttpsError("deadline-exceeded", "Verification code has expired");
+      throw new HttpsError(
+        "deadline-exceeded",
+        "Verification code has expired",
+      );
     }
 
     if (data.code !== code) {
@@ -111,15 +127,20 @@ exports.verifyEmailCode = onCall(async (request) => {
       return { success: true, message: "Email already verified" };
     }
 
-    await admin.firestore().collection("emailVerificationCodes").doc(userId).update({
-      verified: true,
-      verifiedAt: Date.now(),
-    });
+    await admin
+      .firestore()
+      .collection("emailVerificationCodes")
+      .doc(userId)
+      .update({
+        verified: true,
+        verifiedAt: Date.now(),
+      });
 
-    await admin.firestore().collection("profiles").doc(userId).set(
-      { emailVerified: true },
-      { merge: true }
-    );
+    await admin
+      .firestore()
+      .collection("profiles")
+      .doc(userId)
+      .set({ emailVerified: true }, { merge: true });
 
     console.log(`Email verified for user ${userId}`);
     return { success: true, message: "Email verified successfully" };
@@ -129,6 +150,274 @@ exports.verifyEmailCode = onCall(async (request) => {
     throw new HttpsError("internal", "Failed to verify code");
   }
 });
+
+// ─── Scheduled Account Hard-Delete ────────────────────────────────────────────
+// Runs daily at 3 AM UTC. Finds profiles marked `deleted: true` with a
+// `deletedAt` older than the retention window and permanently removes them
+// along with all related data (photos, chats, messages, etc.).
+//
+// This is the second half of the two-stage deletion flow. Stage 1 is the
+// immediate client-side deletion in SettingsScreen.js, which marks the profile
+// as deleted and cascade-cleans related collections. Stage 2 (this function)
+// does the actual hard delete after the retention window expires.
+
+const RETENTION_DAYS = 30;
+
+exports.cleanupDeletedAccounts = onSchedule(
+  {
+    schedule: "every day 03:00",
+    timeZone: "UTC",
+    region: "us-central1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async (event) => {
+    const db = admin.firestore();
+    const bucket = admin.storage().bucket();
+    const cutoff = admin.firestore.Timestamp.fromMillis(
+      Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    console.log(
+      `Running cleanup for profiles deleted before ${cutoff.toDate().toISOString()}`,
+    );
+
+    const snapshot = await db
+      .collection("profiles")
+      .where("deleted", "==", true)
+      .where("deletedAt", "<=", cutoff)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("No expired deleted accounts to clean up");
+      return;
+    }
+
+    console.log(`Found ${snapshot.size} expired deleted accounts`);
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const userId = doc.id;
+      try {
+        await hardDeleteUser(db, bucket, userId, doc.data());
+        successCount++;
+      } catch (err) {
+        failureCount++;
+        console.error(
+          `Failed to hard-delete user ${userId}:`,
+          err.message || err,
+        );
+      }
+    }
+
+    console.log(
+      `Cleanup complete. Success: ${successCount}, Failed: ${failureCount}`,
+    );
+  },
+);
+
+// Permanently removes all data for a single deleted user.
+// Best-effort — each step is wrapped so one failure doesn't block the rest.
+async function hardDeleteUser(db, bucket, userId, profileData) {
+  console.log(`Hard-deleting user ${userId}`);
+
+  // 1. Delete photos from Firebase Storage
+  try {
+    const photos = Array.isArray(profileData?.photos) ? profileData.photos : [];
+    for (const photoUrl of photos) {
+      if (typeof photoUrl !== "string" || !photoUrl) continue;
+      try {
+        const filePath = extractStoragePath(photoUrl);
+        if (filePath) {
+          await bucket.file(filePath).delete();
+        }
+      } catch (err) {
+        console.error(`Failed to delete photo ${photoUrl}:`, err.message);
+      }
+    }
+
+    // Also delete the user's entire profile photos folder in case any
+    // uploaded photos weren't tracked in the profile.photos array
+    try {
+      await bucket.deleteFiles({ prefix: `profile_pictures/${userId}/` });
+    } catch (err) {
+      console.error(
+        `Failed to delete photos folder for ${userId}:`,
+        err.message,
+      );
+    }
+  } catch (err) {
+    console.error(`Photos cleanup error for ${userId}:`, err.message);
+  }
+
+  // 2. Delete chat messages from chats this user was in, then delete/update chats
+  try {
+    const chatsSnap = await db
+      .collection("chats")
+      .where("participants", "array-contains", userId)
+      .get();
+
+    for (const chatDoc of chatsSnap.docs) {
+      const chatData = chatDoc.data() || {};
+      const participants = Array.isArray(chatData.participants)
+        ? chatData.participants
+        : [];
+      const otherParticipants = participants.filter((p) => p !== userId);
+      const allDeleted = participants.every((p) => {
+        const deletedParticipants = Array.isArray(chatData.deletedParticipants)
+          ? chatData.deletedParticipants
+          : [];
+        return deletedParticipants.includes(p) || p === userId;
+      });
+
+      if (otherParticipants.length === 0 || allDeleted) {
+        // Every participant in this chat has deleted — hard-delete the chat
+        // including all messages
+        await deleteChatWithMessages(db, chatDoc.ref);
+      } else {
+        // Other active participants remain. Keep the chat visible to them
+        // but confirm this user is marked deleted in participants array
+        await chatDoc.ref.update({
+          deletedParticipants: admin.firestore.FieldValue.arrayUnion(userId),
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`Chats cleanup error for ${userId}:`, err.message);
+  }
+
+  // 3. Hard-delete all duos involving this user
+  try {
+    const duosSnap = await db
+      .collection("duos")
+      .where("users", "array-contains", userId)
+      .get();
+    await batchDelete(db, duosSnap.docs);
+  } catch (err) {
+    console.error(`Duos cleanup error for ${userId}:`, err.message);
+  }
+
+  // 4. Delete any lingering likes, swipes, requests, matches, ratings
+  for (const collection of [
+    "duoLikes",
+    "duoSwipes",
+    "duoRequests",
+    "duoMatches",
+  ]) {
+    for (const field of ["fromUserId", "toUserId"]) {
+      try {
+        const snap = await db
+          .collection(collection)
+          .where(field, "==", userId)
+          .get();
+        await batchDelete(db, snap.docs);
+      } catch (err) {
+        // Some collections don't have both fields — skip silently
+      }
+    }
+  }
+
+  try {
+    const ratingsSnap = await db
+      .collection("ratings")
+      .where("fromUserId", "==", userId)
+      .get();
+    await batchDelete(db, ratingsSnap.docs);
+    const ratingsToSnap = await db
+      .collection("ratings")
+      .where("toUserId", "==", userId)
+      .get();
+    await batchDelete(db, ratingsToSnap.docs);
+  } catch (err) {
+    console.error(`Ratings cleanup error for ${userId}:`, err.message);
+  }
+
+  // 5. Delete user's events subcollection
+  try {
+    const eventsSnap = await db
+      .collection("userEvents")
+      .doc(userId)
+      .collection("events")
+      .get();
+    await batchDelete(db, eventsSnap.docs);
+    // Delete the userEvents/{userId} parent doc if it exists
+    await db
+      .collection("userEvents")
+      .doc(userId)
+      .delete()
+      .catch(() => {});
+  } catch (err) {
+    console.error(`Events cleanup error for ${userId}:`, err.message);
+  }
+
+  // 6. Delete email verification codes
+  try {
+    await db
+      .collection("emailVerificationCodes")
+      .doc(userId)
+      .delete()
+      .catch(() => {});
+  } catch (err) {
+    console.error(`Email code cleanup error for ${userId}:`, err.message);
+  }
+
+  // 7. Finally, delete the profile document itself
+  try {
+    await db.collection("profiles").doc(userId).delete();
+  } catch (err) {
+    console.error(`Profile document delete error for ${userId}:`, err.message);
+  }
+
+  // Note: We don't touch the Firebase Auth user here — it was already
+  // deleted client-side when the user tapped "Delete Account". If the
+  // auth delete failed at that time, re-running the client flow or
+  // admin deletion is required separately.
+
+  console.log(`Hard-delete complete for user ${userId}`);
+}
+
+// Extracts the Storage object path from either a gs:// URL or an
+// https://firebasestorage.googleapis.com/... URL
+function extractStoragePath(url) {
+  try {
+    if (url.startsWith("gs://")) {
+      const withoutPrefix = url.substring(5);
+      const slashIdx = withoutPrefix.indexOf("/");
+      return slashIdx > -1 ? withoutPrefix.substring(slashIdx + 1) : null;
+    }
+    const match = url.match(/\/o\/([^?]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Deletes docs in batches of 500 (Firestore batch limit)
+async function batchDelete(db, docs) {
+  if (!docs || docs.length === 0) return;
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = db.batch();
+    const chunk = docs.slice(i, i + 500);
+    chunk.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
+// Deletes a chat document and all messages in its subcollection
+async function deleteChatWithMessages(db, chatRef) {
+  try {
+    const messagesSnap = await chatRef.collection("messages").get();
+    await batchDelete(db, messagesSnap.docs);
+    await chatRef.delete();
+  } catch (err) {
+    console.error(`Failed to delete chat ${chatRef.path}:`, err.message);
+  }
+}
 
 // ─── Payment Sheet ────────────────────────────────────────────────────────────
 
@@ -142,18 +431,27 @@ app.post("/payment-sheet", async (req, res) => {
 
     // Reuse existing Stripe customer if one already exists for this user
     let customerId;
-    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
+    const profileDoc = await admin
+      .firestore()
+      .collection("profiles")
+      .doc(uid)
+      .get();
     const profileData = profileDoc.exists ? profileDoc.data() : null;
 
     if (profileData?.stripeCustomerId) {
       customerId = profileData.stripeCustomerId;
       console.log("Reusing existing Stripe customer:", customerId);
     } else {
-      const customer = await stripe.customers.create({ metadata: { firebaseUid: uid } });
+      const customer = await stripe.customers.create({
+        metadata: { firebaseUid: uid },
+      });
       customerId = customer.id;
-      await admin.firestore().collection("profiles").doc(uid).set({
-        stripeCustomerId: customerId,
-      }, { merge: true });
+      await admin.firestore().collection("profiles").doc(uid).set(
+        {
+          stripeCustomerId: customerId,
+        },
+        { merge: true },
+      );
       console.log("Created new Stripe customer:", customerId);
     }
 
@@ -202,11 +500,17 @@ app.post("/create-subscription", async (req, res) => {
       return res.status(400).json({ error: "uid and priceId are required" });
     }
 
-    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
-    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+    const profileDoc = await admin
+      .firestore()
+      .collection("profiles")
+      .doc(uid)
+      .get();
+    if (!profileDoc.exists)
+      return res.status(404).json({ error: "User not found" });
 
     const { stripeCustomerId } = profileDoc.data();
-    if (!stripeCustomerId) return res.status(404).json({ error: "No Stripe customer found" });
+    if (!stripeCustomerId)
+      return res.status(404).json({ error: "No Stripe customer found" });
 
     // Get the default payment method just saved by the SetupIntent
     const paymentMethods = await stripe.paymentMethods.list({
@@ -228,14 +532,22 @@ app.post("/create-subscription", async (req, res) => {
       metadata: { firebaseUid: uid },
     });
 
-    await admin.firestore().collection("profiles").doc(uid).set({
-      subscriptionId: subscription.id,
-      priceId,
-      autoRenew: true,
-      updatedAt: Date.now(),
-    }, { merge: true });
+    await admin.firestore().collection("profiles").doc(uid).set(
+      {
+        subscriptionId: subscription.id,
+        priceId,
+        autoRenew: true,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
 
-    console.log("Subscription created:", subscription.id, "status:", subscription.status);
+    console.log(
+      "Subscription created:",
+      subscription.id,
+      "status:",
+      subscription.status,
+    );
     res.json({ success: true, subscriptionId: subscription.id });
   } catch (err) {
     console.error("create-subscription error:", err);
@@ -253,21 +565,30 @@ app.post("/reactivate-subscription", async (req, res) => {
     const { uid } = req.body;
     if (!uid) return res.status(400).json({ error: "uid is required" });
 
-    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
-    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+    const profileDoc = await admin
+      .firestore()
+      .collection("profiles")
+      .doc(uid)
+      .get();
+    if (!profileDoc.exists)
+      return res.status(404).json({ error: "User not found" });
 
     const { subscriptionId } = profileDoc.data();
-    if (!subscriptionId) return res.status(404).json({ error: "No subscription found" });
+    if (!subscriptionId)
+      return res.status(404).json({ error: "No subscription found" });
 
     // Remove the cancel_at_period_end flag — resumes auto-renew at period end, no charge
     await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false,
     });
 
-    await admin.firestore().collection("profiles").doc(uid).set({
-      autoRenew: true,
-      updatedAt: Date.now(),
-    }, { merge: true });
+    await admin.firestore().collection("profiles").doc(uid).set(
+      {
+        autoRenew: true,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
 
     console.log("Subscription reactivated:", subscriptionId);
     res.json({ success: true });
@@ -285,11 +606,17 @@ app.post("/cancel-subscription", async (req, res) => {
     const { uid } = req.body;
     if (!uid) return res.status(400).json({ error: "uid is required" });
 
-    const profileDoc = await admin.firestore().collection("profiles").doc(uid).get();
-    if (!profileDoc.exists) return res.status(404).json({ error: "User not found" });
+    const profileDoc = await admin
+      .firestore()
+      .collection("profiles")
+      .doc(uid)
+      .get();
+    if (!profileDoc.exists)
+      return res.status(404).json({ error: "User not found" });
 
     const { subscriptionId } = profileDoc.data();
-    if (!subscriptionId) return res.status(404).json({ error: "No subscription found" });
+    if (!subscriptionId)
+      return res.status(404).json({ error: "No subscription found" });
 
     // cancel_at_period_end keeps access until end of billing period,
     // then Stripe fires customer.subscription.deleted which the webhook handles.
@@ -298,10 +625,13 @@ app.post("/cancel-subscription", async (req, res) => {
     });
 
     // Mark auto-renew off — status stays "active" until period ends
-    await admin.firestore().collection("profiles").doc(uid).set({
-      autoRenew: false,
-      updatedAt: Date.now(),
-    }, { merge: true });
+    await admin.firestore().collection("profiles").doc(uid).set(
+      {
+        autoRenew: false,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
 
     console.log("Subscription set to cancel at period end:", subscriptionId);
     res.json({ success: true });
@@ -322,7 +652,7 @@ app.post("/webhook", async (req, res) => {
     event = stripe.webhooks.constructEvent(
       req.rawBody,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET
+      process.env.STRIPE_WEBHOOK_SECRET,
     );
   } catch (err) {
     console.error("Webhook signature error:", err.message);
@@ -335,37 +665,64 @@ app.post("/webhook", async (req, res) => {
   const getUidFromSubscriptionId = async (subscriptionId) => {
     console.log("Fetching subscription:", subscriptionId);
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    console.log("Subscription metadata:", JSON.stringify(subscription.metadata));
+    console.log(
+      "Subscription metadata:",
+      JSON.stringify(subscription.metadata),
+    );
     return subscription.metadata?.firebaseUid || null;
   };
 
   // Helper: update fields on the profile
   const updateProfile = async (uid, fields) => {
-    await admin.firestore().collection("profiles").doc(uid).set({
-      ...fields,
-      updatedAt: Date.now(),
-    }, { merge: true });
+    await admin
+      .firestore()
+      .collection("profiles")
+      .doc(uid)
+      .set(
+        {
+          ...fields,
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
     console.log(`Profile updated for uid: ${uid}`, fields);
   };
 
   try {
     switch (event.type) {
-
       case "invoice.payment_succeeded": {
         const invoice = event.data.object;
-        console.log("invoice.payment_succeeded — subscription:", invoice.subscription);
+        console.log(
+          "invoice.payment_succeeded — subscription:",
+          invoice.subscription,
+        );
         const uid = await getUidFromSubscriptionId(invoice.subscription);
-        if (uid) await updateProfile(uid, { subscriptionStatus: "active", autoRenew: true });
-        else console.warn("No firebaseUid found for subscription:", invoice.subscription);
+        if (uid)
+          await updateProfile(uid, {
+            subscriptionStatus: "active",
+            autoRenew: true,
+          });
+        else
+          console.warn(
+            "No firebaseUid found for subscription:",
+            invoice.subscription,
+          );
         break;
       }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object;
-        console.log("invoice.payment_failed — subscription:", invoice.subscription);
+        console.log(
+          "invoice.payment_failed — subscription:",
+          invoice.subscription,
+        );
         const uid = await getUidFromSubscriptionId(invoice.subscription);
         if (uid) await updateProfile(uid, { subscriptionStatus: "past_due" });
-        else console.warn("No firebaseUid found for subscription:", invoice.subscription);
+        else
+          console.warn(
+            "No firebaseUid found for subscription:",
+            invoice.subscription,
+          );
         break;
       }
 
@@ -375,24 +732,39 @@ app.post("/webhook", async (req, res) => {
         console.log("Full metadata:", JSON.stringify(subscription.metadata));
         const uid = subscription.metadata?.firebaseUid;
         if (uid) {
-          await updateProfile(uid, { subscriptionStatus: "canceled", autoRenew: false });
+          await updateProfile(uid, {
+            subscriptionStatus: "canceled",
+            autoRenew: false,
+          });
         } else {
           // Metadata missing — fall back to querying Firestore by subscriptionId
-          console.warn("No firebaseUid in metadata, falling back to Firestore query");
-          const snapshot = await admin.firestore()
+          console.warn(
+            "No firebaseUid in metadata, falling back to Firestore query",
+          );
+          const snapshot = await admin
+            .firestore()
             .collection("profiles")
             .where("subscriptionId", "==", subscription.id)
             .limit(1)
             .get();
           if (!snapshot.empty) {
-            await snapshot.docs[0].ref.set({
-              subscriptionStatus: "canceled",
-              autoRenew: false,
-              updatedAt: Date.now(),
-            }, { merge: true });
-            console.log("Fallback succeeded: canceled via subscriptionId:", subscription.id);
+            await snapshot.docs[0].ref.set(
+              {
+                subscriptionStatus: "canceled",
+                autoRenew: false,
+                updatedAt: Date.now(),
+              },
+              { merge: true },
+            );
+            console.log(
+              "Fallback succeeded: canceled via subscriptionId:",
+              subscription.id,
+            );
           } else {
-            console.error("Fallback failed: no profile found for subscriptionId:", subscription.id);
+            console.error(
+              "Fallback failed: no profile found for subscriptionId:",
+              subscription.id,
+            );
           }
         }
         break;
@@ -416,7 +788,7 @@ exports.api = onRequest(
     secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
     rawBody: true,
   },
-  app
+  app,
 );
 
 app.get("/config", (req, res) => {
