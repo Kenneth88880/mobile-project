@@ -1091,7 +1091,7 @@ function PhotoStack({ uris, size = 200, style, onPress }) {
               height: size * 0.9,
               borderRadius: 12,
               position: "absolute",
-              bottom: 10,
+              bottom: 0,
               left: size * 0.1 + translateX,
               transform: [{ rotate: `${rotation}deg` }],
               borderWidth: 1,
@@ -1930,84 +1930,73 @@ function IndividualChatScreen({
                                   </View>
                                 </TouchableOpacity>
                               )}
-                              <Surface
-                                style={[
-                                  styles.messageBubble,
-                                  {
-                                    backgroundColor:
-                                      (item.imageUrl || item.imageUrls) &&
-                                      !item.text
-                                        ? "transparent"
-                                        : theme.colors.primaryContainer,
-                                    borderBottomRightRadius: 4,
-                                    borderBottomLeftRadius: 16,
-                                    zIndex: 1,
-                                    padding:
-                                      item.imageUrl || item.imageUrls ? 4 : 8,
-                                  },
-                                ]}
-                                elevation={
-                                  (item.imageUrl || item.imageUrls) &&
-                                  !item.text
-                                    ? 0
-                                    : 1
-                                }
-                              >
-                                {item.imageUrls && item.imageUrls.length > 1 ? (
-                                  <PhotoStack
-                                    uris={item.imageUrls}
-                                    size={200}
-                                    onPress={() =>
-                                      setViewingMedia(item.imageUrls)
-                                    }
-                                    style={{
-                                      marginBottom: item.text ? 8 : 0,
+
+                              {/* Image Part - No Bubble */}
+                              {item.imageUrls && item.imageUrls.length > 1 ? (
+                                <PhotoStack
+                                  uris={item.imageUrls}
+                                  size={200}
+                                  onPress={() =>
+                                    setViewingMedia(item.imageUrls)
+                                  }
+                                  style={{ marginBottom: item.text ? 6 : 0 }}
+                                />
+
+                              ) : item.imageUrl ||
+                                (item.imageUrls &&
+                                  item.imageUrls.length === 1) ? (
+                                <TouchableOpacity
+                                  activeOpacity={0.9}
+                                  onPress={() =>
+                                    setViewingMedia(
+                                      item.imageUrls || [item.imageUrl],
+                                    )
+                                  }
+                                >
+                                  <Image
+                                    source={{
+                                      uri: item.imageUrl || item.imageUrls[0],
                                     }}
+                                    style={{
+                                      width: 200,
+                                      height: 200,
+                                      borderRadius: 12,
+                                    }}
+                                    resizeMode="cover"
                                   />
-                                ) : item.imageUrl ||
-                                  (item.imageUrls &&
-                                    item.imageUrls.length === 1) ? (
-                                  <TouchableOpacity
-                                    activeOpacity={0.9}
-                                    onPress={() =>
-                                      setViewingMedia(
-                                        item.imageUrls || [item.imageUrl],
-                                      )
-                                    }
-                                  >
-                                    <Image
-                                      source={{
-                                        uri: item.imageUrl || item.imageUrls[0],
-                                      }}
-                                      style={{
-                                        width: 200,
-                                        height: 200,
-                                        borderRadius: 12,
-                                        marginBottom: item.text ? 8 : 0,
-                                      }}
-                                      resizeMode="cover"
-                                    />
-                                  </TouchableOpacity>
-                                ) : null}
-                                {item.text ? (
+                                </TouchableOpacity>
+                              ) : null}
+
+                              {/* Text Part - In Bubble */}
+                              {item.text ? (
+                                <Surface
+                                  style={[
+                                    styles.messageBubble,
+                                    {
+                                      backgroundColor:
+                                        theme.colors.primaryContainer,
+                                      borderBottomRightRadius: 4,
+                                      borderBottomLeftRadius: 16,
+                                      borderTopRightRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      borderTopLeftRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      marginTop: item.imageUrl || item.imageUrls ? 0 : 0,
+                                      zIndex: 1,
+                                    },
+                                  ]}
+                                  elevation={1}
+                                >
                                   <Text
                                     variant="bodyMedium"
                                     style={{
                                       color: theme.colors.onPrimaryContainer,
-                                      paddingHorizontal:
-                                        item.imageUrl || item.imageUrls
-                                          ? 8
-                                          : 0,
-                                      paddingBottom:
-                                        item.imageUrl || item.imageUrls
-                                          ? 4
-                                          : 0,
                                     }}
                                   >
                                     {item.text}
                                   </Text>
-                                ) : null}
-                              </Surface>
+                                </Surface>
+                              ) : null}
                             </View>
                           )}
                           {item.type === "place_suggestion" &&
@@ -2135,84 +2124,73 @@ function IndividualChatScreen({
                                   </View>
                                 </TouchableOpacity>
                               )}
-                              <Surface
-                                style={[
-                                  styles.messageBubble,
-                                  {
-                                    backgroundColor:
-                                      (item.imageUrl || item.imageUrls) &&
-                                      !item.text
-                                        ? "transparent"
-                                        : theme.colors.surfaceVariant,
-                                    borderBottomRightRadius: 16,
-                                    borderBottomLeftRadius: 4,
-                                    zIndex: 1,
-                                    padding:
-                                      item.imageUrl || item.imageUrls ? 4 : 8,
-                                  },
-                                ]}
-                                elevation={
-                                  (item.imageUrl || item.imageUrls) &&
-                                  !item.text
-                                    ? 0
-                                    : 1
-                                }
-                              >
-                                {item.imageUrls && item.imageUrls.length > 1 ? (
-                                  <PhotoStack
-                                    uris={item.imageUrls}
-                                    size={200}
-                                    onPress={() =>
-                                      setViewingMedia(item.imageUrls)
-                                    }
-                                    style={{
-                                      marginBottom: item.text ? 8 : 0,
+
+                              {/* Image Part - No Bubble */}
+                              {item.imageUrls && item.imageUrls.length > 1 ? (
+                                <PhotoStack
+                                  uris={item.imageUrls}
+                                  size={200}
+                                  onPress={() =>
+                                    setViewingMedia(item.imageUrls)
+                                  }
+                                  style={{ marginBottom: item.text ? 6 : 0 }}
+                                />
+
+                              ) : item.imageUrl ||
+                                (item.imageUrls &&
+                                  item.imageUrls.length === 1) ? (
+                                <TouchableOpacity
+                                  activeOpacity={0.9}
+                                  onPress={() =>
+                                    setViewingMedia(
+                                      item.imageUrls || [item.imageUrl],
+                                    )
+                                  }
+                                >
+                                  <Image
+                                    source={{
+                                      uri: item.imageUrl || item.imageUrls[0],
                                     }}
+                                    style={{
+                                      width: 200,
+                                      height: 200,
+                                      borderRadius: 12,
+                                    }}
+                                    resizeMode="cover"
                                   />
-                                ) : item.imageUrl ||
-                                  (item.imageUrls &&
-                                    item.imageUrls.length === 1) ? (
-                                  <TouchableOpacity
-                                    activeOpacity={0.9}
-                                    onPress={() =>
-                                      setViewingMedia(
-                                        item.imageUrls || [item.imageUrl],
-                                      )
-                                    }
-                                  >
-                                    <Image
-                                      source={{
-                                        uri: item.imageUrl || item.imageUrls[0],
-                                      }}
-                                      style={{
-                                        width: 200,
-                                        height: 200,
-                                        borderRadius: 12,
-                                        marginBottom: item.text ? 8 : 0,
-                                      }}
-                                      resizeMode="cover"
-                                    />
-                                  </TouchableOpacity>
-                                ) : null}
-                                {item.text ? (
+                                </TouchableOpacity>
+                              ) : null}
+
+                              {/* Text Part - In Bubble */}
+                              {item.text ? (
+                                <Surface
+                                  style={[
+                                    styles.messageBubble,
+                                    {
+                                      backgroundColor:
+                                        theme.colors.surfaceVariant,
+                                      borderBottomRightRadius: 16,
+                                      borderBottomLeftRadius: 4,
+                                      borderTopRightRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      borderTopLeftRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      marginTop: item.imageUrl || item.imageUrls ? 0 : 0,
+                                      zIndex: 1,
+                                    },
+                                  ]}
+                                  elevation={1}
+                                >
                                   <Text
                                     variant="bodyMedium"
                                     style={{
                                       color: theme.colors.onSurfaceVariant,
-                                      paddingHorizontal:
-                                        item.imageUrl || item.imageUrls
-                                          ? 8
-                                          : 0,
-                                      paddingBottom:
-                                        item.imageUrl || item.imageUrls
-                                          ? 4
-                                          : 0,
                                     }}
                                   >
                                     {item.text}
                                   </Text>
-                                ) : null}
-                              </Surface>
+                                </Surface>
+                              ) : null}
                             </View>
                           )}
                           {item.type === "place_suggestion" &&
