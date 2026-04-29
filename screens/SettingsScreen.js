@@ -390,9 +390,7 @@ export default function SettingsScreen({
             <List.Item
               title={email ? email : "No email linked"}
               description={
-                email
-                  ? "Tap to change"
-                  : "Add an email for updates and support"
+                email ? "Tap to change" : "Add an email for updates and support"
               }
               left={(props) => (
                 <IconButton
@@ -500,7 +498,10 @@ export default function SettingsScreen({
           >
             <Text
               variant="headlineSmall"
-              style={[styles.deleteModalTitle, { color: theme.colors.onSurface }]}
+              style={[
+                styles.deleteModalTitle,
+                { color: theme.colors.onSurface },
+              ]}
             >
               {email ? "Change Email" : "Add Email"}
             </Text>
