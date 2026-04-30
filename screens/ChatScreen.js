@@ -52,6 +52,7 @@ import {
   SwipeableMessageLeft,
 } from "./ChatScreen/SwipeableMessage.js";
 import { getSubscriptionStatus } from "../services/profileService";
+import ImageCarousel from "../components/ImageCarousel";
 
 const PLACEHOLDER_IMAGE = "https://via.placeholder.com/400x300?text=No+Image";
 const getUserID = () => CURRENT_USER_ID;
@@ -1060,6 +1061,70 @@ function ChatListScreen({ onChatSelect }) {
   );
 }
 
+function PhotoStack({ uris, size = 200, style, onPress }) {
+  if (!uris || uris.length === 0) return null;
+
+  // Show up to 4 in the fan to see more "parts" of them
+  const displayUris = uris.slice(0, 4).reverse();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={[{ width: size, height: size }, style]}
+    >
+      {displayUris.map((uri, index) => {
+        const count = displayUris.length;
+        const reverseIndex = count - 1 - index;
+
+        // Create a fan effect: spread horizontally and rotate
+        const spread = size * 0.1;
+        const translateX = (reverseIndex - (count - 1) / 2) * spread;
+        const rotation = (reverseIndex - (count - 1) / 2) * 15;
+
+        return (
+          <Image
+            key={uri + index}
+            source={{ uri }}
+            style={{
+              width: size * 0.8,
+              height: size * 0.9,
+              borderRadius: 12,
+              position: "absolute",
+              bottom: 0,
+              left: size * 0.1 + translateX,
+              transform: [{ rotate: `${rotation}deg` }],
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.3)",
+              backgroundColor: "#ccc",
+              zIndex: index,
+            }}
+            resizeMode="cover"
+          />
+        );
+      })}
+      {uris.length > 1 && (
+        <View
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            borderRadius: 12,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>
+            {uris.length} photos
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function IndividualChatScreen({
   chat,
   onBack,
@@ -1170,6 +1235,7 @@ function IndividualChatScreen({
                 _id: doc.id,
                 text: data.text,
                 imageUrl: data.imageUrl,
+                imageUrls: data.imageUrls || (data.imageUrl ? [data.imageUrl] : []),
                 type: data.type,
                 suggestion: data.suggestion,
                 replyTo: data.replyTo
@@ -1468,69 +1534,43 @@ function IndividualChatScreen({
     return stars;
   };
 
-  const handleSendImage = async () => {
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [viewingMedia, setViewingMedia] = useState(null);
+  const [mediaIndex, setMediaIndex] = useState(0);
+
+  const handleSelectImage = async () => {
     try {
       launchImageLibrary(
-        { mediaType: "photo", quality: 0.8, maxWidth: 1000, maxHeight: 1000 },
+        {
+          mediaType: "photo",
+          selectionLimit: 10,
+          quality: 0.8,
+          maxWidth: 1000,
+          maxHeight: 1000,
+        },
         async (response) => {
           if (response.didCancel) return;
           if (response.errorCode) {
-            Alert.alert("Error", "Failed to select image");
+            Alert.alert("Error", "Failed to select images");
             return;
           }
-          if (response.assets?.[0]) {
-            setUploadingImage(true);
-            try {
-              const filename = `chat_messages/${chat.id}_${Date.now()}.jpg`;
-              const reference = storage().ref(filename);
-              await reference.putFile(response.assets[0].uri);
-              const downloadURL = await reference.getDownloadURL();
-              await firestore()
-                .collection("chats")
-                .doc(chat.id)
-                .collection("messages")
-                .add({
-                  imageUrl: downloadURL,
-                  text: "",
-                  createdAt: firestore.FieldValue.serverTimestamp(),
-                  user: { _id: currentUserId, name: "You" },
-                });
-              const unreadUpdate = {};
-              chat.participants?.forEach((participantId) => {
-                if (participantId !== currentUserId)
-                  unreadUpdate[`unreadCount.${participantId}`] =
-                    (chat.unreadCount?.[participantId] || 0) + 1;
-              });
-              await firestore()
-                .collection("chats")
-                .doc(chat.id)
-                .update({
-                  lastMessageText: "📷 Image",
-                  lastMessageTime: firestore.FieldValue.serverTimestamp(),
-                  ...unreadUpdate,
-                });
-            } catch (uploadError) {
-              console.error("Upload error:", uploadError);
-              Alert.alert("Error", "Failed to upload image");
-            } finally {
-              setUploadingImage(false);
-            }
+          if (response.assets) {
+            setSelectedImages(response.assets.map((a) => a.uri));
           }
         },
       );
     } catch (error) {
-      console.error("Error sending image:", error);
-      Alert.alert("Error", "Failed to send image");
-      setUploadingImage(false);
+      console.error("Error selecting images:", error);
+      Alert.alert("Error", "Failed to select images");
     }
   };
 
   const chatActivities = async () => {
     console.log("recognzied button press for chat activities");
-  }
+  };
 
   const onSend = useCallback(async () => {
-    if (!chat?.id || !inputText.trim()) return;
+    if (!chat?.id || (!inputText.trim() && selectedImages.length === 0)) return;
     if (currentChat.status === "archived") {
       Alert.alert(
         "Chat Archived",
@@ -1538,50 +1578,93 @@ function IndividualChatScreen({
       );
       return;
     }
+
+    // Capture values and clear input immediately for "instant" feel
+    const textToSend = inputText.trim();
+    const imagesToSend = [...selectedImages];
+    const replyToSend = replyingTo;
+
+    setInputText("");
+    setSelectedImages([]);
+    setReplyingTo(null);
+    setUploadingImage(true);
+
     try {
-      await firestore()
-        .collection("chats")
-        .doc(chat.id)
-        .collection("messages")
-        .add({
-          text: inputText.trim(),
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          user: { _id: currentUserId, name: "You" },
-          ...(replyingTo && {
-            replyTo: {
-              text: replyingTo.text || "📷 Image",
-              senderName: userProfiles[replyingTo.user._id]?.name || "Someone",
-              senderId: replyingTo.user._id,
-              messageId: replyingTo._id,
-              imageUrl: replyingTo.imageUrl || null,
-            },
+      let imageUrls = [];
+      if (imagesToSend.length > 0) {
+        imageUrls = await Promise.all(
+          imagesToSend.map(async (uri, index) => {
+            const filename = `chat_messages/${chat.id}_${Date.now()}_${index}.jpg`;
+            const reference = storage().ref(filename);
+            await reference.putFile(uri);
+            return reference.getDownloadURL();
           }),
-        });
-      setReplyingTo(null);
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        );
+      }
+
+      const messageData = {
+        text: textToSend,
+        imageUrl: imageUrls[0] || null, // Keep for backward compatibility
+        imageUrls: imageUrls,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        user: { _id: currentUserId, name: "You" },
+        ...(replyToSend && {
+          replyTo: {
+            text: replyToSend.text || "📷 Image",
+            senderName: userProfiles[replyToSend.user._id]?.name || "Someone",
+            senderId: replyToSend.user._id,
+            messageId: replyToSend._id,
+            imageUrl: replyToSend.imageUrl || null,
+          },
+        }),
+      };
+
       const unreadUpdate = {};
       chat.participants?.forEach((participantId) => {
         if (participantId !== currentUserId)
           unreadUpdate[`unreadCount.${participantId}`] =
             (chat.unreadCount?.[participantId] || 0) + 1;
       });
-      await firestore()
-        .collection("chats")
-        .doc(chat.id)
-        .update({
-          lastMessageText: inputText.trim(),
-          lastMessageTime: firestore.FieldValue.serverTimestamp(),
-          ...unreadUpdate,
-        });
-      setInputText("");
+
+      const chatUpdateData = {
+        lastMessageText:
+          imageUrls.length > 0
+            ? textToSend
+              ? `📷 ${textToSend}`
+              : imageUrls.length > 1
+                ? `📷 ${imageUrls.length} Images`
+                : "📷 Image"
+            : textToSend,
+        lastMessageTime: firestore.FieldValue.serverTimestamp(),
+        ...unreadUpdate,
+      };
+
+      // Perform Firestore operations in parallel
+      await Promise.all([
+        firestore()
+          .collection("chats")
+          .doc(chat.id)
+          .collection("messages")
+          .add(messageData),
+        firestore().collection("chats").doc(chat.id).update(chatUpdateData),
+      ]);
+
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert("Error", "Failed to send message");
+      // Optionally restore input on failure
+      if (textToSend && !inputText) setInputText(textToSend);
+      if (imagesToSend.length > 0 && selectedImages.length === 0)
+        setSelectedImages(imagesToSend);
+    } finally {
+      setUploadingImage(false);
     }
   }, [
     chat,
     currentUserId,
     inputText,
+    selectedImages,
     currentChat.status,
     replyingTo,
     userProfiles,
@@ -1676,7 +1759,7 @@ function IndividualChatScreen({
   );
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, animatedStyle]}>
           <KeyboardAvoidingView
@@ -1798,60 +1881,94 @@ function IndividualChatScreen({
                         onMessageSwipeEnd={onMessageSwipeEnd}
                       >
                         <View style={{ alignItems: "flex-end" }}>
-                          {item.text &&
-                            !item.imageUrl &&
-                            item.type !== "place_suggestion" && (
-                              <View style={{ alignItems: "flex-end" }}>
-                                {item.replyTo && (
-                                  <TouchableOpacity
-                                    onPress={() =>
-                                      handleReplyBubbleTap(item.replyTo)
-                                    }
+                          {((item.text && !item.type) ||
+                            (item.imageUrl && !item.type)) && (
+                            <View style={{ alignItems: "flex-end" }}>
+                              {item.replyTo && (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    handleReplyBubbleTap(item.replyTo)
+                                  }
+                                >
+                                  <View
+                                    style={{
+                                      backgroundColor:
+                                        theme.dark === true
+                                          ? "rgb(255, 176, 201)"
+                                          : "rgb(139, 74, 97)",
+                                      opacity: 0.6,
+                                      borderRadius: 12,
+                                      borderBottomRightRadius: 2,
+                                      paddingHorizontal: 10,
+                                      paddingVertical: 6,
+                                      maxWidth: 240,
+                                      marginBottom: 2,
+                                      marginRight: 8,
+                                    }}
                                   >
-                                    <View
+                                    <Text
                                       style={{
-                                        backgroundColor:
-                                          theme.dark === true
-                                            ? "rgb(255, 176, 201)"
-                                            : "rgb(139, 74, 97)",
-                                        opacity: 0.6,
-                                        borderRadius: 12,
-                                        borderBottomRightRadius: 2,
-                                        paddingHorizontal: 10,
-                                        paddingVertical: 6,
-                                        maxWidth: 240,
+                                        fontSize: 11,
+                                        fontWeight: "700",
+                                        color:
+                                          theme.dark === true ? "#fff" : "#000",
                                         marginBottom: 2,
-                                        marginRight: 8,
                                       }}
                                     >
-                                      <Text
-                                        style={{
-                                          fontSize: 11,
-                                          fontWeight: "700",
-                                          color:
-                                            theme.dark === true
-                                              ? "#fff"
-                                              : "#000",
-                                          marginBottom: 2,
-                                        }}
-                                      >
-                                        {item.replyTo.senderName}
-                                      </Text>
-                                      <Text
-                                        style={{
-                                          fontSize: 12,
-                                          color:
-                                            theme.dark === true
-                                              ? "#fff"
-                                              : "#000",
-                                        }}
-                                        numberOfLines={1}
-                                      >
-                                        {item.replyTo.text}
-                                      </Text>
-                                    </View>
-                                  </TouchableOpacity>
-                                )}
+                                      {item.replyTo.senderName}
+                                    </Text>
+                                    <Text
+                                      style={{
+                                        fontSize: 12,
+                                        color:
+                                          theme.dark === true ? "#fff" : "#000",
+                                      }}
+                                      numberOfLines={1}
+                                    >
+                                      {item.replyTo.text}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              )}
+
+                              {/* Image Part - No Bubble */}
+                              {item.imageUrls && item.imageUrls.length > 1 ? (
+                                <PhotoStack
+                                  uris={item.imageUrls}
+                                  size={200}
+                                  onPress={() =>
+                                    setViewingMedia(item.imageUrls)
+                                  }
+                                  style={{ marginBottom: item.text ? 6 : 0 }}
+                                />
+
+                              ) : item.imageUrl ||
+                                (item.imageUrls &&
+                                  item.imageUrls.length === 1) ? (
+                                <TouchableOpacity
+                                  activeOpacity={0.9}
+                                  onPress={() =>
+                                    setViewingMedia(
+                                      item.imageUrls || [item.imageUrl],
+                                    )
+                                  }
+                                >
+                                  <Image
+                                    source={{
+                                      uri: item.imageUrl || item.imageUrls[0],
+                                    }}
+                                    style={{
+                                      width: 200,
+                                      height: 200,
+                                      borderRadius: 12,
+                                    }}
+                                    resizeMode="cover"
+                                  />
+                                </TouchableOpacity>
+                              ) : null}
+
+                              {/* Text Part - In Bubble */}
+                              {item.text ? (
                                 <Surface
                                   style={[
                                     styles.messageBubble,
@@ -1860,6 +1977,11 @@ function IndividualChatScreen({
                                         theme.colors.primaryContainer,
                                       borderBottomRightRadius: 4,
                                       borderBottomLeftRadius: 16,
+                                      borderTopRightRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      borderTopLeftRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      marginTop: item.imageUrl || item.imageUrls ? 0 : 0,
                                       zIndex: 1,
                                     },
                                   ]}
@@ -1874,21 +1996,8 @@ function IndividualChatScreen({
                                     {item.text}
                                   </Text>
                                 </Surface>
-                              </View>
-                            )}
-                          {item.imageUrl && !item.type && (
-                            <Surface>
-                              <Image
-                                source={{ uri: item.imageUrl }}
-                                style={{
-                                  width: 200,
-                                  height: 200,
-                                  borderRadius: 12,
-                                  marginLeft: -1,
-                                }}
-                                resizeMode="cover"
-                              />
-                            </Surface>
+                              ) : null}
+                            </View>
                           )}
                           {item.type === "place_suggestion" &&
                             item.suggestion &&
@@ -1964,62 +2073,96 @@ function IndividualChatScreen({
                         onMessageSwipeEnd={onMessageSwipeEnd}
                       >
                         <View style={{ alignItems: "flex-start" }}>
-                          {item.text &&
-                            !item.imageUrl &&
-                            item.type !== "place_suggestion" && (
-                              <View style={{ alignItems: "flex-start" }}>
-                                {item.replyTo && (
-                                  <TouchableOpacity
-                                    onPress={() =>
-                                      handleReplyBubbleTap(item.replyTo)
-                                    }
+                          {((item.text && !item.type) ||
+                            (item.imageUrl && !item.type)) && (
+                            <View style={{ alignItems: "flex-start" }}>
+                              {item.replyTo && (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    handleReplyBubbleTap(item.replyTo)
+                                  }
+                                >
+                                  <View
+                                    style={{
+                                      backgroundColor:
+                                        theme.dark === true
+                                          ? "rgb(255, 176, 201)"
+                                          : "rgb(139, 74, 97)",
+                                      opacity: 0.6,
+                                      borderRadius: 12,
+                                      borderBottomLeftRadius: 2,
+                                      paddingHorizontal: 10,
+                                      paddingVertical: 6,
+                                      maxWidth: 240,
+                                      marginBottom: 2,
+                                      marginLeft: 8,
+                                      borderLeftWidth: 3,
+                                      borderLeftColor: theme.colors.primary,
+                                    }}
                                   >
-                                    <View
+                                    <Text
                                       style={{
-                                        backgroundColor:
-                                          theme.dark === true
-                                            ? "rgb(255, 176, 201)"
-                                            : "rgb(139, 74, 97)",
-                                        opacity: 0.6,
-                                        borderRadius: 12,
-                                        borderBottomLeftRadius: 2,
-                                        paddingHorizontal: 10,
-                                        paddingVertical: 6,
-                                        maxWidth: 240,
+                                        fontSize: 11,
+                                        fontWeight: "700",
+                                        color:
+                                          theme.dark === true ? "#fff" : "#000",
                                         marginBottom: 2,
-                                        marginLeft: 8,
-                                        borderLeftWidth: 3,
-                                        borderLeftColor: theme.colors.primary,
                                       }}
                                     >
-                                      <Text
-                                        style={{
-                                          fontSize: 11,
-                                          fontWeight: "700",
-                                          color:
-                                            theme.dark === true
-                                              ? "#fff"
-                                              : "#000",
-                                          marginBottom: 2,
-                                        }}
-                                      >
-                                        {item.replyTo.senderName}
-                                      </Text>
-                                      <Text
-                                        style={{
-                                          fontSize: 12,
-                                          color:
-                                            theme.dark === true
-                                              ? "#fff"
-                                              : "#000",
-                                        }}
-                                        numberOfLines={1}
-                                      >
-                                        {item.replyTo.text}
-                                      </Text>
-                                    </View>
-                                  </TouchableOpacity>
-                                )}
+                                      {item.replyTo.senderName}
+                                    </Text>
+                                    <Text
+                                      style={{
+                                        fontSize: 12,
+                                        color:
+                                          theme.dark === true ? "#fff" : "#000",
+                                      }}
+                                      numberOfLines={1}
+                                    >
+                                      {item.replyTo.text}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              )}
+
+                              {/* Image Part - No Bubble */}
+                              {item.imageUrls && item.imageUrls.length > 1 ? (
+                                <PhotoStack
+                                  uris={item.imageUrls}
+                                  size={200}
+                                  onPress={() =>
+                                    setViewingMedia(item.imageUrls)
+                                  }
+                                  style={{ marginBottom: item.text ? 6 : 0 }}
+                                />
+
+                              ) : item.imageUrl ||
+                                (item.imageUrls &&
+                                  item.imageUrls.length === 1) ? (
+                                <TouchableOpacity
+                                  activeOpacity={0.9}
+                                  onPress={() =>
+                                    setViewingMedia(
+                                      item.imageUrls || [item.imageUrl],
+                                    )
+                                  }
+                                >
+                                  <Image
+                                    source={{
+                                      uri: item.imageUrl || item.imageUrls[0],
+                                    }}
+                                    style={{
+                                      width: 200,
+                                      height: 200,
+                                      borderRadius: 12,
+                                    }}
+                                    resizeMode="cover"
+                                  />
+                                </TouchableOpacity>
+                              ) : null}
+
+                              {/* Text Part - In Bubble */}
+                              {item.text ? (
                                 <Surface
                                   style={[
                                     styles.messageBubble,
@@ -2028,6 +2171,11 @@ function IndividualChatScreen({
                                         theme.colors.surfaceVariant,
                                       borderBottomRightRadius: 16,
                                       borderBottomLeftRadius: 4,
+                                      borderTopRightRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      borderTopLeftRadius:
+                                        item.imageUrl || item.imageUrls ? 2 : 16,
+                                      marginTop: item.imageUrl || item.imageUrls ? 0 : 0,
                                       zIndex: 1,
                                     },
                                   ]}
@@ -2042,20 +2190,8 @@ function IndividualChatScreen({
                                     {item.text}
                                   </Text>
                                 </Surface>
-                              </View>
-                            )}
-                          {item.imageUrl && !item.type && (
-                            <Surface>
-                              <Image
-                                source={{ uri: item.imageUrl }}
-                                style={{
-                                  width: 200,
-                                  height: 200,
-                                  borderRadius: 12,
-                                }}
-                                resizeMode="cover"
-                              />
-                            </Surface>
+                              ) : null}
+                            </View>
                           )}
                           {item.type === "place_suggestion" &&
                             item.suggestion &&
@@ -2124,6 +2260,42 @@ function IndividualChatScreen({
                   />
                 </View>
               )}
+              {selectedImages.length > 0 && (
+                <View
+                  style={{
+                    padding: 8,
+                    backgroundColor: theme.colors.surfaceVariant,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <View style={{ position: "relative" }}>
+                    <PhotoStack
+                      uris={selectedImages}
+                      size={80}
+                      onPress={() => setViewingMedia(selectedImages)}
+                    />
+                    <IconButton
+                      icon="close-circle"
+                      size={20}
+                      onPress={() => setSelectedImages([])}
+                      style={{
+                        position: "absolute",
+                        top: -10,
+                        right: -10,
+                        backgroundColor: theme.colors.surface,
+                      }}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 12 }}>
+                    <Text variant="labelMedium">
+                      {selectedImages.length} image
+                      {selectedImages.length > 1 ? "s" : ""} selected
+                    </Text>
+                    {uploadingImage && <ActivityIndicator size="small" />}
+                  </View>
+                </View>
+              )}
               {currentChat.status === "archived" ? (
                 <View
                   style={{
@@ -2162,6 +2334,7 @@ function IndividualChatScreen({
                         borderTopRightRadius: 30,
                         borderWidth: 0,
                         borderColor: "transparent",
+                        paddingRight: 100, // Room for 3 icons
                       },
                     ]}
                     dense
@@ -2178,17 +2351,17 @@ function IndividualChatScreen({
                   {/* {console.log(subStatus)} */}
                   {subStatus === "active" && (
                     <IconButton
-                    style={{
-                      position: "absolute",
-                      right: 69,
-                      backgroundColor: "transparent",
-                    }}
-                    icon="gamepad-variant"
-                    size={24}
-                    onPress={chatActivities}
-                  />
-                  )
-                  }
+                      style={{
+                        position: "absolute",
+                        right: 69,
+                        backgroundColor: "transparent",
+                      }}
+                      icon="gamepad-variant"
+                      size={24}
+                      onPress={chatActivities}
+                      disabled={uploadingImage}
+                    />
+                  )}
                   <IconButton
                     style={{
                       position: "absolute",
@@ -2197,20 +2370,28 @@ function IndividualChatScreen({
                     }}
                     icon="image"
                     size={24}
-                    onPress={handleSendImage}
+                    onPress={handleSelectImage}
+                    disabled={uploadingImage}
                   />
-                  <IconButton
-                    style={{
-                      position: "absolute",
-                      right: 5,
-                      backgroundColor: "transparent",
-                    }}
-                    icon="send"
-                    mode="contained"
-                    onPress={onSend}
-                    disabled={!inputText.trim()}
-                    size={20}
-                  />
+                  {uploadingImage ? (
+                    <ActivityIndicator
+                      size={20}
+                      style={{ position: "absolute", right: 15 }}
+                    />
+                  ) : (
+                    <IconButton
+                      style={{
+                        position: "absolute",
+                        right: 5,
+                        backgroundColor: "transparent",
+                      }}
+                      icon="send"
+                      mode="contained"
+                      onPress={onSend}
+                      disabled={!inputText.trim() && selectedImages.length === 0}
+                      size={20}
+                    />
+                  )}
                 </View>
               )}
             </Surface>
@@ -2547,7 +2728,52 @@ function IndividualChatScreen({
         suggestion={selectedSuggestion}
         onDismiss={() => setSelectedSuggestion(null)}
       />
-    </>
+
+      <Portal>
+        <Modal
+          visible={viewingMedia !== null}
+          onDismiss={() => {
+            setViewingMedia(null);
+            setMediaIndex(0);
+          }}
+          contentContainerStyle={{
+            backgroundColor: "black",
+            margin: 0,
+            width: "100%",
+            height: "100%",
+          }}
+        >
+          {viewingMedia && (
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              <IconButton
+                icon="close"
+                iconColor="white"
+                style={{
+                  position: "absolute",
+                  top: insets.top + 10,
+                  right: 10,
+                  zIndex: 100,
+                }}
+                onPress={() => {
+                  setViewingMedia(null);
+                  setMediaIndex(0);
+                }}
+              />
+              <ImageCarousel
+                photos={viewingMedia}
+                currentIndex={mediaIndex}
+                onNext={() =>
+                  setMediaIndex((i) =>
+                    Math.min(i + 1, viewingMedia.length - 1),
+                  )
+                }
+                onPrevious={() => setMediaIndex((i) => Math.max(i - 1, 0))}
+              />
+            </View>
+          )}
+        </Modal>
+      </Portal>
+    </View>
   );
 }
 
