@@ -52,7 +52,7 @@ export default function ImageCarousel({
 
       {/* Navigation Tap Zones - Only show if multiple photos */}
       {hasMultiplePhotos && (
-        <>
+        <View style={StyleSheet.absoluteFill}>
           {/* Left Tap Zone - Previous Photo */}
           <TouchableOpacity
             style={styles.leftTapZone}
@@ -94,7 +94,7 @@ export default function ImageCarousel({
               />
             ))}
           </View>
-        </>
+        </View>
       )}
     </Card>
   );
