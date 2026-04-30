@@ -13,6 +13,7 @@ import {
   Clipboard,
   Pressable,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Text,
   Button,
@@ -93,6 +94,8 @@ export default function ProfileScreen({
   const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+  const [viewingOwnProfile, setViewingOwnProfile] = useState(false);
+  const [ownProfileImageIndex, setOwnProfileImageIndex] = useState(0);
 
   // Initial load + real-time listener for subscription status
   useEffect(() => {
@@ -775,7 +778,7 @@ export default function ProfileScreen({
   const PendingRequestsModal = () => (
     <Modal visible={showPendingRequests} animationType="slide" onRequestClose={() => setShowPendingRequests(false)}>
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, paddingTop: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>
           <Text variant="headlineMedium">Pending Requests ({pendingRequests.length})</Text>
           <IconButton icon="close" size={24} onPress={() => setShowPendingRequests(false)} />
         </View>
@@ -806,7 +809,9 @@ export default function ProfileScreen({
       </SafeAreaView>
     </Modal>
   );
+  
 
+  
   const BugReportModal = () => (
     <Modal visible={showBugReportModal} animationType="slide" onRequestClose={() => setShowBugReportModal(false)}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -831,6 +836,63 @@ export default function ProfileScreen({
       </KeyboardAvoidingView>
     </Modal>
   );
+
+  // ─── Viewing own profile preview ──────────────────────────────────────────
+
+  if (viewingOwnProfile) {
+    const hasPhotos = profile.photos && profile.photos.length > 0;
+    const currentPhoto = hasPhotos ? profile.photos[ownProfileImageIndex] : null;
+
+    return (
+      <Modal visible={true} animationType="slide" onRequestClose={() => setViewingOwnProfile(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <Surface style={{ flexDirection: "row", alignItems: "center", padding: 16 }} elevation={2}>
+            <IconButton icon="arrow-left" onPress={() => setViewingOwnProfile(false)} />
+            <Text variant="titleLarge">Profile Preview</Text>
+          </Surface>
+          <ScrollView>
+            <Card style={styles.card}>
+              {currentPhoto ? (
+                <Card.Cover source={{ uri: currentPhoto }} style={{ height: 400 }} />
+              ) : (
+                <View style={{ height: 400, justifyContent: "center", alignItems: "center", backgroundColor: "#f0f0f0" }}>
+                  <Avatar.Icon size={120} icon="account" />
+                  <Text variant="bodyLarge" style={{ marginTop: 8 }}>No photos</Text>
+                </View>
+              )}
+              {hasPhotos && profile.photos.length > 1 && (
+                <View style={{ position: "absolute", bottom: 16, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <IconButton icon="chevron-left" iconColor="white" onPress={() => setOwnProfileImageIndex((prev) => prev === 0 ? profile.photos.length - 1 : prev - 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {profile.photos.map((_, index) => (
+                      <View key={index} style={{ width: index === ownProfileImageIndex ? 10 : 8, height: index === ownProfileImageIndex ? 10 : 8, borderRadius: index === ownProfileImageIndex ? 5 : 4, backgroundColor: index === ownProfileImageIndex ? "white" : "rgba(255,255,255,0.5)" }} />
+                    ))}
+                  </View>
+                  <IconButton icon="chevron-right" iconColor="white" onPress={() => setOwnProfileImageIndex((prev) => prev === profile.photos.length - 1 ? 0 : prev + 1)} style={{ backgroundColor: "rgba(0,0,0,0.5)" }} />
+                </View>
+              )}
+            </Card>
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text variant="headlineMedium">{profile.name}, {profile.age}</Text>
+                {profile.city && <Text variant="bodyMedium" style={{ marginTop: 4 }}>📍 {profile.city}</Text>}
+                <Text style={styles.description}>{profile.description || "No description"}</Text>
+                {profile.tags && profile.tags.length > 0 && (
+                  <>
+                    <Divider style={styles.divider} />
+                    <Text variant="titleMedium" style={styles.sectionTitle}>Interests</Text>
+                    <View style={styles.tagsDisplay}>
+                      {profile.tags.map((tag, index) => <Chip key={index} style={styles.tagDisplay}>{tag}</Chip>)}
+                    </View>
+                  </>
+                )}
+              </Card.Content>
+            </Card>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
 
   // ─── Viewing requester profile ────────────────────────────────────────────
 
@@ -984,9 +1046,13 @@ export default function ProfileScreen({
             <Button mode="contained" icon="pencil" onPress={() => setIsEditing(true)} style={styles.editButton}>Edit Profile</Button>
           </View>
 
+          <View style={[styles.actionButtons, { marginTop: -8 }]}>
+            <Button mode="contained" icon="eye" onPress={() => { setOwnProfileImageIndex(0); setViewingOwnProfile(true); }} style={styles.editButton}>Preview Profile</Button>
+          </View>
+
           {devMode && (
-            <View style={styles.actionButtons}>
-              <Button mode="outlined" icon="refresh" onPress={handleResetTestData} style={[styles.editButton, { marginTop: 8 }]} buttonColor={theme.colors.errorContainer} textColor={theme.colors.error}>Reset Test Data</Button>
+            <View style={[styles.actionButtons, { marginTop: -8 }]}>
+              <Button mode="outlined" icon="refresh" onPress={handleResetTestData} style={styles.editButton} buttonColor={theme.colors.errorContainer} textColor={theme.colors.error}>Reset Test Data</Button>
             </View>
           )}
 
@@ -1042,7 +1108,16 @@ export default function ProfileScreen({
 
           <Card style={{ marginHorizontal: 16, marginBottom: 12 }}>
             <Card.Content style={{ padding: 8 }}>
-              <Button mode="contained" icon="bug" onPress={() => setShowBugReportModal(true)} contentStyle={{ paddingVertical: 16 }} labelStyle={{ fontSize: 18, fontWeight: "bold" }} buttonColor="#8B4A61">Report a Bug</Button>
+              <Button
+                mode="contained"
+                icon="bug"
+                onPress={() => setShowBugReportModal(true)}
+                contentStyle={{ paddingVertical: 16 }}
+                labelStyle={{ fontSize: 18, fontWeight: "bold" }}
+                buttonColor={isDarkMode ? theme.colors.primary : "#8B4A61"}
+              >
+                Report a Bug
+              </Button>
             </Card.Content>
           </Card>
 
@@ -1110,7 +1185,7 @@ const styles = StyleSheet.create({
   sectionTitle: { marginTop: 16, marginBottom: 8 },
   tagsDisplay: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   tagDisplay: { marginRight: 4, marginBottom: 4 },
-  modalHeader: { padding: 20, paddingTop: 60 },
+  modalHeader: { padding: 16 },
   tagsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tagChip: { marginRight: 4, marginBottom: 4 },
   searchInput: { marginBottom: 16 },
