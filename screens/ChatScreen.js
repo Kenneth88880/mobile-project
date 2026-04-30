@@ -888,7 +888,6 @@ function ChatListScreen({ onChatSelect }) {
           styles.chatItem,
           isArchived && {
             opacity: 0.7,
-            backgroundColor: theme.colors.surfaceVariant,
           },
         ]}
       />
