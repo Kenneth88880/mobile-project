@@ -4,9 +4,11 @@ const {
   onRequest,
 } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const express = require("express");
+const vision = require("@google-cloud/vision");
 
 admin.initializeApp();
 
@@ -151,15 +153,202 @@ exports.verifyEmailCode = onCall(async (request) => {
   }
 });
 
-// ─── Scheduled Account Hard-Delete ────────────────────────────────────────────
-// Runs daily at 3 AM UTC. Finds profiles marked `deleted: true` with a
-// `deletedAt` older than the retention window and permanently removes them
-// along with all related data (photos, chats, messages, etc.).
+// ─── Photo Moderation ─────────────────────────────────────────────────────────
+// Triggers on every upload to Firebase Storage. Calls Vision API SafeSearch.
 //
-// This is the second half of the two-stage deletion flow. Stage 1 is the
-// immediate client-side deletion in SettingsScreen.js, which marks the profile
-// as deleted and cascade-cleans related collections. Stage 2 (this function)
-// does the actual hard delete after the retention window expires.
+// Decision matrix:
+//   - VERY_LIKELY adult/violence -> auto-delete photo + remove from profile
+//   - LIKELY adult/violence -> queue for human review (photo kept temporarily)
+//   - LIKELY/VERY_LIKELY racy -> queue for human review
+//   - Anything else -> approved silently
+//
+// To approve a queued photo: delete the doc from photoModerationQueue.
+// To reject a queued photo: manually delete the photo from Storage + remove
+// the URL from the profile's photos array, then delete the queue doc.
+
+const visionClient = new vision.ImageAnnotatorClient();
+
+// Likelihood ranking from Vision API:
+// VERY_UNLIKELY < UNLIKELY < POSSIBLE < LIKELY < VERY_LIKELY < UNKNOWN
+const LIKELIHOOD_LEVEL = {
+  VERY_UNLIKELY: 0,
+  UNLIKELY: 1,
+  POSSIBLE: 2,
+  LIKELY: 3,
+  VERY_LIKELY: 4,
+  UNKNOWN: -1,
+};
+
+function level(likelihood) {
+  return LIKELIHOOD_LEVEL[likelihood] ?? -1;
+}
+
+exports.moderateProfilePhoto = onObjectFinalized(
+  {
+    region: "us-central1",
+    timeoutSeconds: 120,
+    memory: "512MiB",
+  },
+  async (event) => {
+    const filePath = event.data.name;
+    const bucket = event.data.bucket;
+    const contentType = event.data.contentType || "";
+
+    // Only moderate uploads to profile_photos/{uid}/...
+    if (!filePath || !filePath.startsWith("profile_photos/")) {
+      console.log(`Skipping non-profile-photo upload: ${filePath}`);
+      return;
+    }
+
+    // Skip non-image files (shouldn't happen but guard anyway)
+    if (!contentType.startsWith("image/")) {
+      console.log(`Skipping non-image file: ${filePath} (${contentType})`);
+      return;
+    }
+
+    // Extract user ID from path
+    const pathParts = filePath.split("/");
+    if (pathParts.length < 2) {
+      console.log(`Cannot extract userId from: ${filePath}`);
+      return;
+    }
+    const userId = pathParts[1];
+
+    console.log(`Moderating photo: ${filePath} for user ${userId}`);
+
+    // Run SafeSearch
+    let safeSearch;
+    try {
+      const [result] = await visionClient.safeSearchDetection(
+        `gs://${bucket}/${filePath}`,
+      );
+      safeSearch = result.safeSearchAnnotation;
+    } catch (err) {
+      console.error(`Vision API error for ${filePath}:`, err.message || err);
+      // Fail open: don't block uploads on API failure, but log it
+      // Optionally queue these for review too — for now, leave the photo alone
+      return;
+    }
+
+    if (!safeSearch) {
+      console.log(`No SafeSearch result for ${filePath}`);
+      return;
+    }
+
+    const { adult, violence, racy } = safeSearch;
+    console.log(`SafeSearch result for ${filePath}:`, {
+      adult,
+      violence,
+      racy,
+    });
+
+    const adultLevel = level(adult);
+    const violenceLevel = level(violence);
+    const racyLevel = level(racy);
+
+    // STRICT: VERY_LIKELY adult or violence -> auto-delete
+    const shouldAutoDelete =
+      adultLevel >= LIKELIHOOD_LEVEL.VERY_LIKELY ||
+      violenceLevel >= LIKELIHOOD_LEVEL.VERY_LIKELY;
+
+    // QUEUE: LIKELY adult/violence, OR LIKELY/VERY_LIKELY racy -> human review
+    const shouldQueue =
+      adultLevel >= LIKELIHOOD_LEVEL.LIKELY ||
+      violenceLevel >= LIKELIHOOD_LEVEL.LIKELY ||
+      racyLevel >= LIKELIHOOD_LEVEL.LIKELY;
+
+    if (shouldAutoDelete) {
+      console.log(`AUTO-DELETING photo ${filePath} - clearly inappropriate`);
+      await deletePhoto(bucket, filePath, userId, {
+        reason: "auto_delete",
+        scores: { adult, violence, racy },
+      });
+      return;
+    }
+
+    if (shouldQueue) {
+      console.log(`QUEUEING photo ${filePath} for human review`);
+      await queueForReview(bucket, filePath, userId, { adult, violence, racy });
+      return;
+    }
+
+    console.log(`Photo ${filePath} APPROVED automatically (clean)`);
+  },
+);
+
+// Delete a photo from Storage and remove its URL from the user's profile
+async function deletePhoto(bucket, filePath, userId, metadata) {
+  const db = admin.firestore();
+
+  // 1. Delete from Storage
+  try {
+    await admin.storage().bucket(bucket).file(filePath).delete();
+    console.log(`Deleted from Storage: ${filePath}`);
+  } catch (err) {
+    console.error(`Failed to delete from Storage:`, err.message);
+  }
+
+  // 2. Remove URL from profile.photos
+  try {
+    const profileRef = db.collection("profiles").doc(userId);
+    const profileDoc = await profileRef.get();
+    if (profileDoc.exists) {
+      const photos = profileDoc.data()?.photos || [];
+      const filteredPhotos = photos.filter((url) => {
+        if (typeof url !== "string") return true;
+        // Match by either the file path or the encoded URL pattern
+        return (
+          !url.includes(encodeURIComponent(filePath)) && !url.includes(filePath)
+        );
+      });
+      if (filteredPhotos.length !== photos.length) {
+        await profileRef.update({ photos: filteredPhotos });
+        console.log(`Removed photo URL from profile ${userId}`);
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to update profile photos:`, err.message);
+  }
+
+  // 3. Log the moderation action for audit
+  try {
+    await db.collection("moderationLog").add({
+      userId,
+      filePath,
+      bucket,
+      action: "auto_deleted",
+      ...metadata,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error(`Failed to log moderation action:`, err.message);
+  }
+}
+
+// Queue a photo for human review (photo stays in Storage for now)
+async function queueForReview(bucket, filePath, userId, scores) {
+  const db = admin.firestore();
+  try {
+    // Get a download URL for the photo so the reviewer can see it
+    const file = admin.storage().bucket(bucket).file(filePath);
+    let publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(filePath)}?alt=media`;
+
+    await db.collection("photoModerationQueue").add({
+      userId,
+      filePath,
+      bucket,
+      publicUrl,
+      scores,
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`Queued ${filePath} for review`);
+  } catch (err) {
+    console.error(`Failed to queue photo for review:`, err.message);
+  }
+}
+
+// ─── Scheduled Account Hard-Delete ────────────────────────────────────────────
 
 const RETENTION_DAYS = 30;
 
@@ -218,12 +407,9 @@ exports.cleanupDeletedAccounts = onSchedule(
   },
 );
 
-// Permanently removes all data for a single deleted user.
-// Best-effort — each step is wrapped so one failure doesn't block the rest.
 async function hardDeleteUser(db, bucket, userId, profileData) {
   console.log(`Hard-deleting user ${userId}`);
 
-  // 1. Delete photos from Firebase Storage
   try {
     const photos = Array.isArray(profileData?.photos) ? profileData.photos : [];
     for (const photoUrl of photos) {
@@ -238,10 +424,8 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
       }
     }
 
-    // Also delete the user's entire profile photos folder in case any
-    // uploaded photos weren't tracked in the profile.photos array
     try {
-      await bucket.deleteFiles({ prefix: `profile_pictures/${userId}/` });
+      await bucket.deleteFiles({ prefix: `profile_photos/${userId}/` });
     } catch (err) {
       console.error(
         `Failed to delete photos folder for ${userId}:`,
@@ -252,7 +436,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Photos cleanup error for ${userId}:`, err.message);
   }
 
-  // 2. Delete chat messages from chats this user was in, then delete/update chats
   try {
     const chatsSnap = await db
       .collection("chats")
@@ -273,12 +456,8 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
       });
 
       if (otherParticipants.length === 0 || allDeleted) {
-        // Every participant in this chat has deleted — hard-delete the chat
-        // including all messages
         await deleteChatWithMessages(db, chatDoc.ref);
       } else {
-        // Other active participants remain. Keep the chat visible to them
-        // but confirm this user is marked deleted in participants array
         await chatDoc.ref.update({
           deletedParticipants: admin.firestore.FieldValue.arrayUnion(userId),
         });
@@ -288,7 +467,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Chats cleanup error for ${userId}:`, err.message);
   }
 
-  // 3. Hard-delete all duos involving this user
   try {
     const duosSnap = await db
       .collection("duos")
@@ -299,7 +477,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Duos cleanup error for ${userId}:`, err.message);
   }
 
-  // 4. Delete any lingering likes, swipes, requests, matches, ratings
   for (const collection of [
     "duoLikes",
     "duoSwipes",
@@ -334,7 +511,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Ratings cleanup error for ${userId}:`, err.message);
   }
 
-  // 5. Delete user's events subcollection
   try {
     const eventsSnap = await db
       .collection("userEvents")
@@ -342,7 +518,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
       .collection("events")
       .get();
     await batchDelete(db, eventsSnap.docs);
-    // Delete the userEvents/{userId} parent doc if it exists
     await db
       .collection("userEvents")
       .doc(userId)
@@ -352,7 +527,6 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Events cleanup error for ${userId}:`, err.message);
   }
 
-  // 6. Delete email verification codes
   try {
     await db
       .collection("emailVerificationCodes")
@@ -363,23 +537,15 @@ async function hardDeleteUser(db, bucket, userId, profileData) {
     console.error(`Email code cleanup error for ${userId}:`, err.message);
   }
 
-  // 7. Finally, delete the profile document itself
   try {
     await db.collection("profiles").doc(userId).delete();
   } catch (err) {
     console.error(`Profile document delete error for ${userId}:`, err.message);
   }
 
-  // Note: We don't touch the Firebase Auth user here — it was already
-  // deleted client-side when the user tapped "Delete Account". If the
-  // auth delete failed at that time, re-running the client flow or
-  // admin deletion is required separately.
-
   console.log(`Hard-delete complete for user ${userId}`);
 }
 
-// Extracts the Storage object path from either a gs:// URL or an
-// https://firebasestorage.googleapis.com/... URL
 function extractStoragePath(url) {
   try {
     if (url.startsWith("gs://")) {
@@ -397,7 +563,6 @@ function extractStoragePath(url) {
   }
 }
 
-// Deletes docs in batches of 500 (Firestore batch limit)
 async function batchDelete(db, docs) {
   if (!docs || docs.length === 0) return;
   for (let i = 0; i < docs.length; i += 500) {
@@ -408,7 +573,6 @@ async function batchDelete(db, docs) {
   }
 }
 
-// Deletes a chat document and all messages in its subcollection
 async function deleteChatWithMessages(db, chatRef) {
   try {
     const messagesSnap = await chatRef.collection("messages").get();
@@ -429,7 +593,6 @@ app.post("/payment-sheet", async (req, res) => {
       return res.status(400).json({ error: "priceId and uid are required" });
     }
 
-    // Reuse existing Stripe customer if one already exists for this user
     let customerId;
     const profileDoc = await admin
       .firestore()
@@ -469,8 +632,6 @@ app.post("/payment-sheet", async (req, res) => {
       },
     });
 
-    // SetupIntent — captures payment method WITHOUT creating a subscription or charge.
-    // Nothing appears in Stripe logs as a transaction until /create-subscription is called.
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       usage: "off_session",
@@ -488,9 +649,6 @@ app.post("/payment-sheet", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ─── Create Subscription ──────────────────────────────────────────────────────
-// Called only after the user confirms payment — this is what actually charges them.
 
 app.post("/create-subscription", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -512,7 +670,6 @@ app.post("/create-subscription", async (req, res) => {
     if (!stripeCustomerId)
       return res.status(404).json({ error: "No Stripe customer found" });
 
-    // Get the default payment method just saved by the SetupIntent
     const paymentMethods = await stripe.paymentMethods.list({
       customer: stripeCustomerId,
       type: "card",
@@ -555,10 +712,6 @@ app.post("/create-subscription", async (req, res) => {
   }
 });
 
-// ─── Reactivate Subscription ──────────────────────────────────────────────────
-// Called when user is still active but had canceled (cancel_at_period_end: true).
-// Flips auto-renew back on without charging them again — no new subscription needed.
-
 app.post("/reactivate-subscription", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   try {
@@ -577,7 +730,6 @@ app.post("/reactivate-subscription", async (req, res) => {
     if (!subscriptionId)
       return res.status(404).json({ error: "No subscription found" });
 
-    // Remove the cancel_at_period_end flag — resumes auto-renew at period end, no charge
     await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false,
     });
@@ -598,8 +750,6 @@ app.post("/reactivate-subscription", async (req, res) => {
   }
 });
 
-// ─── Cancel Subscription ──────────────────────────────────────────────────────
-
 app.post("/cancel-subscription", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   try {
@@ -618,13 +768,10 @@ app.post("/cancel-subscription", async (req, res) => {
     if (!subscriptionId)
       return res.status(404).json({ error: "No subscription found" });
 
-    // cancel_at_period_end keeps access until end of billing period,
-    // then Stripe fires customer.subscription.deleted which the webhook handles.
     await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true,
     });
 
-    // Mark auto-renew off — status stays "active" until period ends
     await admin.firestore().collection("profiles").doc(uid).set(
       {
         autoRenew: false,
@@ -640,8 +787,6 @@ app.post("/cancel-subscription", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ─── Webhook ──────────────────────────────────────────────────────────────────
 
 app.post("/webhook", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -661,7 +806,6 @@ app.post("/webhook", async (req, res) => {
 
   console.log("Webhook event received:", event.type);
 
-  // Helper: get firebaseUid from a subscription ID
   const getUidFromSubscriptionId = async (subscriptionId) => {
     console.log("Fetching subscription:", subscriptionId);
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -672,7 +816,6 @@ app.post("/webhook", async (req, res) => {
     return subscription.metadata?.firebaseUid || null;
   };
 
-  // Helper: update fields on the profile
   const updateProfile = async (uid, fields) => {
     await admin
       .firestore()
@@ -737,7 +880,6 @@ app.post("/webhook", async (req, res) => {
             autoRenew: false,
           });
         } else {
-          // Metadata missing — fall back to querying Firestore by subscriptionId
           console.warn(
             "No firebaseUid in metadata, falling back to Firestore query",
           );
@@ -779,8 +921,6 @@ app.post("/webhook", async (req, res) => {
 
   res.json({ received: true });
 });
-
-// ─── exports.api MUST be last — after all routes are registered ───────────────
 
 exports.api = onRequest(
   {

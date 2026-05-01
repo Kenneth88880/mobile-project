@@ -227,10 +227,21 @@ export default function EditProfileModal({ visible, onClose }) {
         <View
           style={[styles.header, { borderBottomColor: theme.colors.outline }]}
         >
+          <IconButton icon="close" onPress={onClose} disabled={saving} />
           <Text variant="headlineSmall" style={styles.title}>
             Edit Profile
           </Text>
-          <IconButton icon="close" onPress={onClose} />
+          <Button
+            mode="contained"
+            onPress={handleSave}
+            loading={saving}
+            disabled={saving}
+            compact
+            style={styles.headerSaveButton}
+            labelStyle={styles.headerSaveLabel}
+          >
+            Save
+          </Button>
         </View>
 
         <ScrollView
@@ -368,20 +379,6 @@ export default function EditProfileModal({ visible, onClose }) {
               ))}
             </View>
           </View>
-
-          {/* Save Button */}
-          <View style={styles.buttonContainer}>
-            <Button
-              mode="contained"
-              onPress={handleSave}
-              loading={saving}
-              disabled={saving}
-              style={styles.saveButton}
-              contentStyle={styles.saveButtonContent}
-            >
-              Save Changes
-            </Button>
-          </View>
         </ScrollView>
       </View>
     </Modal>
@@ -398,13 +395,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
   },
   title: {
     fontWeight: "bold",
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSaveButton: {
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  headerSaveLabel: {
+    marginVertical: 4,
+    marginHorizontal: 12,
+    fontSize: 14,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -435,15 +443,6 @@ const styles = StyleSheet.create({
   helperText: {
     fontSize: 12,
     marginBottom: 4,
-  },
-  buttonContainer: {
-    paddingVertical: 24,
-  },
-  saveButton: {
-    borderRadius: 8,
-  },
-  saveButtonContent: {
-    paddingVertical: 8,
   },
   loadingContainer: {
     padding: 40,
