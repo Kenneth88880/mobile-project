@@ -407,11 +407,8 @@ export default function PhotoPicker({
         variant="bodySmall"
         style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}
       >
-        • Upload up to {maxPhotos} photos{"\n"}• Supported formats: JPG, PNG,
-        WebP{"\n"}• Images will be resized to max 1080p{"\n"}• Extreme aspect
-        ratios will be cropped{"\n"}• First photo can be replaced but not
-        removed{"\n"}• Tap the crop icon on your first photo to adjust its
-        position on the dating card
+        • First photo can be replaced but not removed{"\n"}• Tap the crop icon
+        on your first photo to adjust its position on the dating card
       </Text>
 
       {/* Intro Photo Crop Position Modal */}
