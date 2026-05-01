@@ -1,17 +1,55 @@
 import React, { useState } from "react";
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-import { Text, TextInput, Button, useTheme, Card, IconButton } from "react-native-paper";
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Card,
+  IconButton,
+} from "react-native-paper";
+
+import {
+  RegExpMatcher,
+  englishDataset,
+  englishRecommendedTransformers,
+} from "obscenity";
+
+const matcher = new RegExpMatcher({
+  ...englishDataset.build(),
+  ...englishRecommendedTransformers,
+});
 
 const FirstNameScreen = ({ onNext, onBack, initialName = "" }) => {
   const theme = useTheme();
   const [firstName, setFirstName] = useState(initialName);
 
   const handleNext = () => {
-    if (!firstName.trim()) {
+    const trimmed = firstName.trim();
+    if (!trimmed) {
       alert("Please enter your first name");
       return;
     }
-    onNext(firstName.trim());
+    if (trimmed.length < 2) {
+      alert("Name must be at least 2 characters");
+      return;
+    }
+    if (matcher.hasMatch(trimmed)) {
+      alert("Please choose an appropriate name");
+      return;
+    }
+    // Optional: block names with numbers/special chars
+    if (!/^[a-zA-Z\s'-]+$/.test(trimmed)) {
+      alert("Names can only contain letters, spaces, hyphens, and apostrophes");
+      return;
+    }
+    onNext(trimmed);
   };
 
   return (
@@ -30,7 +68,9 @@ const FirstNameScreen = ({ onNext, onBack, initialName = "" }) => {
         </View>
       )}
       <View style={styles.progressCounter}>
-        <Text style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}>
+        <Text
+          style={[styles.counterText, { color: theme.colors.onSurfaceVariant }]}
+        >
           1/6
         </Text>
       </View>
