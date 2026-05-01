@@ -203,6 +203,7 @@ export default function SettingsScreen({
       await auth().currentUser.delete();
     } catch (error) {
       console.error("Error deleting account:", error);
+      setIsDeletingAccount(false);
       if (error.code === "auth/requires-recent-login") {
         Alert.alert(
           "Re-authentication Required",
