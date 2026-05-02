@@ -1,5 +1,3 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # dependencies
 node_modules/
 
@@ -21,17 +19,33 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
-# debug
+# debug / logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+firebase-debug.log*
 
 # macOS
 .DS_Store
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.development
+.env.production
+stripeServer/.env
+functions/.env
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # typescript
 *.tsbuildinfo
@@ -43,33 +57,20 @@ yarn-error.*
 # stripe api keys (DO NOT KEEP)
 stripeConfig.js
 
-# GOOGLE stuff
-
+# Firebase / Google Config (SENSITIVE)
 GoogleService-Info.plist
 google-services.json
-
-#keys for all our services
-#GoogleService-Info.plist
-
-#eas.json
-eas.json
-
-# ui colours test
-colours/
-
-# .env containing api keys
-.env
-stripeServer/.env
-functions/.env
-
-# 
-database.rules.json
-
-#creates test accounts without the need of validation
-verifyUser.cjs
 serviceAccountKey.json
+database.rules.json
+.firebaserc
 
-#metro config (irf: using react native cli to build, rather than using expo)
+# Build / Config
+eas.json
 metro.config.cjs
+
+# Local Data / Tools
+archive/
+verifyUser.cjs
+colours/
 
 GEMINI.md
