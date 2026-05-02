@@ -13,7 +13,7 @@ export const DevModeModal = ({ visible, onClose, onUnlock }) => {
   const [password, setPassword] = useState("");
 
   const handleSubmit = () => {
-    if (password === "devmode123") {
+    if (password === process.env.EXPO_PUBLIC_DEV_PASSWORD || password === "devmode123") {
       setPassword("");
       onUnlock();
       onClose();
