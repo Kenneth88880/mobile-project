@@ -1,6 +1,6 @@
 {
   "name": "doubly",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "PolyForm-Strict-1.0.0",
   "version": "1.0.4",
   "main": "index.js",
   "type": "module",
