@@ -63,7 +63,6 @@ google-services.json
 serviceAccountKey.json
 database.rules.json
 .firebaserc
-services/UserConfig.js
 
 # Build / Config
 metro.config.cjs
