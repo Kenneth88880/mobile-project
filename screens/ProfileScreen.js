@@ -46,6 +46,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import EditProfileModal from "../components/EditProfileModal";
 import { AVAILABLE_TAGS } from "../tags";
 import firestore from "@react-native-firebase/firestore";
+import Constants from "expo-constants";
 
 export default function ProfileScreen({
   isDarkMode,
@@ -524,8 +525,10 @@ export default function ProfileScreen({
         status: "new",
       });
 
+      const contactEmail = Constants.expoConfig?.extra?.contactEmail;
+
       await firestore().collection("mail").add({
-        to: process.env.EXPO_PUBLIC_CONTACT_EMAIL,
+        to: contactEmail,
         message: {
           subject: `New Bug Report: ${bugReport.title}`,
           html: `
@@ -589,7 +592,10 @@ export default function ProfileScreen({
   };
 
   const handleDevModeToggle = () => {
-    if (devPasswordInput === process.env.EXPO_PUBLIC_DEV_PASSWORD_PROD || devPasswordInput === process.env.EXPO_PUBLIC_DEV_PASSWORD_PROD) {
+    const devPassword = Constants.expoConfig?.extra?.devPassword;
+    const devPasswordProd = Constants.expoConfig?.extra?.devPasswordProd;
+
+    if (devPasswordInput === devPasswordProd || devPasswordInput === devPassword) {
       const newDevMode = !devMode;
       setDevMode(newDevMode);
       setShowDevPasswordModal(false);

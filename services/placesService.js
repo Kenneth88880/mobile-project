@@ -10,13 +10,13 @@ const API_KEY =
     ios: Constants.expoConfig?.extra?.googlePlacesApiKeyIOS,
     android: Constants.expoConfig?.extra?.googlePlacesApiKeyAndroid,
   }) ??
-  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ??
+  process.env.GOOGLE_PLACES_API_KEY ??
   "";
 
 if (!API_KEY) {
   console.warn(
     "placesService: GOOGLE_PLACES_API_KEY is not set. " +
-      "Make sure your .env contains EXPO_PUBLIC_GOOGLE_PLACES_API_KEY or " +
+      "Make sure your .env contains GOOGLE_PLACES_API_KEY or " +
       "you expose it via app.config.js → extra.googlePlacesApiKey."
   );
   

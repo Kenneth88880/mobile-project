@@ -99,6 +99,9 @@ export default {
       googlePlacesApiKeyAndroid: process.env.GOOGLE_PLACES_API_KEY_ANDROID,
       recaptchaIosSiteKey: process.env.RECAPTCHA_IOS_SITE_KEY,
       recaptchaAndroidSiteKey: process.env.RECAPTCHA_ANDROID_SITE_KEY,
+      devPassword: process.env.DEV_PASSWORD,
+      devPasswordProd: process.env.DEV_PASSWORD_PROD,
+      contactEmail: process.env.CONTACT_EMAIL,
     },
   },
 };

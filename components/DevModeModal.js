@@ -8,12 +8,16 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
+import Constants from "expo-constants";
 
 export const DevModeModal = ({ visible, onClose, onUnlock }) => {
   const [password, setPassword] = useState("");
 
   const handleSubmit = () => {
-    if (password === process.env.EXPO_PUBLIC_DEV_PASSWORD || password === process.env.EXPO_PUBLIC_DEV_PASSWORD) {
+    const devPassword = Constants.expoConfig?.extra?.devPassword;
+    const devPasswordProd = Constants.expoConfig?.extra?.devPasswordProd;
+
+    if (password === devPassword || password === devPasswordProd) {
       setPassword("");
       onUnlock();
       onClose();
