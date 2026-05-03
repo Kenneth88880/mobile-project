@@ -1,3 +1,7 @@
+/**
+ * Required Notice: Copyright 2026 Doubly Connections Inc. (https://github.com/Kenneth88880/mobile-project)
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ */
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { StyleSheet, View, LogBox, Dimensions } from "react-native";
 import {
