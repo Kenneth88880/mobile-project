@@ -34,6 +34,6 @@
 
 ## License
 
-This project is licensed under the PolyForm Noncommercial License 1.0.0.
+Copyright 2026 Doubly Connections Inc. All rights reserved.
 
-> Required Notice: Copyright 2026 Doubly Connections Inc. (https://github.com/Kenneth88880/mobile-project)
+This software is licensed under the [PolyForm Strict License 1.0.0](https://polyformproject.org/licenses/strict/1.0.0).
