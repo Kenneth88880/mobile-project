@@ -31,3 +31,9 @@
 - Report bug system
 - change chat text box to be smaller
 - change chat bubble text more soft/round
+
+## License
+
+This project is licensed under the PolyForm Noncommercial License 1.0.0.
+
+> Required Notice: Copyright 2026 Doubly Connections Inc. (https://github.com/Kenneth88880/mobile-project)
