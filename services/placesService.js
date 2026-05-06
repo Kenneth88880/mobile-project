@@ -10,6 +10,7 @@ const API_KEY =
     ios: Constants.expoConfig?.extra?.googlePlacesApiKeyIOS,
     android: Constants.expoConfig?.extra?.googlePlacesApiKeyAndroid,
   }) ??
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ??
   process.env.GOOGLE_PLACES_API_KEY ??
   "";
 

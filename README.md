@@ -8,7 +8,7 @@
 
 - Verify Emails (both on signup and login)
 - Recaptcha system
-- SMS verification 
+- SMS verification
 - framework for premium users
 - framework for handeling user payments and user refunds
 - Explore system, calander, maps, planning

@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "doubly-messenging",
+    "Stripe Integration": "doubly-messenging"
+  },
+  "targets": {},
+  "etags": {}
+}
