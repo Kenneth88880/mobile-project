@@ -1,3 +1,7 @@
+/**
+ * Required Notice: Copyright 2026 Doubly Connections Inc. (https://github.com/Kenneth88880/mobile-project)
+ * Licensed under the PolyForm Strict License 1.0.0
+ */
 import "dotenv/config";
 
 export default {
@@ -95,6 +99,12 @@ export default {
       googlePlacesApiKeyAndroid: process.env.GOOGLE_PLACES_API_KEY_ANDROID,
       recaptchaIosSiteKey: process.env.RECAPTCHA_IOS_SITE_KEY,
       recaptchaAndroidSiteKey: process.env.RECAPTCHA_ANDROID_SITE_KEY,
+<<<<<<< HEAD
+=======
+      devPassword: process.env.DEV_PASSWORD,
+      devPasswordProd: process.env.DEV_PASSWORD_PROD,
+      contactEmail: process.env.CONTACT_EMAIL,
+>>>>>>> c1ae9bd57a9a5aeaf144a20cb163359696c9c855
     },
   },
 };

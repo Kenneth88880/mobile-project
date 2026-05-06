@@ -8,7 +8,7 @@
 
 - Verify Emails (both on signup and login)
 - Recaptcha system
-- SMS verification 
+- SMS verification
 - framework for premium users
 - framework for handeling user payments and user refunds
 - Explore system, calander, maps, planning
@@ -31,3 +31,9 @@
 - Report bug system
 - change chat text box to be smaller
 - change chat bubble text more soft/round
+
+## License
+
+Copyright 2026 Doubly Connections Inc. All rights reserved.
+
+This software is licensed under the [PolyForm Strict License 1.0.0](https://polyformproject.org/licenses/strict/1.0.0).

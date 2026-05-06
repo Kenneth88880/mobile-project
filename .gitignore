@@ -1,4 +1,76 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug / logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+firebase-debug.log*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+.env.development
+.env.production
+stripeServer/.env
+functions/.env
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# stripe api keys (DO NOT KEEP)
+stripeConfig.js
+
+# Firebase / Google Config (SENSITIVE)
+GoogleService-Info.plist
+google-services.json
+serviceAccountKey.json
+database.rules.json
+.firebaserc
+
+# Build / Config
+metro.config.cjs
+
+# Local Data / Tools
+archive/
+verifyUser.cjs
+colours/
 
 # dependencies
 node_modules/
@@ -21,17 +93,33 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
-# debug
+# debug / logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+firebase-debug.log*
 
 # macOS
 .DS_Store
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.development
+.env.production
+stripeServer/.env
+functions/.env
+
+# IDE / Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # typescript
 *.tsbuildinfo
@@ -45,16 +133,24 @@ stripeConfig.js
 
 # GOOGLE stuff
 
+# Firebase / Google Config (SENSITIVE)
 GoogleService-Info.plist
 google-services.json
+serviceAccountKey.json
+database.rules.json
+.firebaserc
 
 #keys for all our services
 #GoogleService-Info.plist
 
 #eas.json
 eas.json
+# Build / Config
+metro.config.cjs
 
-# ui colours test
+# Local Data / Tools
+archive/
+verifyUser.cjs
 colours/
 
 # .env containing api keys

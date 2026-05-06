@@ -1,3 +1,7 @@
+/**
+ * Required Notice: Copyright 2026 Doubly Connections Inc. (https://github.com/Kenneth88880/mobile-project)
+ * Licensed under the PolyForm Strict License 1.0.0
+ */
 import { registerRootComponent } from "expo";
 import App from "./App";
 import React from "react";
