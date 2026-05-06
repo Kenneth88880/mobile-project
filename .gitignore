@@ -71,3 +71,5 @@ metro.config.cjs
 archive/
 verifyUser.cjs
 colours/
+
+GEMINI.md
