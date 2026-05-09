@@ -30,6 +30,11 @@ export const getUserProfile = async (userId) => {
   }
 };
 
+export const clearAllCaches = () => {
+  for (const key in profileCache) delete profileCache[key];
+  for (const key in duoPartnerCache) delete duoPartnerCache[key];
+};
+
 // Call this after saveUserProfile so the cache doesn't serve stale data
 export const invalidateProfileCache = (userId) => {
   delete profileCache[userId];

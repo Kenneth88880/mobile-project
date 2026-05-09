@@ -23,6 +23,7 @@ import {
   getUserProfile,
   getDuoPartnerProfile,
   checkDuoPreferenceMatch,
+  clearAllCaches,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { isWithinDistance } from "../utils/locationUtils";
@@ -77,6 +78,7 @@ export default function DatingScreen({
 
   const loadData = async () => {
     setLoading(true);
+    clearAllCaches(); // THIS MAKES APP A BIT SLOW, DELETE IF NEEDED
     try {
       // Step 1 — need duo ID before calling getAllDuoPairs
       const [currentUserProfile, duo] = await Promise.all([
