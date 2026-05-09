@@ -25,7 +25,7 @@ export default {
       backgroundColor: "#ffffff",
     },
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
       bundleIdentifier: "com.doublyconnections.doubly",
       googleServicesFile:
         process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
