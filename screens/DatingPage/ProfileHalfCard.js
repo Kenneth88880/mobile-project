@@ -75,7 +75,7 @@ export default function ProfileHalfCard({
 
 const styles = StyleSheet.create({
   halfCard: {
-    marginVertical: 8,
+    marginVertical: 2,
     height: CARD_HEIGHT,
     overflow: "hidden",
   },
