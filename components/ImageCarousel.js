@@ -7,7 +7,7 @@ import {
   Dimensions,
   StyleSheet,
 } from "react-native";
-import { Card, IconButton, useTheme } from "react-native-paper";
+import { Card, IconButton, Avatar, useTheme } from "react-native-paper";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_HEIGHT = 500; // Fixed height for consistency
@@ -27,14 +27,10 @@ export default function ImageCarousel({
 
   if (!photos || photos.length === 0) {
     return (
-      <Card style={[styles.container, style]}>
-        <Image
-          source={{
-            uri: "https://via.placeholder.com/400x500?text=No+Photo",
-          }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+      <Card style={[styles.container, styles.noPhotoCard, style]}>
+        <View style={styles.noPhotoContent}>
+          <Avatar.Icon size={80} icon="account" />
+        </View>
       </Card>
     );
   }
@@ -106,6 +102,15 @@ const styles = StyleSheet.create({
     height: CARD_HEIGHT,
     overflow: "hidden",
     position: "relative",
+  },
+  noPhotoCard: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noPhotoContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   image: {
     width: "100%",

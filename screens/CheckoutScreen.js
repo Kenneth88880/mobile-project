@@ -47,11 +47,11 @@ const dark = {
 };
 
 const FEATURES = [
-  "Diverse range of workout programs.",
-  "Personalized plans based on user goals and fitness level.",
-  "Advanced tracking and analytics for detailed progress monitoring.",
-  "Access to exclusive live and on-demand classes.",
-  "Priority customer support and coaching.",
+  "See who liked your duo before you swipe.",
+  "Unlimited swipes — never hit a daily cap.",
+  "Advanced filters to find your ideal match.",
+  "Priority visibility — appear higher in the feed.",
+  "Priority customer support.",
 ];
 
 const PLANS = {

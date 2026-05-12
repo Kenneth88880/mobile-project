@@ -758,7 +758,11 @@ export default function ProfileScreen({
                 <Card key={item.id} style={styles.searchResultCard}>
                   <Card.Content>
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Avatar.Image size={50} source={{ uri: item.photos?.[0] || "https://via.placeholder.com/150" }} />
+                      {item.photos?.[0] ? (
+                        <Avatar.Image size={50} source={{ uri: item.photos[0] }} />
+                      ) : (
+                        <Avatar.Icon size={50} icon="account" />
+                      )}
                       <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text variant="titleMedium">{item.name}</Text>
                         <Text variant="bodySmall">{item.age} years old • {item.city || "Location unknown"}</Text>
@@ -797,7 +801,11 @@ export default function ProfileScreen({
               <Card key={request.id} style={styles.requestCard} onPress={() => { setViewingRequesterProfile(request.requesterProfile); setRequesterImageIndex(0); }}>
                 <Card.Content>
                   <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                    <Avatar.Image size={50} source={{ uri: request.requesterProfile.photos?.[0] || "https://via.placeholder.com/150" }} />
+                    {request.requesterProfile.photos?.[0] ? (
+                      <Avatar.Image size={50} source={{ uri: request.requesterProfile.photos[0] }} />
+                    ) : (
+                      <Avatar.Icon size={50} icon="account" />
+                    )}
                     <View style={{ marginLeft: 12, flex: 1 }}>
                       <Text variant="titleMedium">{request.requesterProfile.name}</Text>
                       <Text variant="bodySmall">{request.requesterProfile.age} years old</Text>
@@ -1034,7 +1042,11 @@ export default function ProfileScreen({
           <View style={styles.profilePhotoSection}>
             <TouchableOpacity onPress={() => setIsEditing(true)}>
               <View style={styles.circularPhoto}>
-                <Avatar.Image size={120} source={{ uri: mainPhoto || "https://via.placeholder.com/120" }} />
+                {mainPhoto ? (
+                  <Avatar.Image size={120} source={{ uri: mainPhoto }} />
+                ) : (
+                  <Avatar.Icon size={120} icon="account" />
+                )}
               </View>
               <View style={styles.editBadge}>
                 <IconButton icon="pencil" size={16} iconColor="#fff" style={{ margin: 0 }} />
@@ -1080,7 +1092,11 @@ export default function ProfileScreen({
               {duoPartnerProfile ? (
                 <>
                   <TouchableOpacity onPress={() => { setCurrentImageIndex(0); setViewingPartnerProfile(true); }} style={styles.partnerContainer}>
-                    <Avatar.Image size={80} source={{ uri: duoPartnerProfile.photos?.[0] || "https://via.placeholder.com/80" }} />
+                    {duoPartnerProfile.photos?.[0] ? (
+                      <Avatar.Image size={80} source={{ uri: duoPartnerProfile.photos[0] }} />
+                    ) : (
+                      <Avatar.Icon size={80} icon="account" />
+                    )}
                     <View style={styles.partnerInfo}>
                       <Text variant="titleLarge">{duoPartnerProfile.name}</Text>
                       <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{duoPartnerProfile.age} years old</Text>

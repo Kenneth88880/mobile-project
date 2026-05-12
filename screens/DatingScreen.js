@@ -524,12 +524,8 @@ export default function DatingScreen({
     currentDuoPair?.user1Profile || currentDuoPair?.user1 || {};
   const bottomProfile =
     currentDuoPair?.user2Profile || currentDuoPair?.user2 || {};
-  const topPhoto =
-    topProfile?.photos?.[0] ||
-    "https://via.placeholder.com/400x300?text=No+Photo";
-  const bottomPhoto =
-    bottomProfile?.photos?.[0] ||
-    "https://via.placeholder.com/400x300?text=No+Photo";
+  const topPhoto = topProfile?.photos?.[0] || null;
+  const bottomPhoto = bottomProfile?.photos?.[0] || null;
   const topName = topProfile?.name || "Unknown";
   const topAge = topProfile?.age || "?";
   const bottomName = bottomProfile?.name || "Unknown";

@@ -514,12 +514,21 @@ export default function SettingsScreen({
               onPress={() => Linking.openURL("mailto:safety@doubly.ca?subject=Safety%20Report")}
             />
             <Divider />
+            <Divider />
             <List.Item
               title="Community Guidelines"
               description="Our rules for a safe community"
               left={(props) => <IconButton icon="book-open-outline" {...props} />}
               right={(props) => <IconButton icon="open-in-new" {...props} />}
               onPress={() => Linking.openURL("https://doubly.ca/community-guidelines")}
+            />
+            <Divider />
+            <List.Item
+              title="Privacy Policy"
+              description="How we handle your data"
+              left={(props) => <IconButton icon="shield-lock-outline" {...props} />}
+              right={(props) => <IconButton icon="open-in-new" {...props} />}
+              onPress={() => Linking.openURL("https://doubly.ca/privacy-policy")}
             />
           </Card.Content>
         </Card>

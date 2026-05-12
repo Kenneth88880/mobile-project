@@ -176,7 +176,7 @@ export default function App() {
   useEffect(() => {
     let profileUnsubscribe = null;
     const authUnsubscribe = auth().onAuthStateChanged(async (user) => {
-      console.log("[Auth] onAuthStateChanged fired — user:", user ? `logged in (uid: ${user.uid}, email: ${user.email})` : "not logged in");
+      if (__DEV__) console.log("[Auth] onAuthStateChanged fired — user:", user ? `logged in (uid: ${user.uid}, email: ${user.email})` : "not logged in");
       setUser(user);
       if (user) {
         const { creationTime, lastSignInTime } = user.metadata;

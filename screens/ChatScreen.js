@@ -42,7 +42,7 @@ import Animated, {
 } from "react-native-reanimated";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
-import { getUserProfile, blockUser as blockUserFn, getCurrentDuoPartner } from "../services/profileService";
+import { getUserProfile, blockUser as blockUserFn, getCurrentDuoPartner, reportUser as reportUserFn } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
@@ -54,7 +54,7 @@ import {
 import { getSubscriptionStatus } from "../services/profileService";
 import ImageCarousel from "../components/ImageCarousel";
 
-const PLACEHOLDER_IMAGE = "https://via.placeholder.com/400x300?text=No+Image";
+const PLACEHOLDER_IMAGE = null;
 const getUserID = () => CURRENT_USER_ID;
 
 const openPlaceInBrowser = (suggestion) => {
@@ -304,11 +304,17 @@ function PlaceSuggestionModal({ visible, suggestion, onDismiss }) {
             showsVerticalScrollIndicator={false}
           >
             <View style={{ position: "relative" }}>
-              <Image
-                source={{ uri: imageUri }}
-                style={{ width: "100%", aspectRatio: 4 / 3 }}
-                resizeMode="cover"
-              />
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={{ width: "100%", aspectRatio: 4 / 3 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={{ width: "100%", aspectRatio: 4 / 3, backgroundColor: "rgba(0,0,0,0.08)", alignItems: "center", justifyContent: "center" }}>
+                  <IconButton icon="map-marker" size={48} iconColor="rgba(0,0,0,0.3)" />
+                </View>
+              )}
               <TouchableOpacity
                 onPress={onDismiss}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -1463,6 +1469,18 @@ function IndividualChatScreen({
         },
       ],
     );
+  };
+
+  const handleReportViewingProfile = (profile) => {
+    const reportedId = profile?.id;
+    const name = profile?.name || "this user";
+    if (!reportedId || reportedId === currentUserId) return;
+    Alert.alert("Report User", `Why are you reporting ${name}?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Fake Profile", onPress: async () => { await reportUserFn(currentUserId, reportedId, "fake_profile"); Alert.alert("Reported", "Thank you. Our team will review this report."); } },
+      { text: "Inappropriate Content", onPress: async () => { await reportUserFn(currentUserId, reportedId, "inappropriate_content"); Alert.alert("Reported", "Thank you. Our team will review this report."); } },
+      { text: "Harassment", onPress: async () => { await reportUserFn(currentUserId, reportedId, "harassment"); Alert.alert("Reported", "Thank you. Our team will review this report."); } },
+    ]);
   };
 
   const handleReplyBubbleTap = (replyTo) => {
@@ -2794,7 +2812,15 @@ function IndividualChatScreen({
                             </Card.Content>
                           </Card>
                           <Card style={{ marginBottom: 16 }}>
-                            <Card.Content>
+                            <Card.Content style={{ gap: 8 }}>
+                              <Button
+                                mode="outlined"
+                                icon="flag-outline"
+                                textColor={theme.colors.error}
+                                onPress={() => handleReportViewingProfile(viewingProfile)}
+                              >
+                                Report {viewingProfile.name}
+                              </Button>
                               <Button
                                 mode="outlined"
                                 icon="block-helper"
