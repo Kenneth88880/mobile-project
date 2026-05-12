@@ -25,7 +25,7 @@ export const getUserProfile = async (userId) => {
     }
     return null;
   } catch (error) {
-    console.error("Error getting user profile:", error);
+    console.error("Error getting user profile for userId:", userId, "| auth.currentUser:", auth().currentUser?.uid ?? "NOT LOGGED IN", "| error:", error.message);
     return null;
   }
 };
