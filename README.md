@@ -2,10 +2,9 @@
 
 ## Things to do before release
 
-- Add report system
-
 ## Things in progress
 
+- Add report system
 - Verify Emails (both on signup and login)
 - Recaptcha system
 - SMS verification
