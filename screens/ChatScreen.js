@@ -42,7 +42,7 @@ import Animated, {
 } from "react-native-reanimated";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
-import { getUserProfile, blockUser as blockUserFn } from "../services/profileService";
+import { getUserProfile, blockUser as blockUserFn, getCurrentDuoPartner } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
@@ -670,6 +670,13 @@ function ChatListScreen({ onChatSelect }) {
   const [selectedChatName, setSelectedChatName] = useState("");
   const [selectedChatIsPrivate, setSelectedChatIsPrivate] = useState(false);
   const [selectedChatParticipants, setSelectedChatParticipants] = useState([]);
+  const [duoPartnerId, setDuoPartnerId] = useState(null);
+
+  useEffect(() => {
+    getCurrentDuoPartner(currentUserId).then((duo) => {
+      if (duo?.partnerId) setDuoPartnerId(duo.partnerId);
+    });
+  }, [currentUserId]);
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -800,8 +807,13 @@ function ChatListScreen({ onChatSelect }) {
   };
 
   const handleBlockChatUsers = (chatId, chatName, participants) => {
-    const othersToBlock = participants.filter((id) => id !== currentUserId);
-    if (othersToBlock.length === 0) return;
+    const othersToBlock = participants.filter(
+      (id) => id !== currentUserId && id !== duoPartnerId,
+    );
+    if (othersToBlock.length === 0) {
+      Alert.alert("Nothing to block", "There are no other users to block in this chat.");
+      return;
+    }
     Alert.alert(
       "Block Users",
       `Block all users in "${chatName}"? They will no longer be able to contact you or appear in your feed.`,
@@ -1425,6 +1437,32 @@ function IndividualChatScreen({
     setViewingProfile(profile);
     setProfileImageIndex(0);
     loadProfileRating(profile.id);
+  };
+
+  const handleBlockViewingProfile = (profile) => {
+    const blockedId = profile?.id;
+    const name = profile?.name || "this user";
+    if (!blockedId || blockedId === currentUserId) return;
+    Alert.alert(
+      "Block User",
+      `Block ${name}? They will no longer appear in your feed and cannot contact you.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            const success = await blockUserFn(currentUserId, blockedId);
+            if (success) {
+              setViewingProfile(null);
+              Alert.alert("Blocked", `${name} has been blocked.`);
+            } else {
+              Alert.alert("Error", "Failed to block user. Please try again.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleReplyBubbleTap = (replyTo) => {
@@ -2673,87 +2711,101 @@ function IndividualChatScreen({
                         </Card.Content>
                       </Card>
                       {viewingProfile.id !== currentUserId && (
-                        <Card
-                          style={{
-                            marginBottom: 16,
-                            backgroundColor: theme.colors.primaryContainer,
-                          }}
-                        >
-                          <Card.Content>
-                            <Text
-                              variant="titleMedium"
-                              style={{ marginBottom: 12, textAlign: "center" }}
-                            >
-                              {hasRated
-                                ? "Update Your Rating"
-                                : "Rate This Person"}
-                            </Text>
-                            <View
-                              style={{ alignItems: "center", marginBottom: 12 }}
-                            >
-                              <View
-                                style={{
-                                  flexDirection: "row",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                {renderStars(userRating, setUserRating)}
-                              </View>
-                              {userRating > 0 && (
-                                <Text
-                                  variant="bodySmall"
-                                  style={{ marginTop: 8, fontStyle: "italic" }}
-                                >
-                                  {userRating === 1 && "Poor"}
-                                  {userRating === 2 && "Fair"}
-                                  {userRating === 3 && "Good"}
-                                  {userRating === 4 && "Very Good"}
-                                  {userRating === 5 && "Excellent"}
-                                </Text>
-                              )}
-                            </View>
-                            <Button
-                              mode="contained"
-                              onPress={() =>
-                                handleSubmitRating(
-                                  viewingProfile.id,
-                                  userRating,
-                                )
-                              }
-                              disabled={userRating === 0 || submittingRating}
-                              loading={submittingRating}
-                              icon={hasRated ? "update" : "star"}
-                            >
-                              {hasRated ? "Update Rating" : "Submit Rating"}
-                            </Button>
-                            {hasRated && (
+                        <>
+                          <Card
+                            style={{
+                              marginBottom: 16,
+                              backgroundColor: theme.colors.primaryContainer,
+                            }}
+                          >
+                            <Card.Content>
                               <Text
-                                variant="bodySmall"
-                                style={{
-                                  marginTop: 8,
-                                  textAlign: "center",
-                                  fontStyle: "italic",
-                                  opacity: 0.7,
-                                }}
+                                variant="titleMedium"
+                                style={{ marginBottom: 12, textAlign: "center" }}
                               >
-                                You previously rated this person {userRating}{" "}
-                                star
-                                {userRating !== 1 ? "s" : ""}
+                                {hasRated
+                                  ? "Update Your Rating"
+                                  : "Rate This Person"}
                               </Text>
-                            )}
-                            {currentChat.isPrivate !== true && (
+                              <View
+                                style={{ alignItems: "center", marginBottom: 12 }}
+                              >
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {renderStars(userRating, setUserRating)}
+                                </View>
+                                {userRating > 0 && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={{ marginTop: 8, fontStyle: "italic" }}
+                                  >
+                                    {userRating === 1 && "Poor"}
+                                    {userRating === 2 && "Fair"}
+                                    {userRating === 3 && "Good"}
+                                    {userRating === 4 && "Very Good"}
+                                    {userRating === 5 && "Excellent"}
+                                  </Text>
+                                )}
+                              </View>
                               <Button
                                 mode="contained"
-                                style={{ marginTop: 8 }}
                                 onPress={() =>
-                                  handleCreatePrivateChat(viewingProfile.id)
+                                  handleSubmitRating(
+                                    viewingProfile.id,
+                                    userRating,
+                                  )
                                 }
+                                disabled={userRating === 0 || submittingRating}
+                                loading={submittingRating}
+                                icon={hasRated ? "update" : "star"}
                               >
-                                Create Private DM
+                                {hasRated ? "Update Rating" : "Submit Rating"}
                               </Button>
-                            )}
-                          </Card.Content>
-                        </Card>
+                              {hasRated && (
+                                <Text
+                                  variant="bodySmall"
+                                  style={{
+                                    marginTop: 8,
+                                    textAlign: "center",
+                                    fontStyle: "italic",
+                                    opacity: 0.7,
+                                  }}
+                                >
+                                  You previously rated this person {userRating}{" "}
+                                  star
+                                  {userRating !== 1 ? "s" : ""}
+                                </Text>
+                              )}
+                              {currentChat.isPrivate !== true && (
+                                <Button
+                                  mode="contained"
+                                  style={{ marginTop: 8 }}
+                                  onPress={() =>
+                                    handleCreatePrivateChat(viewingProfile.id)
+                                  }
+                                >
+                                  Create Private DM
+                                </Button>
+                              )}
+                            </Card.Content>
+                          </Card>
+                          <Card style={{ marginBottom: 16 }}>
+                            <Card.Content>
+                              <Button
+                                mode="outlined"
+                                icon="block-helper"
+                                textColor={theme.colors.error}
+                                onPress={() => handleBlockViewingProfile(viewingProfile)}
+                              >
+                                Block {viewingProfile.name}
+                              </Button>
+                            </Card.Content>
+                          </Card>
+                        </>
                       )}
                     </View>
                   )}
