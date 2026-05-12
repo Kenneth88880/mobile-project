@@ -24,6 +24,8 @@ import {
   getDuoPartnerProfile,
   checkDuoPreferenceMatch,
   clearAllCaches,
+  blockUser,
+  reportUser,
 } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { isWithinDistance } from "../utils/locationUtils";
@@ -226,6 +228,74 @@ export default function DatingScreen({
   const handleBackToDouble = () => {
     setSelectedProfile(null);
     setCurrentImageIndex(0);
+  };
+
+  const handleReportUser = (profile) => {
+    const reportedId = profile?.userId || profile?.id;
+    if (!reportedId) return;
+    Alert.alert("Report User", "Why are you reporting this user?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Fake Profile",
+        onPress: async () => {
+          await reportUser(currentUserId, reportedId, "fake_profile");
+          Alert.alert("Reported", "Thank you. Our moderation team will review this profile.");
+        },
+      },
+      {
+        text: "Inappropriate Content",
+        onPress: async () => {
+          await reportUser(currentUserId, reportedId, "inappropriate_content");
+          Alert.alert("Reported", "Thank you. Our moderation team will review this profile.");
+        },
+      },
+      {
+        text: "Harassment",
+        onPress: async () => {
+          await reportUser(currentUserId, reportedId, "harassment");
+          Alert.alert("Reported", "Thank you. Our moderation team will review this profile.");
+        },
+      },
+    ]);
+  };
+
+  const handleBlockUser = (profile) => {
+    const blockedId = profile?.userId || profile?.id;
+    const name = profile?.name || "this user";
+    if (!blockedId) return;
+    Alert.alert(
+      "Block User",
+      `Block ${name}? They will no longer appear in your feed and cannot contact you.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            const success = await blockUser(currentUserId, blockedId);
+            if (success) {
+              handleBackToDouble();
+              setAllFilteredPairs((prev) =>
+                prev.filter(
+                  (p) =>
+                    (p.user1Profile?.userId || p.user1Profile?.id) !== blockedId &&
+                    (p.user2Profile?.userId || p.user2Profile?.id) !== blockedId,
+                ),
+              );
+              setLoadedPairs((prev) =>
+                prev.filter(
+                  (p) =>
+                    (p.user1Profile?.userId || p.user1Profile?.id) !== blockedId &&
+                    (p.user2Profile?.userId || p.user2Profile?.id) !== blockedId,
+                ),
+              );
+            } else {
+              Alert.alert("Error", "Failed to block user. Please try again.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleNextImage = () => {
@@ -441,6 +511,8 @@ export default function DatingScreen({
             handleBackToDouble={handleBackToDouble}
             handleImageTap={handleImageTap}
             isDatingScreen={true}
+            onReportUser={handleReportUser}
+            onBlockUser={handleBlockUser}
           />
         </GestureDetector>
       </GestureHandlerRootView>

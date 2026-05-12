@@ -178,12 +178,13 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
 
     console.log("Current duo ID:", currentDuoId);
 
-    // Fire all 4 independent reads simultaneously
+    // Fire all independent reads simultaneously
     const [
       swipesSnapshot,
       sentLikesSnapshot,
       receivedLikesSnapshot,
       duosSnapshot,
+      blockedUserIds,
     ] = await Promise.all([
       firestore()
         .collection("duoSwipes")
@@ -198,7 +199,9 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
         .where("toDuoId", "==", currentDuoId)
         .get(),
       firestore().collection("duos").where("status", "==", "active").get(),
+      getBlockedUsers(userId),
     ]);
+    const blockedSet = new Set(blockedUserIds);
 
     const excludedDuoIds = new Set([
       currentDuoId,
@@ -207,10 +210,13 @@ export const getAllDuoPairs = async (userId, currentDuoId) => {
       ...receivedLikesSnapshot.docs.map((d) => d.data().fromDuoId),
     ]);
 
-    // Filter out excluded and invalid duos before any profile fetching
+    // Filter out excluded, blocked, and invalid duos before any profile fetching
     const eligibleDuos = duosSnapshot.docs.filter((doc) => {
       if (excludedDuoIds.has(doc.id)) return false;
-      return (doc.data().users || []).length === 2;
+      const users = doc.data().users || [];
+      if (users.length !== 2) return false;
+      if (blockedSet.has(users[0]) || blockedSet.has(users[1])) return false;
+      return true;
     });
 
     if (eligibleDuos.length === 0) {
@@ -881,4 +887,71 @@ export const subscribeToSubscriptionStatus = (userId, onChange) => {
         console.error("Error listening to subscription status:", error);
       },
     );
+};
+
+export const blockUser = async (blockerUserId, blockedUserId) => {
+  try {
+    const existing = await firestore()
+      .collection("userBlocks")
+      .where("blockerId", "==", blockerUserId)
+      .where("blockedId", "==", blockedUserId)
+      .get();
+    if (!existing.empty) return true;
+    await firestore().collection("userBlocks").add({
+      blockerId: blockerUserId,
+      blockedId: blockedUserId,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error blocking user:", error);
+    return false;
+  }
+};
+
+export const unblockUser = async (blockerUserId, blockedUserId) => {
+  try {
+    const snapshot = await firestore()
+      .collection("userBlocks")
+      .where("blockerId", "==", blockerUserId)
+      .where("blockedId", "==", blockedUserId)
+      .get();
+    const batch = firestore().batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.error("Error unblocking user:", error);
+    return false;
+  }
+};
+
+export const getBlockedUsers = async (userId) => {
+  try {
+    const snapshot = await firestore()
+      .collection("userBlocks")
+      .where("blockerId", "==", userId)
+      .get();
+    return snapshot.docs.map((doc) => doc.data().blockedId);
+  } catch (error) {
+    console.error("Error fetching blocked users:", error);
+    return [];
+  }
+};
+
+export const reportUser = async (reporterUserId, reportedUserId, reason, details = "") => {
+  try {
+    await firestore().collection("userReports").add({
+      reporterId: reporterUserId,
+      reportedUserId,
+      reason,
+      details,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      status: "pending",
+    });
+    return true;
+  } catch (error) {
+    console.error("Error reporting user:", error);
+    return false;
+  }
 };

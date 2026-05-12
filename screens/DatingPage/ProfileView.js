@@ -1,6 +1,6 @@
 import React from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
-import { Text, Card, Button, IconButton, useTheme } from "react-native-paper";
+import { Text, Card, Button, IconButton, useTheme, Avatar } from "react-native-paper";
 import { ProfileInfoCard } from "../../components/CommonComponents";
 import { formatLastActive } from "../../utils/locationTracker";
 
@@ -13,6 +13,8 @@ export default function ProfileView({
   hasRatedUser,
   existingRating,
   isDatingScreen,
+  onReportUser,
+  onBlockUser,
 }) {
   const theme = useTheme();
 
@@ -65,13 +67,13 @@ export default function ProfileView({
           </TouchableOpacity>
         </Card>
       ) : (
-        <Card style={styles.imageCard}>
-          <Card.Cover
-            source={{
-              uri: "https://via.placeholder.com/400x300?text=No+Photo",
-            }}
-            style={styles.cardCover}
-          />
+        <Card style={[styles.imageCard, styles.noPhotoCard]}>
+          <View style={styles.noPhotoContent}>
+            <Avatar.Icon size={80} icon="account" />
+            <Text variant="bodyMedium" style={{ marginTop: 12, opacity: 0.6 }}>
+              No photos available
+            </Text>
+          </View>
         </Card>
       )}
 
@@ -126,6 +128,33 @@ export default function ProfileView({
           </Button>
         )
       )}
+
+      {(onReportUser || onBlockUser) && (
+        <View style={styles.safetyActions}>
+          {onReportUser && (
+            <Button
+              mode="outlined"
+              icon="flag-outline"
+              onPress={() => onReportUser(selectedProfile)}
+              textColor={theme.colors.error}
+              style={styles.safetyButton}
+            >
+              Report
+            </Button>
+          )}
+          {onBlockUser && (
+            <Button
+              mode="outlined"
+              icon="block-helper"
+              onPress={() => onBlockUser(selectedProfile)}
+              textColor={theme.colors.error}
+              style={styles.safetyButton}
+            >
+              Block
+            </Button>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -145,6 +174,16 @@ const styles = StyleSheet.create({
   },
   cardCover: {
     height: 400,
+  },
+  noPhotoCard: {
+    height: 200,
+    justifyContent: "center",
+  },
+  noPhotoContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
   },
   dotsContainer: {
     position: "absolute",
@@ -169,5 +208,14 @@ const styles = StyleSheet.create({
   },
   rateButton: {
     marginTop: 16,
+  },
+  safetyActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  safetyButton: {
+    flex: 1,
   },
 });

@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   PanResponder,
   TextInput as RNTextInput,
+  Linking,
 } from "react-native";
 import {
   Text,
@@ -19,6 +20,7 @@ import {
   useTheme,
   IconButton,
   Button,
+  Avatar,
 } from "react-native-paper";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -28,6 +30,8 @@ import {
   updateMaxDistance,
   saveUserProfile,
   invalidateProfileCache,
+  getBlockedUsers,
+  unblockUser,
 } from "../services/profileService";
 
 export default function SettingsScreen({
@@ -42,6 +46,9 @@ export default function SettingsScreen({
   const [genderPreference, setGenderPreference] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [blockedUserIds, setBlockedUserIds] = useState([]);
+  const [blockedProfiles, setBlockedProfiles] = useState([]);
+  const [showBlockedModal, setShowBlockedModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
@@ -63,7 +70,10 @@ export default function SettingsScreen({
 
   const loadSettings = async () => {
     try {
-      const userProfile = await getUserProfile(CURRENT_USER_ID);
+      const [userProfile, blocked] = await Promise.all([
+        getUserProfile(CURRENT_USER_ID),
+        getBlockedUsers(CURRENT_USER_ID),
+      ]);
       if (userProfile) {
         setProfile(userProfile);
         const distance = userProfile.maxDistance || 50;
@@ -77,11 +87,47 @@ export default function SettingsScreen({
         );
         setEmail(userProfile.contactEmail || null);
       }
+      setBlockedUserIds(blocked);
     } catch (error) {
       console.error("Error loading settings:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadBlockedProfiles = async () => {
+    try {
+      const profiles = await Promise.all(
+        blockedUserIds.map((id) => getUserProfile(id)),
+      );
+      setBlockedProfiles(
+        profiles
+          .map((p, i) => (p ? { ...p, blockedId: blockedUserIds[i] } : null))
+          .filter(Boolean),
+      );
+    } catch (error) {
+      console.error("Error loading blocked profiles:", error);
+    }
+  };
+
+  const handleUnblock = (blockedId, name) => {
+    Alert.alert("Unblock User", `Unblock ${name}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Unblock",
+        onPress: async () => {
+          const success = await unblockUser(CURRENT_USER_ID, blockedId);
+          if (success) {
+            setBlockedUserIds((prev) => prev.filter((id) => id !== blockedId));
+            setBlockedProfiles((prev) =>
+              prev.filter((p) => p.blockedId !== blockedId),
+            );
+          } else {
+            Alert.alert("Error", "Failed to unblock. Please try again.");
+          }
+        },
+      },
+    ]);
   };
 
   const handleDistanceSave = async () => {
@@ -438,6 +484,46 @@ export default function SettingsScreen({
           </Card.Content>
         </Card>
 
+        {/* Safety Settings */}
+        <Card style={styles.card}>
+          <Card.Title
+            title="Safety"
+            left={(props) => <IconButton icon="shield-check" {...props} />}
+          />
+          <Card.Content>
+            <List.Item
+              title="Blocked Users"
+              description={
+                blockedUserIds.length > 0
+                  ? `${blockedUserIds.length} user${blockedUserIds.length !== 1 ? "s" : ""} blocked`
+                  : "No blocked users"
+              }
+              left={(props) => <IconButton icon="account-cancel" {...props} />}
+              right={(props) => <IconButton icon="chevron-right" {...props} />}
+              onPress={() => {
+                loadBlockedProfiles();
+                setShowBlockedModal(true);
+              }}
+            />
+            <Divider />
+            <List.Item
+              title="Safety & Support"
+              description="Report abuse or get help"
+              left={(props) => <IconButton icon="lifebuoy" {...props} />}
+              right={(props) => <IconButton icon="open-in-new" {...props} />}
+              onPress={() => Linking.openURL("mailto:safety@doubly.ca?subject=Safety%20Report")}
+            />
+            <Divider />
+            <List.Item
+              title="Community Guidelines"
+              description="Our rules for a safe community"
+              left={(props) => <IconButton icon="book-open-outline" {...props} />}
+              right={(props) => <IconButton icon="open-in-new" {...props} />}
+              onPress={() => Linking.openURL("https://doubly.ca/community-guidelines")}
+            />
+          </Card.Content>
+        </Card>
+
         {/* Appearance Settings */}
         <Card style={styles.card}>
           <Card.Title
@@ -482,6 +568,61 @@ export default function SettingsScreen({
           Sign Out
         </Button>
       </ScrollView>
+
+      {/* ── Blocked Users Modal ── */}
+      <Modal
+        visible={showBlockedModal}
+        animationType="slide"
+        onRequestClose={() => setShowBlockedModal(false)}
+      >
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <Surface style={styles.header} elevation={2}>
+            <IconButton icon="arrow-left" onPress={() => setShowBlockedModal(false)} />
+            <Text variant="titleLarge" style={{ flex: 1 }}>Blocked Users</Text>
+          </Surface>
+          <ScrollView style={styles.scrollView}>
+            {blockedProfiles.length === 0 ? (
+              <View style={{ padding: 32, alignItems: "center" }}>
+                <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center" }}>
+                  You have not blocked anyone.
+                </Text>
+              </View>
+            ) : (
+              blockedProfiles.map((p) => (
+                <List.Item
+                  key={p.blockedId}
+                  title={p.name || "Unknown User"}
+                  description={p.age ? `${p.age} years old` : undefined}
+                  left={() =>
+                    p.photos?.[0] ? (
+                      <Avatar.Image
+                        size={48}
+                        source={{ uri: p.photos[0] }}
+                        style={{ marginLeft: 8, marginRight: 4 }}
+                      />
+                    ) : (
+                      <Avatar.Icon
+                        size={48}
+                        icon="account"
+                        style={{ marginLeft: 8, marginRight: 4 }}
+                      />
+                    )
+                  }
+                  right={() => (
+                    <Button
+                      mode="outlined"
+                      onPress={() => handleUnblock(p.blockedId, p.name || "this user")}
+                      style={{ alignSelf: "center", marginRight: 8 }}
+                    >
+                      Unblock
+                    </Button>
+                  )}
+                />
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* ── Email Modal ── */}
       <Modal

@@ -42,7 +42,7 @@ import Animated, {
 } from "react-native-reanimated";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
-import { getUserProfile } from "../services/profileService";
+import { getUserProfile, blockUser as blockUserFn } from "../services/profileService";
 import { CURRENT_USER_ID } from "../services/UserConfig";
 import { EmptyState, ProfilePhoto } from "../components/CommonComponents";
 import { launchImageLibrary } from "react-native-image-picker";
@@ -669,6 +669,7 @@ function ChatListScreen({ onChatSelect }) {
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [selectedChatName, setSelectedChatName] = useState("");
   const [selectedChatIsPrivate, setSelectedChatIsPrivate] = useState(false);
+  const [selectedChatParticipants, setSelectedChatParticipants] = useState([]);
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -783,10 +784,11 @@ function ChatListScreen({ onChatSelect }) {
     );
   };
 
-  const showChatOptions = (chatId, chatName, isPrivate) => {
+  const showChatOptions = (chatId, chatName, isPrivate, participants = []) => {
     setSelectedChatId(chatId);
     setSelectedChatName(chatName);
     setSelectedChatIsPrivate(isPrivate);
+    setSelectedChatParticipants(participants);
     setChatOptionsVisible(true);
   };
 
@@ -794,6 +796,32 @@ function ChatListScreen({ onChatSelect }) {
     setChatOptionsVisible(false);
     setSelectedChatId(null);
     setSelectedChatName("");
+    setSelectedChatParticipants([]);
+  };
+
+  const handleBlockChatUsers = (chatId, chatName, participants) => {
+    const othersToBlock = participants.filter((id) => id !== currentUserId);
+    if (othersToBlock.length === 0) return;
+    Alert.alert(
+      "Block Users",
+      `Block all users in "${chatName}"? They will no longer be able to contact you or appear in your feed.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await Promise.all(othersToBlock.map((id) => blockUserFn(currentUserId, id)));
+              await deleteChat(chatId);
+              Alert.alert("Blocked", "Users have been blocked and the chat removed.");
+            } catch {
+              Alert.alert("Error", "Failed to block users. Please try again.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const renderItem = ({ item }) => {
@@ -878,6 +906,7 @@ function ChatListScreen({ onChatSelect }) {
                   item.id,
                   item.groupName || "Chat",
                   item.isPrivate || false,
+                  item.participants || [],
                 )
               }
             />
@@ -1047,8 +1076,21 @@ function ChatListScreen({ onChatSelect }) {
               }}
               buttonColor={theme.colors.errorContainer}
               textColor={theme.colors.error}
+              style={{ marginBottom: 12 }}
             >
               REPORT
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                const participants = selectedChatParticipants;
+                hideChatOptions();
+                handleBlockChatUsers(selectedChatId, selectedChatName, participants);
+              }}
+              buttonColor={theme.colors.errorContainer}
+              textColor={theme.colors.error}
+            >
+              BLOCK USERS
             </Button>
           </Dialog.Content>
           <Dialog.Actions>
