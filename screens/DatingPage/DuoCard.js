@@ -16,10 +16,9 @@ export default function DuoCard({
   currentUserLocation,
   handleProfileClick,
   swipeFeedback,
-  cardAnimatedStyle,
 }) {
   return (
-    <Animated.View style={[styles.cardsContainer, cardAnimatedStyle]}>
+    <View style={styles.cardsContainer}>
       <View style={styles.duoCard}>
         <ProfileHalfCard
           profile={topProfile}
@@ -46,7 +45,7 @@ export default function DuoCard({
           </Text>
         </Surface>
       )}
-    </Animated.View>
+      </View>
   );
 }
 

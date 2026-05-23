@@ -59,6 +59,7 @@ export default function DatingScreen({
   const rotateVal = useSharedValue(0);
   const scaleVal = useSharedValue(1);
   const opacityVal = useSharedValue(1);
+  const pendingSwipeRef = useRef(null);
 
   const cardAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -335,24 +336,35 @@ export default function DatingScreen({
     scaleVal.value = 1;
   };
 
-  const afterSwipeComplete = async (action, currentDuoPair) => {
-    try {
-      const currentDuoId = currentDuo?.duoId;
-      if (!currentDuoId) {
-        console.error("No duo ID found");
+const afterSwipeComplete = async (action, currentDuoPair) => {
+  try {
+    const currentDuoId = currentDuo?.duoId;
+    if (!currentDuoId || !currentDuoPair?.id) {
+      console.error("Missing duo data", { currentDuoId, currentDuoPair });
+      setCurrentPairIndex((prev) => prev + 1);
+      // reset animation
+      panX.value = 0; panY.value = 0; rotateVal.value = 0;
+      opacityVal.value = 1; scaleVal.value = 1;
+      return;
+    }
+
+    if (action === "like") {
+      const users = currentDuoPair.users || [];
+      const toUser1 = users[0] ?? currentDuoPair.user1Profile?.userId ?? currentDuoPair.user1Profile?.id;
+      const toUser2 = users[1] ?? currentDuoPair.user2Profile?.userId ?? currentDuoPair.user2Profile?.id;
+      
+      if (!toUser1 || !toUser2) {
+        console.error("Cannot resolve user IDs from duo pair", currentDuoPair);
+        setCurrentPairIndex((prev) => prev + 1);
         return;
       }
-
-      if (action === "like") {
-        const duo1 = currentDuoId;
-        const duo2 = currentDuoPair.id;
-        const fromUser1 =
-          currentDuo?.partnerProfile?.userId || currentDuo?.partnerId;
-        const fromUser2 = currentUserId;
-        const toUser1 = currentDuoPair.users[0];
-        const toUser2 = currentDuoPair.users[1];
-        await saveDuoLike(duo1, duo2, fromUser1, fromUser2, toUser1, toUser2);
-      } else if (action === "pass") {
+      
+      const fromUser1 = currentDuo?.partnerProfile?.userId || currentDuo?.partnerId;
+      const fromUser2 = currentUserId;
+      await saveDuoLike(currentDuoId, currentDuoPair.id, fromUser1, fromUser2, toUser1, toUser2);
+    }
+    
+    else if (action === "pass") {
         const duo1 = currentDuoId;
         const duo2 = currentDuoPair.id;
         await saveDuoSwipe(duo1, duo2);
@@ -370,41 +382,49 @@ export default function DatingScreen({
         loadMorePairs();
       }
     } catch (error) {
-      console.error("Error in swipe complete:", error);
-      Alert.alert("Error", "Failed to save your decision. Please try again.");
-      panX.value = 0;
-      panY.value = 0;
-      rotateVal.value = 0;
-      opacityVal.value = 1;
-      scaleVal.value = 1;
-      setSwipeFeedback(null);
-    }
-  };
+    console.error("afterSwipeComplete error:", error);
+    // reset state so user isn't stuck
+    setCurrentPairIndex((prev) => prev + 1);
+    panX.value = 0; panY.value = 0; rotateVal.value = 0;
+    opacityVal.value = 1; scaleVal.value = 1;
+    setSwipeFeedback(null);
+  }
+};
 
-  const handleSwipeComplete = (direction) => {
-    if (currentPairIndex >= loadedPairs.length) return;
+const handleSwipeComplete = (direction) => {
+  if (currentPairIndex >= loadedPairs.length) return;
 
-    const currentDuoPair = loadedPairs[currentPairIndex];
-    const action = direction === "right" ? "like" : "pass";
+  const currentDuoPair = loadedPairs[currentPairIndex];
+  const action = direction === "right" ? "like" : "pass";
 
-    if (!currentDuo) {
-      Alert.alert("No Duo", "You need a duo partner to swipe! Go to Profile.");
-      setCurrentPairIndex((prev) => prev + 1);
-      return;
-    }
+  if (!currentDuo) {
+    Alert.alert("No Duo", "You need a duo partner to swipe! Go to Profile.");
+    setCurrentPairIndex((prev) => prev + 1);
+    return;
+  }
 
-    setSwipeFeedback(action);
+  // Stash for the JS-thread handler — don't capture in worklet
+  pendingSwipeRef.current = { action, duoPair: currentDuoPair };
 
-    const toX = direction === "right" ? 500 : -500;
-    const toRotate = direction === "right" ? 20 : -20;
+  setSwipeFeedback(action);
 
-    panX.value = withTiming(toX, { duration: 300 });
-    rotateVal.value = withTiming(toRotate, { duration: 300 });
-    opacityVal.value = withTiming(0, { duration: 300 }, (finished) => {
-      "worklet";
-      if (finished) runOnJS(afterSwipeComplete)(action, currentDuoPair);
-    });
-  };
+  const toX = direction === "right" ? 500 : -500;
+  const toRotate = direction === "right" ? 20 : -20;
+
+  panX.value = withTiming(toX, { duration: 300 });
+  rotateVal.value = withTiming(toRotate, { duration: 300 });
+  opacityVal.value = withTiming(0, { duration: 300 }, (finished) => {
+    "worklet";
+    if (finished) runOnJS(processPendingSwipe)();
+  });
+};
+
+const processPendingSwipe = () => {
+  const pending = pendingSwipeRef.current;
+  pendingSwipeRef.current = null;
+  if (!pending) return;
+  afterSwipeComplete(pending.action, pending.duoPair);
+};
 
   const SWIPE_THRESHOLD = 120;
 
