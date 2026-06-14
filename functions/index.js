@@ -934,3 +934,36 @@ exports.api = onRequest(
 app.get("/config", (req, res) => {
   res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY });
 });
+
+// ─── Delete Account ───────────────────────────────────────────────────────────
+
+exports.deleteAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in to delete your account.",
+    );
+  }
+
+  const uid = request.auth.uid;
+
+  try {
+    const db = admin.firestore();
+
+    await db.collection("profiles").doc(uid).update({
+      deleted: true,
+      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await admin.auth().deleteUser(uid);
+
+    console.log(`Account deleted for UID: ${uid}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    throw new HttpsError(
+      "internal",
+      "Failed to delete account. Please try again.",
+    );
+  }
+});
