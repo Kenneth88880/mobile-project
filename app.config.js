@@ -87,7 +87,7 @@ export default {
             useSPM: true,
           },
           android: {
-            compileSdkVersion: 36,
+            compileSdkVersion: 35,
             targetSdkVersion: 35,
           },
         },
