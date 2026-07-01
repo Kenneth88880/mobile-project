@@ -89,6 +89,7 @@ export default {
           android: {
             compileSdkVersion: 35,
             targetSdkVersion: 35,
+            enableCoreLibraryDesugaring: true,
           },
         },
       ],
